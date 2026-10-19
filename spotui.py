@@ -1936,7 +1936,7 @@ class UI:
                 "to add it", pal["faint"])
             return
         # Reuse list scrolling but retain original queue indices for input.
-        visible = max(0, y1 - y - 1)
+        visible = max(0, y1 - y - 2)
         selected = app.sel.get("queue:", first)
         offset = max(first, app.off.get("queue:", first))
         if selected >= first:
@@ -2229,7 +2229,7 @@ class UI:
         app, pal = self.app, self.pal
         w = 44
         h = min(len(app.pick_rows) + 4, 14)
-        y = max(2, y0 - h // 2 - 2)
+        y = max(1, (self.scr.getmaxyx()[0] - h) // 2)
         x = (W - w) // 2
         box(self.scr, y, x, w, h, pal["dim"], pal["side"])
         put(self.scr, y + 1, x + 2, "Add to playlist", pal["side"],
