@@ -1569,8 +1569,8 @@ class UI:
         put(self.scr, y0 + 1, 2, "←", pal["sdim"])
         self.hit(2, y0 + 1, 1, 1, "back")
 
-        pw = min(max(28, W - 34), 56)
-        px = max(SW + 2, (W - pw) // 2)
+        px = max(SW + 2, (W - min(56, W - SW - 14)) // 2)
+        pw = min(56, W - px - 12)
         focused = app.mode == "search"
         border = pal["green"] if focused else pal["pilldim"]
         put(self.scr, y0, px, "╭" + "─" * (pw - 2) + "╮", border)
@@ -1586,7 +1586,7 @@ class UI:
                 curses.A_BOLD)
         else:
             put(self.scr, y0 + 1, px + 2, IC_SEARCH, pal["pilldim"])
-            put(self.scr, y0 + 1, px + 4, PLACEHOLDER, pal["pilldim"])
+            put(self.scr, y0 + 1, px + 4, wcut(PLACEHOLDER, pw - 6), pal["pilldim"])
         self.hit(px, y0, pw, 3, "focus_search")
         app.search_xy = (px + 4 + min(dlen(q), pw - 7), y0 + 1)
 
@@ -2056,7 +2056,8 @@ class UI:
         tx = x0 + num_w
         cx = tx + title_w + 2
         put(self.scr, y, tx, "TITLE", pal["faint"], curses.A_BOLD)
-        put(self.scr, y, cx, "CHANNEL", pal["faint"], curses.A_BOLD)
+        if chan_w:
+            put(self.scr, y, cx, "CHANNEL", pal["faint"], curses.A_BOLD)
         if show_date and date_w:
             put(self.scr, y, cx + chan_w + 2, "DATE ADDED", pal["faint"],
                 curses.A_BOLD)
@@ -2064,10 +2065,14 @@ class UI:
 
     def col_widths(self, w, show_date):
         num_w, dur_w, heart_w = 4, 7, 2
-        date_w = 12 if show_date else 0
+        date_w = 12 if show_date and w >= 66 else 0
         fixed = num_w + dur_w + heart_w + date_w + 6
-        title_w = max(10, int((w - fixed) * 0.55))
-        chan_w = max(8, w - fixed - title_w)
+        available = max(0, w - fixed)
+        title_w = max(8, int(available * 0.60))
+        chan_w = max(0, available - title_w)
+        if chan_w < 8:
+            title_w = max(8, available)
+            chan_w = 0
         return num_w, title_w, chan_w, date_w, dur_w, heart_w
 
     def row(self, y, x0, w, t, idx, vk, real_idx, show_date=False,
@@ -2108,7 +2113,8 @@ class UI:
             curses.A_BOLD if (playing or selected) else 0)
 
         cx = tx + title_w + 2
-        put(scr, y, cx, wcut(t["artist"], chan_w), cp(pal["dim"]))
+        if chan_w:
+            put(scr, y, cx, wcut(t["artist"], chan_w), cp(pal["dim"]))
 
         if show_date and date_w:
             dx = cx + chan_w + 2
@@ -2175,7 +2181,7 @@ class UI:
 
         cur = app.current
         # left block shrinks on narrow terminals
-        tw = 30 if W >= 104 else (24 if W >= 80 else 20)
+        tw = 30 if W >= 104 else (20 if W >= 86 else 12)
         hx = 7 + tw + 1            # heart column
         if cur:
             draw_art(scr, y0, 2, 3, 2, cur["id"], pal)
@@ -2201,7 +2207,7 @@ class UI:
         vx = (W - 11) if narrow else (W - 20)
         spx = vx - 4                        # speaker glyph column
         bx = hx + 4                         # seekbar starts after the heart
-        bw = max(16, min(132, spx - bx - 6))
+        bw = max(4, min(132, spx - bx - 6))
         cx = max(hx + 4, (W - 22) // 2)     # transport cluster centered
         if cx + 22 > rz:
             cx = max(hx + 4, rz - 22)
@@ -2273,7 +2279,7 @@ class UI:
         put(self.scr, y0, x, wcut(s, W - x - 1), pal["toast"])
 
     def help(self, y0, W):
-        app, pal = self.app, self.pal
+        pal = self.pal
         rows = [
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
             ("Enter", "play selection"), ("Space", "play / pause"),
@@ -2287,7 +2293,7 @@ class UI:
             ("Backspace", "back"),
             ("?", "this help"), ("q", "quit"),
         ]
-        w = min(70, W - 6)
+        w = min(76, W - 4)
         two = w >= 62
         per_col = (len(rows) + 1) // 2 if two else len(rows)
         h = per_col + 5

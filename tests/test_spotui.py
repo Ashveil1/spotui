@@ -257,6 +257,29 @@ class AppTests(unittest.TestCase):
         self.app._apply_shuffle(False)
         self.assertNotIn(removed, [t['id'] for t in self.app.queue])
 
+    def test_topbar_search_avoids_help_and_avatar(self):
+        from collections import defaultdict
+        self.app.pal = defaultdict(int)
+        for width in [72, 80, 120]:
+            self.app.rects = []
+            ui = s.UI(self.app, Mock())
+            with patch.object(s, 'put'), patch.object(s, 'fill'):
+                ui.topbar(0, width, max(24, min(32, width // 4)))
+            rect = next(r for r in self.app.rects if r['act'] == 'focus_search')
+            self.assertLess(rect['x1'], width - 9)
+
+    def test_player_controls_do_not_overlap_volume_at_supported_widths(self):
+        from collections import defaultdict
+        self.app.pal = defaultdict(int)
+        for width in [72, 80, 86, 104, 120]:
+            self.app.rects = []
+            ui = s.UI(self.app, Mock())
+            with patch.object(s, 'put'), patch.object(s, 'fill'):
+                ui.playerbar(20, width)
+            seek = next(r for r in self.app.rects if r['act'] == 'seek')
+            volume = next(r for r in self.app.rects if r['act'] == 'vol')
+            self.assertLess(seek['x1'] + 5, volume['x0'])
+
 
 class MpvTests(unittest.TestCase):
     def test_stopped_player_cannot_restart(self):
