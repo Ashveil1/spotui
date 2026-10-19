@@ -148,3 +148,5 @@ selected upcoming song down / up. Non-finite numbers in a saved library are igno
 ## Session restore
 
 The queue and position are saved in the library file and restored paused on the next launch. Press space to resume.
+
+`F` (in Liked, playlists, history, queue) finds and jumps to the first song whose title or artist matches what you type; Enter keeps the selection.

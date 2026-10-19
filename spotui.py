@@ -838,7 +838,8 @@ class App:
         self.results = []
         self.searching = False
         self.search_token = 0
-        self.mode = "normal"          # normal | search | name | pick
+        self.find_buf = ""
+        self.mode = "normal"          # normal | search | name | pick | find
         self.name_buf = ""
         self.rename_index = None
         self.delete_index = None
@@ -927,6 +928,19 @@ class App:
         if kind == "similar":
             return (self.store.similar or {}).get("items") or []
         return []
+
+    def find_jump(self):
+        q = self.find_buf.casefold().strip()
+        tracks = self.view_tracks()
+        if not q:
+            self.toast_now("Find: type to jump, Enter to stay")
+            return
+        for i, t in enumerate(tracks):
+            if q in f"{t.get('title', '')} {t.get('artist', '')}".casefold():
+                self.sel[self.key()] = i
+                self.toast_now(f"Find: {self.find_buf}")
+                return
+        self.toast_now(f"Find: {self.find_buf} (no match)")
 
     def sel_row(self):
         return self.sel.get(self.key(), 0)
@@ -2417,7 +2431,7 @@ class UI:
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
             ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"),
-            ("l", "like / unlike"), ("s", "shuffle"),
+            ("F", "find in a list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
             ("c", "create playlist"), ("P", "add to playlist"),
@@ -2592,6 +2606,18 @@ def handle_key(app, k):
             app.mode = "normal"
         return
 
+    if app.mode == "find":
+        if k in ("\n", "\r", curses.KEY_ENTER, 10, 13, "\x1b", 27):
+            app.find_buf = ""
+            app.mode = "normal"
+        elif k in ("\x7f", "\b", curses.KEY_BACKSPACE, 127, 8, 263):
+            app.find_buf = app.find_buf[:-1]
+            app.find_jump()
+        elif isinstance(k, str) and k >= " " and unicodedata.category(k)[0] != "C":
+            app.find_buf += k
+            app.find_jump()
+        return
+
     if app.mode == "name":
         if k in ("\n", "\r", curses.KEY_ENTER, 10, 13):
             if app.rename_index is not None:
@@ -2659,6 +2685,10 @@ def handle_key(app, k):
             app.mode = "search"
         elif k == "?":
             app.show_help = True
+        elif k == "F" and kind in ("liked", "playlist", "history", "queue", "similar"):
+            app.find_buf = ""
+            app.mode = "find"
+            app.toast_now("Find: type to jump, Enter to stay")
         elif k == " ":
             app.toggle()
         elif k == "j":
