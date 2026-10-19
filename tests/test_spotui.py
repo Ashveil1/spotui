@@ -68,6 +68,16 @@ class AppTests(unittest.TestCase):
         self.assertEqual(len(self.app.store.playlists), 1)
         self.assertEqual([x['id'] for x in self.app.store.playlists[0]['tracks']], ['1', '2'])
 
+    def test_speed_steps_clamp(self):
+        self.app.mpv = Mock()
+        for _ in range(9):
+            s.handle_key(self.app, ']')
+        self.assertEqual(self.app.speed, 2.0)
+        self.app.mpv.set_speed.assert_called_with(2.0)
+        for _ in range(9):
+            s.handle_key(self.app, '[')
+        self.assertEqual(self.app.speed, 0.75)
+
     def test_home_keyboard_navigation(self):
         self.app.create_playlist('Rock')
         self.app.back()

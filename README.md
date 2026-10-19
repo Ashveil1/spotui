@@ -152,3 +152,5 @@ The queue and position are saved in the library file and restored paused on the 
 `F` (in Liked, playlists, history, queue) finds and jumps to the first song whose title or artist matches what you type; Enter keeps the selection.
 
 `W` in the queue view saves the queue as a new playlist (duplicates removed).
+
+`[` and `]` change playback speed (0.75x, 1x, 1.25x, 1.5x, 2x). Speed resets to 1x when SpotUI restarts.

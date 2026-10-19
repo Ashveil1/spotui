@@ -464,6 +464,9 @@ class Mpv:
         self.state["vol"] = v
         self.cmd(["set_property", "volume", v])
 
+    def set_speed(self, v):
+        self.cmd(["set_property", "speed", float(v)])
+
     def seek_abs(self, t):
         self.cmd(["set_property", "time-pos", max(0.0, float(t))])
 
@@ -873,6 +876,7 @@ class App:
         self.help_page = 0
         self.help_pages = 1
         self.sleep_deadline = None
+        self.speed = 1.0
         self.sleep_minutes = 0
         self.drag_rect = None
         self.last_store_error = None
@@ -1455,6 +1459,15 @@ class App:
         self.store.playlists.append({"name": name, "tracks": tracks})
         self.store.save()
         self.toast_now(f"Saved {len(tracks)} songs as {name}")
+
+    SPEEDS = (0.75, 1.0, 1.25, 1.5, 2.0)
+
+    def change_speed(self, d):
+        i = self.SPEEDS.index(self.speed) if self.speed in self.SPEEDS else 1
+        i = max(0, min(len(self.SPEEDS) - 1, i + d))
+        self.speed = self.SPEEDS[i]
+        self.mpv.set_speed(self.speed)
+        self.toast_now(f"Speed {self.speed:g}x")
 
     def create_playlist(self, name):
         name = name.strip() or "New Playlist"
@@ -2446,7 +2459,7 @@ class UI:
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("[ / ]", "speed down / up"),
             ("F", "find in a list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -2780,6 +2793,8 @@ def handle_key(app, k):
             app.vol(+5)
         elif k == "-":
             app.vol(-5)
+        elif k in ("[", "]"):
+            app.change_speed(1 if k == "]" else -1)
         elif k == "\x7f" or k == "\b":
             app.back()
         return
