@@ -61,6 +61,13 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.app.mode, 'normal')
         self.assertEqual(len(self.app.store.liked), 3)
 
+    def test_save_queue_as_playlist_dedupes(self):
+        self.app.queue = [track(1), track(2), track(1)]
+        self.app.push('queue')
+        s.handle_key(self.app, 'W')
+        self.assertEqual(len(self.app.store.playlists), 1)
+        self.assertEqual([x['id'] for x in self.app.store.playlists[0]['tracks']], ['1', '2'])
+
     def test_home_keyboard_navigation(self):
         self.app.create_playlist('Rock')
         self.app.back()
