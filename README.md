@@ -136,3 +136,8 @@ appears at the bottom of the sidebar. At expiry SpotUI pauses playback and
 cancels a pending track load; it does not close the app or shut down the computer.
 The timer is not persisted across restarts. Seek and volume bars support dragging
 on terminals that report mouse-motion events.
+
+`f` opens Now Playing with larger cover art, playback status and the next song.
+Click the small cover or title in the player bar to open it too. Its moving bars
+are decorative animation, not measured audio levels. Set
+`SPOTUI_REDUCED_MOTION=1` to skip the intro and keep visualizers still.
