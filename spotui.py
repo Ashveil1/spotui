@@ -856,6 +856,8 @@ class App:
         self._radio_busy = False
         self.quit = False
         self.show_help = False
+        self.help_page = 0
+        self.help_pages = 1
         self.sleep_deadline = None
         self.sleep_minutes = 0
         self.drag_rect = None
@@ -2374,25 +2376,26 @@ class UI:
             ("Backspace", "back"),
             ("?", "this help"), ("q", "quit"),
         ]
-        w = min(76, W - 4)
-        two = w >= 62
-        per_col = (len(rows) + 1) // 2 if two else len(rows)
-        h = per_col + 5
-        y = max(3, y0 - h // 2 - 2)
+        w = min(100, W - 4)
+        columns = 2 if w >= 90 else 1
+        capacity = max(1, min(12, self.scr.getmaxyx()[0] - 7))
+        page_size = capacity * columns
+        self.app.help_pages = max(1, (len(rows) + page_size - 1) // page_size)
+        self.app.help_page = min(self.app.help_page, self.app.help_pages - 1)
+        rows = rows[self.app.help_page * page_size:(self.app.help_page + 1) * page_size]
+        h = min(capacity, (len(rows) + columns - 1) // columns) + 5
+        y = max(1, (self.scr.getmaxyx()[0] - h) // 2)
         x = (W - w) // 2
         box(self.scr, y, x, w, h, pal["dim"], pal["side"])
-        put(self.scr, y + 1, x + 2, "Keyboard shortcuts", pal["side"],
-            curses.A_BOLD)
-        cols = [rows[:per_col], rows[per_col:]] if two else [rows]
-        colw = (w - 4) // len(cols)
-        for ci, col in enumerate(cols):
-            xx = x + 2 + ci * colw
-            for i, (k, d) in enumerate(col):
-                yy = y + 3 + i
-                put(self.scr, yy, xx, wcut(k, 10).ljust(11), pal["sgreen"],
-                    curses.A_BOLD)
-                put(self.scr, yy, xx + 11, wcut(d, colw - 13), pal["sdim"])
-        put(self.scr, y + h - 2, x + 2, "Esc or ? to close", pal["sfaint"])
+        put(self.scr, y + 1, x + 2, "Keyboard shortcuts", pal["side"], curses.A_BOLD)
+        colw = (w - 4) // columns
+        for i, (key, description) in enumerate(rows):
+            ci, ri = divmod(i, capacity)
+            xx, yy = x + 2 + ci * colw, y + 3 + ri
+            put(self.scr, yy, xx, wcut(key, 10), pal["sgreen"], curses.A_BOLD)
+            put(self.scr, yy, xx + 12, wcut(description, colw - 13), pal["sdim"])
+        footer = f"Page {self.app.help_page + 1}/{self.app.help_pages}  j/k: page  Esc: close"
+        put(self.scr, y + h - 2, x + 2, wcut(footer, w - 4), pal["sfaint"])
         self.hit(x, y, w, h, "helpclose")
 
     def name_modal(self, y0, W):
@@ -2477,7 +2480,8 @@ class UI:
             self.pick_modal(y1, W)
         if app.mode == "confirm_delete":
             self.delete_modal(W)
-        self.toast(y1 - 1, W)
+        if not app.show_help and app.mode not in ("name", "pick", "confirm_delete"):
+            self.toast(y1 - 1, W)
         # cursor for text input
         if app.mode == "search" and hasattr(app, "search_xy"):
             try:
@@ -2585,7 +2589,11 @@ def handle_key(app, k):
 
     # normal mode
     if app.show_help:
-        if k == "\x1b" or k == 27 or k == "?" or k == "q":
+        if k in ("j", curses.KEY_DOWN, curses.KEY_NPAGE):
+            app.help_page = min(app.help_pages - 1, app.help_page + 1)
+        elif k in ("k", curses.KEY_UP, curses.KEY_PPAGE):
+            app.help_page = max(0, app.help_page - 1)
+        elif k == "\x1b" or k == 27 or k == "?" or k == "q":
             app.show_help = False
             if k == "q":
                 app.quit = True
