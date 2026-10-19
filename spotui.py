@@ -855,6 +855,9 @@ class App:
         self._radio_busy = False
         self.quit = False
         self.show_help = False
+        self.sleep_deadline = None
+        self.sleep_minutes = 0
+        self.drag_rect = None
         self.user = (os.environ.get("USER") or "u")[:1]
         # --- real cover art piping (thumbnails as half-block pixels) ---
         self.cover_ok = shutil.which("ffmpeg") is not None
@@ -1319,6 +1322,24 @@ class App:
         self.store.save()
 
     # ------------------------------------------------------------ library --
+    def cycle_sleep(self):
+        options = [0, 15, 30, 60, 90]
+        self.sleep_minutes = options[(options.index(self.sleep_minutes) + 1) % len(options)]
+        self.sleep_deadline = (time.monotonic() + self.sleep_minutes * 60
+                               if self.sleep_minutes else None)
+        self.toast_now(f"Sleep timer: {self.sleep_minutes} min" if self.sleep_minutes
+                       else "Sleep timer off")
+
+    def tick(self):
+        if self.sleep_deadline is not None and time.monotonic() >= self.sleep_deadline:
+            self.sleep_deadline = None
+            self.sleep_minutes = 0
+            self.load_token += 1
+            self.loading = False
+            self.mpv.cmd(["set_property", "pause", True])
+            self.mpv.state["pause"] = True
+            self.toast_now("Sleep timer - playback paused")
+
     def like(self, t):
         if not t:
             return
@@ -1604,6 +1625,9 @@ class UI:
         put(scr, y0 + 1, 2, IC_LOGO, pal["sgreen"], curses.A_BOLD)
         put(scr, y0 + 1, 4, "SpotUI", pal["side"], curses.A_BOLD)
 
+        if app.sleep_deadline is not None:
+            remaining = max(0, int(app.sleep_deadline - time.monotonic()))
+            put(scr, y1 - 1, 2, f"Sleep {fmt_t(remaining)}", pal["sgreen"])
         kind, _ = app.stack[-1]
         navs = [("home", IC_HOME, "Home"), ("search", IC_SEARCH, "Search")]
         for i, (k, ic, label) in enumerate(navs):
@@ -2287,7 +2311,7 @@ class UI:
             ("+ / -", "volume"), ("a", "add to queue"),
             ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
-            ("v", "queue view"),
+            ("v", "queue view"), ("t", "sleep timer"),
             ("c", "create playlist"), ("P", "add to playlist"),
             ("d", "delete from list"), ("e / D", "rename / delete playlist"),
             ("Backspace", "back"),
@@ -2559,6 +2583,8 @@ def handle_key(app, k):
             app.like(app.track_under() or app.current)
         elif k == "s":
             app.toggle_shuffle()
+        elif k == "t":
+            app.cycle_sleep()
         elif k == "R":
             app.refresh_similar(force=True)
             app.toast_now("Finding new picks…")
@@ -2620,6 +2646,17 @@ def handle_mouse(app):
         _, mx, my, _, bstate = curses.getmouse()
     except curses.error:
         return
+    if app.drag_rect is not None and bstate & (curses.REPORT_MOUSE_POSITION | curses.BUTTON1_RELEASED):
+        r = app.drag_rect
+        start, width = r["arg"]
+        fraction = min(1.0, max(0.0, (mx - start) / max(1, width - 1)))
+        if r["act"] == "vol":
+            app.vol(absolute=round(fraction * 100))
+        elif app.mpv.state["dur"]:
+            app.mpv.seek_abs(fraction * app.mpv.state["dur"])
+        if bstate & curses.BUTTON1_RELEASED:
+            app.drag_rect = None
+        return
     if bstate & curses.BUTTON4_PRESSED:
         if app.sw_bounds and mx < app.sw_bounds[0]:
             app.soff = max(0, min(getattr(app, "soff_max", 0),
@@ -2646,6 +2683,8 @@ def handle_mouse(app):
         if not (r["x0"] <= mx < r["x1"] and r["y0"] <= my < r["y1"]):
             continue
         act, arg = r["act"], r["arg"]
+        if act in ("seek", "vol") and not blocked and bstate & curses.BUTTON1_PRESSED:
+            app.drag_rect = r
         if blocked and act not in allowed:
             return
         if act == "noop":
@@ -2735,7 +2774,8 @@ def run(scr):
         curses.mousemask(
             curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED
             | curses.BUTTON1_CLICKED | curses.BUTTON1_DOUBLE_CLICKED
-            | curses.BUTTON4_PRESSED | getattr(curses, "BUTTON5_PRESSED", 0))
+            | curses.BUTTON4_PRESSED | getattr(curses, "BUTTON5_PRESSED", 0)
+            | curses.REPORT_MOUSE_POSITION)
     except curses.error:
         pass
 
@@ -2784,6 +2824,7 @@ def run(scr):
     try:
         while not app.quit:
             app.frame += 1
+            app.tick()
             if app.mpv.on_end.is_set():
                 app.mpv.on_end.clear()
                 app.next(auto=True)

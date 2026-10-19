@@ -280,6 +280,29 @@ class AppTests(unittest.TestCase):
             volume = next(r for r in self.app.rects if r['act'] == 'vol')
             self.assertLess(seek['x1'] + 5, volume['x0'])
 
+    def test_sleep_timer_pauses_and_cancels_pending_load(self):
+        self.app.mpv.cmd = Mock()
+        with patch.object(s.time, 'monotonic', return_value=100):
+            self.app.cycle_sleep()
+        self.assertEqual(self.app.sleep_deadline, 1000)
+        with patch.object(s.time, 'monotonic', return_value=1001):
+            self.app.tick()
+        self.assertIsNone(self.app.sleep_deadline)
+        self.assertTrue(self.app.mpv.state['pause'])
+        self.assertEqual(self.app.load_token, 1)
+
+    def test_sleep_timer_cycles_off(self):
+        for _ in range(5):
+            self.app.cycle_sleep()
+        self.assertIsNone(self.app.sleep_deadline)
+
+    def test_volume_drag_clamps_and_releases(self):
+        self.app.drag_rect = dict(act='vol', arg=(10, 10))
+        with patch.object(s.curses, 'getmouse', return_value=(0, 40, 5, 0, s.curses.BUTTON1_RELEASED)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.store.volume, 100)
+        self.assertIsNone(self.app.drag_rect)
+
 
 class MpvTests(unittest.TestCase):
     def test_stopped_player_cannot_restart(self):
