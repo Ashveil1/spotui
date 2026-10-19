@@ -143,6 +143,45 @@ class AppTests(unittest.TestCase):
         self.assertEqual(json.loads(s.STORE.read_text())['liked'][0]['id'], '1')
         self.assertEqual(list(s.CFG.iterdir()), [s.STORE])
 
+    def test_put_clips_by_terminal_cells(self):
+        scr = Mock()
+        scr.getmaxyx.return_value = (10, 8)
+        with patch.object(s.curses, 'color_pair', return_value=0):
+            s.put(scr, 0, 3, '中文abc', 0)
+        self.assertEqual(scr.addstr.call_args.args[2], '中文')
+
+    def test_put_drops_control_characters(self):
+        scr = Mock()
+        scr.getmaxyx.return_value = (10, 40)
+        with patch.object(s.curses, 'color_pair', return_value=0):
+            s.put(scr, 0, 0, 'song\nname\x1b', 0)
+        self.assertEqual(scr.addstr.call_args.args[2], 'songname')
+
+    def test_playlist_picker_scrolls_selected_item_into_view(self):
+        self.app.pick_rows = [dict(name=str(i)) for i in range(25)]
+        self.app.pick_idx = 24
+        self.app.pal = {key: 0 for key in ['dim', 'side', 'hover', 'sdim']}
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        with patch.object(s.curses, 'color_pair', return_value=0):
+            s.UI(self.app, scr).pick_modal(35, 120)
+        rows = [r['arg'] for r in self.app.rects if r['act'] == 'pickrow']
+        self.assertIn(24, rows)
+        self.assertNotIn(0, rows)
+
+    def test_queue_scrolls_selected_item_into_view(self):
+        self.app.queue = [track(i) for i in range(40)]
+        self.app.current = self.app.queue[0]
+        self.app.qpos = 0
+        self.app.sel['queue:'] = 35
+        self.app.pal = dict(text=0, faint=0, dim=0)
+        ui = s.UI(self.app, Mock())
+        ui.row = Mock()
+        with patch.object(s, 'put'):
+            ui.v_queue(3, 25, 24, 120)
+        indices = [c.args[6] for c in ui.row.call_args_list]
+        self.assertIn(35, indices)
+
 
 class MpvTests(unittest.TestCase):
     def test_load_checks_command_success_not_null_data(self):

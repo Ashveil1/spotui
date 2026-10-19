@@ -1390,11 +1390,19 @@ def put(scr, y, x, s, pair, attr=0):
     # Never write the last column: a write there arms curses' pending
     # wrap, and the NEXT write then silently lands one row lower (the
     # whole background shifts down a row = black boxes over the text).
-    n = min(len(s), max(0, W - 1 - x))
-    if n <= 0:
+    text, used = [], 0
+    for ch in str(s):
+        if unicodedata.category(ch).startswith("C"):
+            continue
+        width = dwidth(ch)
+        if used + width > W - 1 - x:
+            break
+        text.append(ch)
+        used += width
+    if not text:
         return
     try:
-        scr.addnstr(y, x, s[:n], n, curses.color_pair(pair) | attr)
+        scr.addstr(y, x, "".join(text), curses.color_pair(pair) | attr)
     except curses.error:
         pass
 
@@ -1483,7 +1491,7 @@ class UI:
             put(self.scr, y0 + 1, px + 2, IC_SEARCH, pal["pilldim"])
             put(self.scr, y0 + 1, px + 4, PLACEHOLDER, pal["pilldim"])
         self.hit(px, y0, pw, 3, "focus_search")
-        app.search_xy = (px + 4 + dlen(q), y0 + 1)
+        app.search_xy = (px + 4 + min(dlen(q), pw - 7), y0 + 1)
 
         put(self.scr, y0 + 1, W - 9, "?", pal["sdim"])
         self.hit(W - 9, y0 + 1, 1, 1, "help")
@@ -1922,14 +1930,25 @@ class UI:
                      "queue:", app.qpos, show_date=False, current=True)
             y += 3
         put(scr, y, x0 + 2, "Next up", pal["dim"], curses.A_BOLD)
-        nxt = list(enumerate(app.queue))[app.qpos + 1:]
-        if not nxt:
-            put(scr, y + 1, x0 + 5, "Queue is empty — press a on a song "
+        first = max(0, app.qpos + 1)
+        if first >= len(app.queue):
+            put(scr, y + 1, x0 + 5, "Queue is empty - press a on a song "
                 "to add it", pal["faint"])
             return
-        for j, (qi, t) in enumerate(nxt):
-            self.row(y + 1 + j, x0 + 2, W - x0 - 4, t, qi, "queue:", qi,
-                     show_date=False)
+        # Reuse list scrolling but retain original queue indices for input.
+        visible = max(0, y1 - y - 2)
+        selected = app.sel.get("queue:", first)
+        offset = max(first, app.off.get("queue:", first))
+        if selected >= first:
+            if selected < offset:
+                offset = selected
+            elif selected >= offset + visible:
+                offset = selected - visible + 1
+        offset = max(first, min(offset, max(first, len(app.queue) - visible)))
+        app.off["queue:"] = offset
+        for j, qi in enumerate(range(offset, min(offset + visible, len(app.queue)))):
+            self.row(y + 1 + j, x0 + 2, W - x0 - 4, app.queue[qi], qi,
+                     "queue:", qi, show_date=False)
 
     # --------------------------------------------------------- list bits --
     def list_header(self, y, x0, w, show_date):
@@ -2202,7 +2221,7 @@ class UI:
         fill(self.scr, y + 3, x + 2, w - 4, pal["pill"])
         put(self.scr, y + 3, x + 3, wcut(app.name_buf, w - 8), pal["pill"],
             curses.A_BOLD)
-        app.name_xy = (x + 3 + dlen(app.name_buf), y + 3)
+        app.name_xy = (x + 3 + min(dlen(app.name_buf), w - 9), y + 3)
         put(self.scr, y + h - 2, x + 2, "Enter: save · Esc: cancel",
             pal["sfaint"])
 
@@ -2210,13 +2229,17 @@ class UI:
         app, pal = self.app, self.pal
         w = 44
         h = min(len(app.pick_rows) + 4, 14)
-        y = max(2, y0 - h // 2 - 2)
+        y = max(1, (self.scr.getmaxyx()[0] - h) // 2)
         x = (W - w) // 2
         box(self.scr, y, x, w, h, pal["dim"], pal["side"])
         put(self.scr, y + 1, x + 2, "Add to playlist", pal["side"],
             curses.A_BOLD)
-        for i, r in enumerate(app.pick_rows[: h - 3]):
-            yy = y + 3 + i
+        count = max(1, h - 4)
+        start = max(0, min(app.pick_idx - count + 1,
+                           len(app.pick_rows) - count))
+        for i in range(start, min(start + count, len(app.pick_rows))):
+            r = app.pick_rows[i]
+            yy = y + 3 + i - start
             if i == app.pick_idx:
                 fill(self.scr, yy, x + 2, w - 4, pal["hover"])
             put(self.scr, yy, x + 4, wcut(r["name"], w - 8),
@@ -2235,6 +2258,8 @@ class UI:
         if H < 16 or W < 72:
             put(scr, H // 2, 2, "Terminal too small — SpotUI needs ≥ 72×16",
                 0)
+            scr.noutrefresh()
+            curses.doupdate()
             return
         # solid #121212 canvas first — no transparent gaps showing the
         # terminal's own background as patchwork boxes around text

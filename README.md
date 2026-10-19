@@ -92,3 +92,11 @@ GitHub Actions runs these tests on Python 3.9, 3.11 and 3.13. The suite covers
 mpv's IPC success replies, stale playback requests, queue navigation, playlist
 creation, mouse hit boundaries, volume limits and Thai recommendation titles.
 Live YouTube access and a working audio device still need a separate smoke test.
+
+Saved libraries that cannot be parsed are left untouched rather than replaced
+with an empty library. Back up `~/.config/spotui/library.json` before repairing
+such a file. The app reports the read error at startup.
+
+Long queues and the Add to playlist picker scroll to keep the selected row
+visible. Track text is clipped by terminal-cell width so wide CJK titles do not
+wrap into the next row.
