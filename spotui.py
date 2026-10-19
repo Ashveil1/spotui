@@ -1444,6 +1444,19 @@ class App:
         self.sel["queue:"] = j
         return True
 
+    def clear_upcoming(self):
+        if self.qpos + 1 >= len(self.queue):
+            self.toast_now("Nothing upcoming to clear")
+            return
+        n = len(self.queue) - self.qpos - 1
+        self.queue_revision += 1
+        del self.queue[self.qpos + 1:]
+        if self.orig_queue is not None:
+            ids = {t.get("id") for t in self.queue}
+            self.orig_queue = [t for t in self.orig_queue if t.get("id") in ids]
+        self.sel["queue:"] = max(0, min(self.sel.get("queue:", 0), len(self.queue) - 1))
+        self.toast_now(f"Cleared {n} upcoming songs")
+
     def save_queue_as_playlist(self):
         keep = ("id", "title", "artist", "dur", "url")
         seen, tracks = set(), []
@@ -2459,7 +2472,7 @@ class UI:
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("[ / ]", "speed down / up"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("[ / ]", "speed down / up"),
             ("F", "find in a list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -2752,6 +2765,8 @@ def handle_key(app, k):
                 app.toast_now("Nothing selected — play or pick a song first")
         elif k == "A":
             app.play_next(app.track_under() or app.current)
+        elif k == "C" and kind == "queue":
+            app.clear_upcoming()
         elif k == "W" and kind == "queue":
             app.save_queue_as_playlist()
         elif k in ("J", "K") and kind == "queue":
