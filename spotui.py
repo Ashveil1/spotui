@@ -3098,8 +3098,30 @@ def run(scr):
         app.mpv.stop()
 
 
+def import_playlist(path):
+    """Import a playlist JSON written by X. Returns (ok, message)."""
+    store = Store()
+    if store._corrupt:
+        return False, store.error
+    try:
+        d = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return False, f"Could not read {path}: {e}"
+    if not isinstance(d, dict) or not isinstance(d.get("name"), str):
+        return False, "Not a SpotUI playlist file"
+    tracks = Store._tracks(d.get("tracks"))
+    store.playlists.append({"name": d["name"], "tracks": tracks})
+    if not store.save():
+        return False, store.error
+    return True, f"Imported {d['name']} ({len(tracks)} songs)"
+
+
 def main():
     locale.setlocale(locale.LC_ALL, "")
+    if len(sys.argv) == 3 and sys.argv[1] == "--import":
+        ok, msg = import_playlist(sys.argv[2])
+        print(msg, file=sys.stdout if ok else sys.stderr)
+        sys.exit(0 if ok else 1)
     if not sys.stdout.isatty():
         print("SpotUI needs a terminal.", file=sys.stderr)
         sys.exit(1)
