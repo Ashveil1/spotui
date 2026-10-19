@@ -17,6 +17,7 @@ import socket
 import subprocess
 import sys
 import threading
+import tempfile
 import time
 import unicodedata
 import queue
@@ -254,35 +255,90 @@ class Store:
         self.volume = 70
         self._load()
 
+    @staticmethod
+    def _tracks(value):
+        if not isinstance(value, list):
+            return []
+        out = []
+        for t in value:
+            if not isinstance(t, dict) or not isinstance(t.get("id"), str):
+                continue
+            if not re.fullmatch(r"[A-Za-z0-9_-]+", t["id"]):
+                continue
+            t = dict(t)
+            for key, default in (("title", "Unknown title"),
+                                 ("artist", "Unknown artist")):
+                if not isinstance(t.get(key), str):
+                    t[key] = default
+            t["url"] = f"https://www.youtube.com/watch?v={t['id']}"
+            if not isinstance(t.get("dur"), (int, float)):
+                t["dur"] = None
+            out.append(t)
+        return out
+
     def _load(self):
+        self.error = None
+        self._save_lock = threading.Lock()
+        self._corrupt = False
         try:
-            d = json.loads(STORE.read_text())
-            self.liked = d.get("liked", [])
-            self.playlists = d.get("playlists", [])
-            self.recent = d.get("recent", [])
-            self.history = d.get("history", []) or []
-            self.similar = d.get("similar", {}) or {}
+            d = json.loads(STORE.read_text(encoding="utf-8"))
+            if not isinstance(d, dict):
+                raise ValueError("library root must be an object")
+        except FileNotFoundError:
+            return
+        except (OSError, ValueError) as e:
+            self.error = f"Library could not be read: {e}"
+            self._corrupt = True
+            return
+        self.liked = self._tracks(d.get("liked"))
+        self.history = self._tracks(d.get("history"))[:30]
+        self.playlists = []
+        for pl in d.get("playlists", []) if isinstance(d.get("playlists"), list) else []:
+            if isinstance(pl, dict) and isinstance(pl.get("name"), str):
+                self.playlists.append(dict(name=pl["name"], tracks=self._tracks(pl.get("tracks"))))
+        self.recent = [q for q in d.get("recent", []) if isinstance(q, str)][:8] if isinstance(d.get("recent"), list) else []
+        cache = d.get("similar")
+        self.similar = dict(cache) if isinstance(cache, dict) else {}
+        for key in ("items", "pool"):
+            self.similar[key] = self._tracks(self.similar.get(key))
+        try:
             self.last_search = float(d.get("last_search") or 0)
-            self.volume = int(d.get("volume", 70))
-        except Exception:
+        except (ValueError, TypeError):
+            pass
+        try:
+            self.volume = max(0, min(100, int(d.get("volume", 70))))
+        except (ValueError, TypeError):
             pass
 
     def save(self):
-        try:
-            CFG.mkdir(parents=True, exist_ok=True)
-            tmp = STORE.with_suffix(".tmp")
-            tmp.write_text(json.dumps({
-                "liked": self.liked,
-                "playlists": self.playlists,
-                "recent": self.recent,
-                "history": self.history,
-                "similar": self.similar,
-                "last_search": self.last_search,
-                "volume": self.volume,
-            }, ensure_ascii=False, indent=1))
-            tmp.replace(STORE)
-        except Exception:
-            pass
+        # A private unique temp file prevents two background saves from
+        # replacing each other's temp files. Never destroy an unreadable library.
+        with self._save_lock:
+            if self._corrupt:
+                return False
+            tmp = None
+            try:
+                CFG.mkdir(parents=True, exist_ok=True)
+                with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
+                                                 dir=CFG, delete=False) as f:
+                    tmp = Path(f.name)
+                    json.dump({
+                        "liked": self.liked, "playlists": self.playlists,
+                        "recent": self.recent, "history": self.history,
+                        "similar": self.similar, "last_search": self.last_search,
+                        "volume": self.volume,
+                    }, f, ensure_ascii=False, indent=1)
+                    f.flush()
+                    os.fsync(f.fileno())
+                tmp.replace(STORE)
+                self.error = None
+                return True
+            except (OSError, ValueError, TypeError) as e:
+                self.error = f"Library could not be saved: {e}"
+                return False
+            finally:
+                if tmp is not None:
+                    tmp.unlink(missing_ok=True)
 
 
 # ------------------------------------------------------------------- mpv ---
@@ -2568,6 +2624,8 @@ def run(scr):
 
     if not HAVE_YTDL:
         app.toast_now("yt-dlp missing — run ./install.sh first")
+    if app.store.error:
+        app.toast_now(app.store.error)
     app.refresh_similar()
 
     try:
