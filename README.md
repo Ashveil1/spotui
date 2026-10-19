@@ -130,3 +130,9 @@ expressly permits. Using yt-dlp or direct streams can conflict with those terms,
 and access can break or be restricted. Users are responsible for checking the
 terms and rights that apply to their use. Use official clients when those are
 required. This note is not legal advice.
+
+`t` cycles a session sleep timer: 15 / 30 / 60 / 90 minutes / off. The countdown
+appears at the bottom of the sidebar. At expiry SpotUI pauses playback and
+cancels a pending track load; it does not close the app or shut down the computer.
+The timer is not persisted across restarts. Seek and volume bars support dragging
+on terminals that report mouse-motion events.
