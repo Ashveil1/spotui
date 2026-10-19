@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# SpotUI launcher — resolves its real location, so it works from any
+# directory and even when invoked through a symlink.
+SELF="$(readlink -f "$0")"
+ROOT="$(dirname "$SELF")"
+if [ -x "$ROOT/.venv/bin/python" ]; then
+    exec "$ROOT/.venv/bin/python" "$ROOT/spotui.py" "$@"
+else
+    exec python3 "$ROOT/spotui.py" "$@"
+fi

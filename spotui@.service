@@ -1,0 +1,22 @@
+[Unit]
+Description=SpotUI music player on %I (replaces the %I login prompt)
+After=graphical-session.target pipewire.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+# รอให้ pipewire ของผู้ใช้พร้อมก่อน (ไม่เกิน 60 วิ)
+ExecStartPre=/bin/sh -c 'i=0; while [ $i -lt 60 ]; do [ -S /run/user/1000/pipewire-0 ] && exit 0; i=$((i+1)); sleep 1; done; exit 0'
+ExecStart=/home/aponith/.local/bin/spotui
+Restart=on-failure
+RestartSec=5
+TTYPath=/dev/%I
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+# ถ้าโปรแกรมหายเอง ไม่ต้องรีสตาร์ทวนไม่จบ
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Install]
+WantedBy=graphical-session.target

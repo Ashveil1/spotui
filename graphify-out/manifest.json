@@ -1,0 +1,26 @@
+{
+  "install.sh": {
+    "mtime": 1792395680.7887986,
+    "seen": 1792399509.5213573,
+    "ast_hash": "39fb38c0b6da3cb98e8316ab54bf90ed",
+    "semantic_hash": "39fb38c0b6da3cb98e8316ab54bf90ed"
+  },
+  "spotui": {
+    "mtime": 1792395680.7887986,
+    "seen": 1792399509.521364,
+    "ast_hash": "13aec667a8d844814519532fc9a8286e",
+    "semantic_hash": "13aec667a8d844814519532fc9a8286e"
+  },
+  "spotui.py": {
+    "mtime": 1792399215.6178968,
+    "seen": 1792399509.521368,
+    "ast_hash": "dd156368eb28e1ecc9efa20a250d4d87",
+    "semantic_hash": "dd156368eb28e1ecc9efa20a250d4d87"
+  },
+  "README.md": {
+    "mtime": 1792399389.744366,
+    "seen": 1792399509.5213711,
+    "ast_hash": "fe4ca2f4d965ccaac66d603b60768242",
+    "semantic_hash": "fe4ca2f4d965ccaac66d603b60768242"
+  }
+}

@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local environment / editor
+.env
+.DS_Store
+*.swp
+
+# Generated knowledge-graph output (regenerate with graphify)
+graphify-out/cache/
+graphify-out/cost.json
