@@ -1908,7 +1908,8 @@ class UI:
         state = "Connecting..." if app.loading else ("Paused" if app.mpv.state["pause"] else
                  "Stopped" if app.mpv.state["idle"] else "Playing")
         if ty + 3 < y1 - 1:
-            put(scr, ty + 3, tx, state, pal["green"])
+            label = state if app.speed == 1.0 else f"{state}  {app.speed:g}x"
+            put(scr, ty + 3, tx, wcut(label, tw), pal["green"])
         if ty + 6 < y1 - 1:
             n = min(20, tw)
             for i in range(n):
