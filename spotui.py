@@ -361,6 +361,8 @@ class Mpv:
 
     def ensure(self):
         with self.slock:
+            if not self.running:
+                return False
             if self.alive():
                 return True
             try:
@@ -484,10 +486,22 @@ class Mpv:
         try:
             if self.alive():
                 self.cmd(["quit"])
-                time.sleep(0.15)
-                self.proc.terminate()
-        except Exception:
+                try:
+                    self.proc.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    self.proc.terminate()
+                    try:
+                        self.proc.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        self.proc.kill()
+                        self.proc.wait(timeout=1)
+        except (OSError, subprocess.TimeoutExpired):
             pass
+        finally:
+            try:
+                os.unlink(self.sock_path)
+            except FileNotFoundError:
+                pass
 
 
 # -------------------------------------------------------------- yt-dlp -----
@@ -789,6 +803,7 @@ class App:
         self.pick_pending = None      # track waiting to be added
         self.toast = ("", 0.0)
         self.queue = []
+        self.queue_revision = 0
         self.qpos = -1
         self.orig_queue = None
         self.current = None
@@ -969,6 +984,7 @@ class App:
     def play(self, tracks, pos):
         if not tracks or not 0 <= pos < len(tracks):
             return
+        self.queue_revision += 1
         self.orig_queue = None
         self.queue = [dict(t) for t in tracks]
         self.qpos = pos
@@ -977,6 +993,7 @@ class App:
         self._play_current()
 
     def _apply_shuffle(self, on):
+        self.queue_revision += 1
         if on:
             self.orig_queue = [dict(t) for t in self.queue]
             head = self.queue[:self.qpos + 1]
@@ -1026,10 +1043,12 @@ class App:
         if not vid or self._radio_busy:
             return
         self._radio_busy = True
-        threading.Thread(target=self._radio_worker, args=(dict(track),),
+        threading.Thread(target=self._radio_worker, args=(dict(track), self.queue_revision, self.load_token),
                          daemon=True).start()
 
-    def _radio_worker(self, track):
+    def _radio_worker(self, track, revision=None, token=None):
+        revision = self.queue_revision if revision is None else revision
+        token = self.load_token if token is None else token
         import random
         items = []
         try:
@@ -1053,7 +1072,9 @@ class App:
         picks.sort(key=lambda t: 0 if (t.get("ch") or "") == ch else 1)
         with self.lock:
             # only swap the queue if the user is still on this track
-            if self.current and self.current.get("id") == track.get("id"):
+            if (picks and not self.quit and revision == self.queue_revision
+                    and token == self.load_token and self.current
+                    and self.current.get("id") == track.get("id")):
                 self.queue = [track] + picks
                 self.qpos = 0
                 self.toast_now("Radio on — more from "
@@ -1189,7 +1210,7 @@ class App:
             if not url:
                 raise RuntimeError("no stream found")
             with self.lock:
-                if token != self.load_token:
+                if token != self.load_token or self.quit:
                     return
                 if not self.mpv.load(url):
                     raise RuntimeError("mpv failed to start")
@@ -1197,7 +1218,7 @@ class App:
                 self._note_history(track)
         except Exception as e:
             with self.lock:
-                if token != self.load_token:
+                if token != self.load_token or self.quit:
                     return
                 self.loading = False
                 self.toast_now(f"Couldn't play — {e}")
@@ -1285,6 +1306,7 @@ class App:
         if not self.current:
             self.play([t], 0)
             return
+        self.queue_revision += 1
         self.queue.append(dict(t))
         if self.shuffle and self.orig_queue:
             self.orig_queue.append(dict(t))
@@ -1324,6 +1346,7 @@ class App:
         elif kind == "liked":
             self.like(tracks[idx])
         elif kind == "queue":
+            self.queue_revision += 1
             del self.queue[idx]
             if idx < self.qpos:
                 self.qpos -= 1
@@ -2683,6 +2706,8 @@ def run(scr):
             except Exception:
                 pass
     finally:
+        app.quit = True
+        app.load_token += 1
         try:
             app.pal.restore()
         except Exception:

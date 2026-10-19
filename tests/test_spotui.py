@@ -182,8 +182,38 @@ class AppTests(unittest.TestCase):
         indices = [c.args[6] for c in ui.row.call_args_list]
         self.assertIn(35, indices)
 
+    def test_radio_does_not_overwrite_user_queue_edits(self):
+        self.app.current = track(1)
+        self.app.queue = [track(1)]
+        rev = self.app.queue_revision
+        self.app.add_queue(track(2))
+        with patch.object(s, '_ytdl_playlist', return_value=[track(3)]):
+            self.app._radio_worker(track(1), rev, self.app.load_token)
+        self.assertEqual([t['id'] for t in self.app.queue], ['1', '2'])
+
+    def test_empty_radio_preserves_search_queue(self):
+        self.app.current = track(1)
+        self.app.queue = [track(1), track(2)]
+        with patch.object(s, '_ytdl_playlist', return_value=[]):
+            self.app._radio_worker(track(1))
+        self.assertEqual(len(self.app.queue), 2)
+
+    def test_quit_cancels_resolver(self):
+        self.app.quit = True
+        self.app.mpv.load = Mock()
+        with patch.object(s, 'HAVE_YTDL', True), patch.object(s, 'resolve_url', return_value='audio'):
+            self.app._resolve_load(track(1))
+        self.app.mpv.load.assert_not_called()
+
 
 class MpvTests(unittest.TestCase):
+    def test_stopped_player_cannot_restart(self):
+        mpv = s.Mpv()
+        mpv.stop()
+        with patch.object(s.subprocess, 'Popen') as proc:
+            self.assertFalse(mpv.ensure())
+        proc.assert_not_called()
+
     def test_load_checks_command_success_not_null_data(self):
         mpv = s.Mpv()
         mpv.ensure = Mock(return_value=True)
