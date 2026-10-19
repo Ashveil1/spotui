@@ -205,6 +205,34 @@ class AppTests(unittest.TestCase):
             self.app._resolve_load(track(1))
         self.app.mpv.load.assert_not_called()
 
+    def test_playlist_rename(self):
+        self.app.create_playlist('Old')
+        s.handle_key(self.app, 'e')
+        self.app.name_buf = 'New'
+        s.handle_key(self.app, s.curses.KEY_ENTER)
+        self.assertEqual(self.app.store.playlists[0]['name'], 'New')
+
+    def test_playlist_delete_requires_confirmation_and_reindexes(self):
+        for name in ['One', 'Two', 'Three']:
+            self.app.create_playlist(name)
+        self.app.sel['playlist:2'] = 3
+        self.app.push('playlist', 1)
+        s.handle_key(self.app, 'D')
+        self.assertEqual(len(self.app.store.playlists), 3)
+        s.handle_key(self.app, 'n')
+        self.assertEqual(len(self.app.store.playlists), 3)
+        s.handle_key(self.app, 'D')
+        s.handle_key(self.app, 'y')
+        self.assertEqual([p['name'] for p in self.app.store.playlists], ['One', 'Three'])
+        self.assertEqual(self.app.sel['playlist:1'], 3)
+        self.assertNotIn(('playlist', 2), self.app.stack)
+
+    def test_name_cancel_clears_pending_track(self):
+        self.app.open_pick(track(1))
+        s.handle_key(self.app, '\n')
+        s.handle_key(self.app, '\x1b')
+        self.assertIsNone(self.app.pick_pending)
+
 
 class MpvTests(unittest.TestCase):
     def test_stopped_player_cannot_restart(self):

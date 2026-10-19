@@ -100,3 +100,7 @@ such a file. The app reports the read error at startup.
 Long queues and the Add to playlist picker scroll to keep the selected row
 visible. Track text is clipped by terminal-cell width so wide CJK titles do not
 wrap into the next row.
+
+While viewing a playlist, `e` renames it and `D` opens a delete confirmation.
+Deletion only happens after `y`; `n` or Esc cancels. Removing a playlist does not
+stop the current song or remove songs from Liked Songs.
