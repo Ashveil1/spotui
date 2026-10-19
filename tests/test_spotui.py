@@ -328,6 +328,34 @@ class AppTests(unittest.TestCase):
         self.app._apply_shuffle(False)
         self.assertCountEqual([t['id'] for t in self.app.queue], ['1', '3', '4'])
 
+    def test_now_playing_toggle_returns_to_previous_view(self):
+        self.app.push('liked')
+        s.handle_key(self.app, 'f')
+        self.assertEqual(self.app.stack[-1], ('playing', None))
+        s.handle_key(self.app, 'f')
+        self.assertEqual(self.app.stack[-1], ('liked', None))
+
+    def test_reduced_motion_equalizer_is_static(self):
+        self.app.reduced_motion = True
+        self.app.frame = 0
+        first = s.eq_bars(self.app)
+        self.app.frame = 40
+        self.assertEqual(s.eq_bars(self.app), first)
+
+    def test_now_playing_empty_and_current_render(self):
+        from collections import defaultdict
+        self.app.pal = defaultdict(int)
+        scr = Mock()
+        scr.getmaxyx.return_value = (32, 120)
+        ui = s.UI(self.app, scr)
+        self.app.cover_for = Mock(return_value=None)
+        with patch.object(s, 'put') as output, patch.object(s, 'draw_art'):
+            ui.v_playing(3, 29, 30, 120)
+            self.assertTrue(any('Search for a song' in str(c) for c in output.call_args_list))
+            self.app.current = track(1)
+            ui.v_playing(3, 29, 30, 120)
+            self.assertTrue(any('Song 1' in str(c) for c in output.call_args_list))
+
 
 class MpvTests(unittest.TestCase):
     def test_stopped_player_cannot_restart(self):

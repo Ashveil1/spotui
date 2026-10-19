@@ -845,6 +845,7 @@ class App:
         self._last_row_t = 0.0
         self.shuffle = False
         self.repeat = 0               # 0 off, 1 all, 2 one
+        self.reduced_motion = bool(os.environ.get("SPOTUI_REDUCED_MOTION"))
         self.frame = 0
         self.rects = []
         self.soff = 0                 # sidebar scroll offset
@@ -1575,6 +1576,8 @@ def draw_art(scr, y, x, w, h, seed, pal, icon=None, art=None):
 
 
 def eq_bars(app):
+    if app.reduced_motion:
+        return EQ_FRAMES[0]
     return EQ_FRAMES[(app.frame // 4) % len(EQ_FRAMES)]
 
 
@@ -1696,6 +1699,8 @@ class UI:
         """Opening animation: sweeping equalizer bars + wordmark reveal.
         Any key skips it; tiny screens skip it automatically."""
         pal = self.pal
+        if self.app.reduced_motion:
+            return
         H, W = scr.getmaxyx()
         if H < 16 or W < 72:
             return
@@ -1751,6 +1756,48 @@ class UI:
             self.v_collection(y0, y1, x0, W, kind, arg)
         elif kind == "queue":
             self.v_queue(y0, y1, x0, W)
+        elif kind == "playing":
+            self.v_playing(y0, y1, x0, W)
+
+    def v_playing(self, y0, y1, x0, W):
+        app, pal, scr = self.app, self.pal, self.scr
+        track = app.current
+        width, height = W - x0 - 4, y1 - y0 - 2
+        put(scr, y0 + 1, x0 + 2, "N O W   P L A Y I N G", pal["green"], curses.A_BOLD)
+        if not track:
+            put(scr, y0 + 3, x0 + 2, "Search for a song with / to begin", pal["dim"])
+            return
+        ah = max(2, min(10, height - 7))
+        aw = min(30, max(8, width // 3))
+        wide = width >= 72
+        ax = x0 + 2 if wide else x0 + 2 + max(0, (width - aw) // 2)
+        ay = y0 + 3
+        draw_art(scr, ay, ax, aw, ah, track["id"], pal, icon=IC_NOTE,
+                 art=app.cover_for(track["id"], aw, ah))
+        tx = ax + aw + 4 if wide else x0 + 2
+        ty = ay + 1 if wide else ay + ah + 1
+        tw = max(8, W - tx - 3)
+        put(scr, ty, tx, wcut(track["title"], tw), pal["text"], curses.A_BOLD)
+        put(scr, ty + 1, tx, wcut(track["artist"], tw), pal["dim"])
+        state = "Connecting..." if app.loading else ("Paused" if app.mpv.state["pause"] else
+                 "Stopped" if app.mpv.state["idle"] else "Playing")
+        if ty + 3 < y1 - 1:
+            put(scr, ty + 3, tx, state, pal["green"])
+        if ty + 6 < y1 - 1:
+            n = min(20, tw)
+            for i in range(n):
+                v = self.BARS_PAT[(i + app.frame // 2) % len(self.BARS_PAT)]
+                ch = "▁" if state != "Playing" or app.reduced_motion else "▁▂▃▄▅▆▇█"[v]
+                put(scr, ty + 5, tx + i, ch, pal["green"])
+            put(scr, ty + 6, tx, "visual animation, not audio levels", pal["faint"])
+        if wide and ty + 9 < y1 - 1:
+            next_index = app.qpos + 1
+            put(scr, ty + 8, tx, "UP NEXT", pal["faint"], curses.A_BOLD)
+            if 0 <= next_index < len(app.queue):
+                nxt = app.queue[next_index]
+                put(scr, ty + 9, tx, wcut(nxt["title"], tw), pal["dim"])
+        if y1 - y0 >= 18:
+            put(scr, y1 - 2, x0 + 2, "Space pause   l like   P playlist   v queue   f back", pal["faint"])
 
     def v_home(self, y0, y1, x0, W):
         app, pal = self.app, self.pal
@@ -2228,6 +2275,8 @@ class UI:
             liked = cur["id"] in app.liked_ids
             put(scr, y0, hx, IC_HEART if liked else IC_HEARTO,
                 pal["bsgreen"] if liked else pal["bsdim"], curses.A_BOLD)
+            self.hit(2, y0, 3, 2, "playing")
+            self.hit(7, y0, tw, 2, "playing")
             self.hit(hx - 1, y0, 2, 2, "heart")
 
         # geometry: right block reserves its columns first so the
@@ -2319,7 +2368,7 @@ class UI:
             ("+ / -", "volume"), ("a", "add to queue"),
             ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
-            ("v", "queue view"), ("t", "sleep timer"),
+            ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
             ("c", "create playlist"), ("P", "add to playlist"),
             ("d", "delete from list"), ("e / D", "rename / delete playlist"),
             ("Backspace", "back"),
@@ -2598,6 +2647,11 @@ def handle_key(app, k):
             app.toast_now("Finding new picks…")
         elif k == "r":
             app.cycle_repeat()
+        elif k == "f":
+            if kind == "playing":
+                app.back()
+            else:
+                app.push("playing")
         elif k == "v":
             app.push("queue")
         elif k == "e" and kind == "playlist":
@@ -2760,6 +2814,8 @@ def handle_mouse(app):
             app.like(arg)
         elif act == "addq":
             app.add_queue(arg)
+        elif act == "playing":
+            app.push("playing")
         elif act == "queue":
             app.push("queue")
         elif act == "seek":
