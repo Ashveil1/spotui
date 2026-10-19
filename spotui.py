@@ -1628,7 +1628,7 @@ class UI:
 
         if app.sleep_deadline is not None:
             remaining = max(0, int(app.sleep_deadline - time.monotonic()))
-            put(scr, y1 - 1, 2, f"Sleep {fmt_t(remaining)}", pal["sgreen"])
+            put(scr, y1 - 2, 2, f"Sleep {fmt_t(remaining)}", pal["sgreen"])
         kind, _ = app.stack[-1]
         navs = [("home", IC_HOME, "Home"), ("search", IC_SEARCH, "Search")]
         for i, (k, ic, label) in enumerate(navs):
