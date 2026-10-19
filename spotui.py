@@ -2418,7 +2418,7 @@ def handle_mouse(app):
         else:
             app.move_sel(-3, len(app.view_tracks()))
         return
-    if bstate & curses.BUTTON5_PRESSED:
+    if bstate & getattr(curses, "BUTTON5_PRESSED", 0):
         if app.sw_bounds and mx < app.sw_bounds[0]:
             app.soff = max(0, min(getattr(app, "soff_max", 0),
                                   app.soff + 2))
@@ -2526,7 +2526,7 @@ def run(scr):
         curses.mousemask(
             curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED
             | curses.BUTTON1_CLICKED | curses.BUTTON1_DOUBLE_CLICKED
-            | curses.BUTTON4_PRESSED | curses.BUTTON5_PRESSED)
+            | curses.BUTTON4_PRESSED | getattr(curses, "BUTTON5_PRESSED", 0))
     except curses.error:
         pass
 

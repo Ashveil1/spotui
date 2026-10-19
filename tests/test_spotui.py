@@ -99,6 +99,14 @@ class AppTests(unittest.TestCase):
             s.handle_mouse(self.app)
         self.app.toggle.assert_not_called()
 
+    def test_mouse_works_without_button5_constant(self):
+        self.app.rects = [dict(x0=0, x1=5, y0=1, y1=2, act='toggle', arg=None)]
+        self.app.toggle = Mock()
+        with patch.object(s.curses, 'BUTTON5_PRESSED', 0, create=True), patch.object(
+                s.curses, 'getmouse', return_value=(0, 2, 1, 0, s.curses.BUTTON1_CLICKED)):
+            s.handle_mouse(self.app)
+        self.app.toggle.assert_called_once()
+
     def test_mouse_release_does_not_double_activate(self):
         self.app.rects = [dict(x0=0, x1=5, y0=1, y1=2, act='toggle', arg=None)]
         self.app.toggle = Mock()
