@@ -798,6 +798,8 @@ class App:
         self.search_token = 0
         self.mode = "normal"          # normal | search | name | pick
         self.name_buf = ""
+        self.rename_index = None
+        self.delete_index = None
         self.pick_rows = []
         self.pick_idx = 0
         self.pick_pending = None      # track waiting to be added
@@ -1318,6 +1320,41 @@ class App:
         self.store.save()
         self.push("playlist", len(self.store.playlists) - 1)
         self.toast_now(f"Created playlist: {name}")
+
+    def rename_playlist(self, pi, name):
+        if not 0 <= pi < len(self.store.playlists):
+            return
+        name = name.strip()
+        if not name:
+            self.toast_now("Playlist name cannot be empty")
+            return
+        self.store.playlists[pi]["name"] = name
+        self.store.save()
+        self.toast_now(f"Renamed playlist: {name}")
+
+    def delete_playlist(self, pi):
+        if not 0 <= pi < len(self.store.playlists):
+            return
+        name = self.store.playlists[pi]["name"]
+        del self.store.playlists[pi]
+        # Playlist view keys use indices; remove deleted views and reindex
+        # every saved selection and back-stack entry after that index.
+        self.stack = [(kind, arg - 1 if kind == "playlist" and arg > pi else arg)
+                      for kind, arg in self.stack
+                      if not (kind == "playlist" and arg == pi)] or [("home", None)]
+        for state in (self.sel, self.off):
+            updated = {}
+            for key, value in state.items():
+                if key.startswith("playlist:"):
+                    idx = int(key.split(":", 1)[1])
+                    if idx == pi:
+                        continue
+                    key = f"playlist:{idx - 1 if idx > pi else idx}"
+                updated[key] = value
+            state.clear()
+            state.update(updated)
+        self.store.save()
+        self.toast_now(f"Deleted playlist: {name}")
 
     def add_to_playlist(self, pi, t):
         try:
@@ -2209,7 +2246,8 @@ class UI:
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"),
             ("c", "create playlist"), ("P", "add to playlist"),
-            ("d", "delete from list"), ("Backspace", "back"),
+            ("d", "delete from list"), ("e / D", "rename / delete playlist"),
+            ("Backspace", "back"),
             ("?", "this help"), ("q", "quit"),
         ]
         w = min(70, W - 6)
@@ -2239,7 +2277,8 @@ class UI:
         y = max(2, y0 - 8)
         x = (W - w) // 2
         box(self.scr, y, x, w, h, pal["dim"], pal["side"])
-        put(self.scr, y + 1, x + 2, "Create playlist", pal["side"],
+        label = "Rename playlist" if app.rename_index is not None else "Create playlist"
+        put(self.scr, y + 1, x + 2, label, pal["side"],
             curses.A_BOLD)
         fill(self.scr, y + 3, x + 2, w - 4, pal["pill"])
         put(self.scr, y + 3, x + 3, wcut(app.name_buf, w - 8), pal["pill"],
@@ -2269,6 +2308,17 @@ class UI:
                 pal["hover"] if i == app.pick_idx else pal["sdim"],
                 curses.A_BOLD if i == app.pick_idx else 0)
             self.hit(x, yy, w, 1, "pickrow", i)
+
+    def delete_modal(self, W):
+        app, pal = self.app, self.pal
+        w, h = min(56, W - 4), 7
+        y = max(1, (self.scr.getmaxyx()[0] - h) // 2)
+        x = (W - w) // 2
+        box(self.scr, y, x, w, h, pal["dim"], pal["side"])
+        name = app.store.playlists[app.delete_index]["name"]
+        put(self.scr, y + 1, x + 2, "Delete playlist?", pal["side"], curses.A_BOLD)
+        put(self.scr, y + 3, x + 2, wcut(name, w - 4), pal["sdim"])
+        put(self.scr, y + 5, x + 2, "y: delete playlist   n / Esc: cancel", pal["sfaint"])
 
     # -------------------------------------------------------------- draw --
     def draw(self):
@@ -2301,6 +2351,8 @@ class UI:
             self.name_modal(y1, W)
         if app.mode == "pick":
             self.pick_modal(y1, W)
+        if app.mode == "confirm_delete":
+            self.delete_modal(W)
         self.toast(y1 - 1, W)
         # cursor for text input
         if app.mode == "search" and hasattr(app, "search_xy"):
@@ -2353,36 +2405,38 @@ def handle_key(app, k):
                 app.mode = "normal"
         return
 
+    if app.mode == "confirm_delete":
+        if k in ("y", "Y"):
+            app.delete_playlist(app.delete_index)
+            app.delete_index = None
+            app.mode = "normal"
+        elif k in ("n", "N", "q", "\x1b", 27):
+            app.delete_index = None
+            app.mode = "normal"
+        return
+
     if app.mode == "name":
-        if isinstance(k, str):
-            if k in ("\n", "\r"):
+        if k in ("\n", "\r", curses.KEY_ENTER, 10, 13):
+            if app.rename_index is not None:
+                app.rename_playlist(app.rename_index, app.name_buf)
+            else:
                 app.create_playlist(app.name_buf)
-                app.name_buf = ""
-                app.mode = "normal"
                 if app.pick_pending:
                     app.add_to_playlist(len(app.store.playlists) - 1,
                                         app.pick_pending)
-                    app.pick_pending = None
-                return
-            if k == "\x1b":
-                app.name_buf = ""
-                app.mode = "normal"
-                return
-            if k in ("\x7f", "\b"):
-                app.name_buf = app.name_buf[:-1]
-                return
-            if k >= " " and unicodedata.category(k)[0] != "C":
-                app.name_buf += k
-        else:
-            if k in (curses.KEY_BACKSPACE, 127, 8, 263):
-                app.name_buf = app.name_buf[:-1]
-            elif k in (curses.KEY_ENTER, 10, 13):
-                app.create_playlist(app.name_buf)
-                app.name_buf = ""
-                app.mode = "normal"
-            elif k == 27:
-                app.name_buf = ""
-                app.mode = "normal"
+            app.pick_pending = None
+            app.rename_index = None
+            app.name_buf = ""
+            app.mode = "normal"
+        elif k in ("\x1b", 27):
+            app.name_buf = ""
+            app.pick_pending = None
+            app.rename_index = None
+            app.mode = "normal"
+        elif k in ("\x7f", "\b", curses.KEY_BACKSPACE, 127, 8, 263):
+            app.name_buf = app.name_buf[:-1]
+        elif isinstance(k, str) and k >= " " and unicodedata.category(k)[0] != "C":
+            app.name_buf += k
         return
 
     if app.mode == "pick":
@@ -2469,7 +2523,15 @@ def handle_key(app, k):
             app.cycle_repeat()
         elif k == "v":
             app.push("queue")
+        elif k == "e" and kind == "playlist":
+            app.rename_index = arg
+            app.name_buf = app.store.playlists[arg]["name"]
+            app.mode = "name"
+        elif k == "D" and kind == "playlist":
+            app.delete_index = arg
+            app.mode = "confirm_delete"
         elif k == "c":
+            app.rename_index = None
             app.mode = "name"
             app.name_buf = ""
         elif k == "d":
@@ -2535,8 +2597,8 @@ def handle_mouse(app):
     dbl = bool(bstate & (curses.BUTTON1_DOUBLE_CLICKED
                          | curses.BUTTON1_TRIPLE_CLICKED))
     # while a modal is open, only the modal's own controls respond
-    blocked = app.show_help or app.mode in ("name", "pick")
-    allowed = {"helpclose", "pickrow", "create"}
+    blocked = app.show_help or app.mode in ("name", "pick", "confirm_delete")
+    allowed = {"helpclose"} if app.show_help else ({"pickrow"} if app.mode == "pick" else set())
     for r in reversed(app.rects):
         if not (r["x0"] <= mx < r["x1"] and r["y0"] <= my < r["y1"]):
             continue
