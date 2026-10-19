@@ -97,6 +97,20 @@ class AppTests(unittest.TestCase):
         data = s.json.loads(path.read_text(encoding='utf-8'))
         self.assertEqual(data['tracks'][0]['id'], '1')
 
+    def test_import_playlist_roundtrip(self):
+        src = Path(self.tmp.name) / 'in.json'
+        src.write_text(s.json.dumps({'name': 'Mix', 'tracks': [track(1), {'bad': 1}]}), encoding='utf-8')
+        ok, msg = s.import_playlist(src)
+        self.assertTrue(ok, msg)
+        st = s.Store()
+        self.assertEqual(st.playlists[-1]['name'], 'Mix')
+        self.assertEqual(len(st.playlists[-1]['tracks']), 1)
+
+    def test_import_rejects_garbage(self):
+        src = Path(self.tmp.name) / 'bad.json'
+        src.write_text('[1,2]', encoding='utf-8')
+        self.assertFalse(s.import_playlist(src)[0])
+
     def test_home_keyboard_navigation(self):
         self.app.create_playlist('Rock')
         self.app.back()

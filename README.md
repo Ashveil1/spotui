@@ -157,4 +157,4 @@ The queue and position are saved in the library file and restored paused on the 
 
 `C` in the queue view clears the upcoming songs and keeps the current song and what already played.
 
-`X` in a playlist exports it as JSON to `~/spotui-exports/`. There is no import yet.
+`X` in a playlist exports it as JSON to `~/spotui-exports/`. Import one with `python3 spotui.py --import file.json` while SpotUI is closed.
