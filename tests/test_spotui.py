@@ -369,6 +369,22 @@ class AppTests(unittest.TestCase):
         s.handle_key(self.app, 'j')
         self.assertEqual(self.app.help_page, 1)
 
+    def test_play_next_and_reorder(self):
+        self.app.queue = [track(i) for i in range(4)]
+        self.app.qpos = 0
+        self.app.current = self.app.queue[0]
+        self.app.play_next(track(9))
+        self.assertEqual(self.app.queue[1]['id'], '9')
+        self.assertTrue(self.app.move_queue(1, 1))
+        self.assertEqual([t['id'] for t in self.app.queue], ['0', '1', '9', '2', '3'])
+        self.assertFalse(self.app.move_queue(1, -1))
+
+    def test_non_finite_numbers_sanitized(self):
+        s.STORE.write_text('{"liked":[{"id":"a","dur":1e999}],"last_search":1e999}')
+        store = s.Store()
+        self.assertIsNone(store.liked[0]['dur'])
+        self.assertEqual(store.last_search, 0.0)
+
 
 class MpvTests(unittest.TestCase):
     def test_stopped_player_cannot_restart(self):

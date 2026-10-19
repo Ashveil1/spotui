@@ -141,3 +141,6 @@ on terminals that report mouse-motion events.
 Click the small cover or title in the player bar to open it too. Its moving bars
 are decorative animation, not measured audio levels. Set
 `SPOTUI_REDUCED_MOTION=1` to skip the intro and keep visualizers still.
+
+`A` queues the selected song to play next. In the queue view, `J` / `K` move the
+selected upcoming song down / up. Non-finite numbers in a saved library are ignored.
