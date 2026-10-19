@@ -78,6 +78,16 @@ class AppTests(unittest.TestCase):
             s.handle_key(self.app, '[')
         self.assertEqual(self.app.speed, 0.75)
 
+    def test_clear_upcoming_keeps_current_and_history(self):
+        self.app.queue = [track(i) for i in range(5)]
+        self.app.qpos = 2
+        self.app.push('queue')
+        s.handle_key(self.app, 'C')
+        self.assertEqual([x['id'] for x in self.app.queue], ['0', '1', '2'])
+        self.assertEqual(self.app.qpos, 2)
+        s.handle_key(self.app, 'C')
+        self.assertEqual(len(self.app.queue), 3)
+
     def test_home_keyboard_navigation(self):
         self.app.create_playlist('Rock')
         self.app.back()
