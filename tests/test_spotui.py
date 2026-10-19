@@ -303,6 +303,31 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.app.store.volume, 100)
         self.assertIsNone(self.app.drag_rect)
 
+    def test_modal_wheel_does_not_scroll_underlying_queue(self):
+        self.app.mode = 'confirm_delete'
+        self.app.move_sel = Mock()
+        with patch.object(s.curses, 'getmouse', return_value=(0, 40, 5, 0, s.curses.BUTTON4_PRESSED)):
+            s.handle_mouse(self.app)
+        self.app.move_sel.assert_not_called()
+
+    def test_picker_wheel_moves_picker(self):
+        self.app.open_pick(track(1))
+        self.app.pick_rows += [dict(name='One', new=False)]
+        with patch.object(s.curses, 'getmouse', return_value=(0, 40, 5, 0, getattr(s.curses, 'BUTTON5_PRESSED', 0)), create=True):
+            if getattr(s.curses, 'BUTTON5_PRESSED', 0):
+                s.handle_mouse(self.app)
+                self.assertEqual(self.app.pick_idx, 1)
+
+    def test_radio_resets_shuffle_original_order(self):
+        self.app.current = track(1)
+        self.app.queue = [track(1), track(2)]
+        self.app.shuffle = True
+        self.app.orig_queue = [track(1), track(99)]
+        with patch.object(s, '_ytdl_playlist', return_value=[track(3), track(4)]):
+            self.app._radio_worker(track(1))
+        self.app._apply_shuffle(False)
+        self.assertCountEqual([t['id'] for t in self.app.queue], ['1', '3', '4'])
+
 
 class MpvTests(unittest.TestCase):
     def test_stopped_player_cannot_restart(self):
