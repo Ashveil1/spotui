@@ -27,6 +27,27 @@ class AppTests(unittest.TestCase):
             self.app = s.App()
         self.app.refresh_similar = Mock()
 
+    def test_session_queue_restores_paused(self):
+        self.app.queue = [track(1), track(2), track(3)]
+        self.app.qpos = 1
+        self.app.snapshot_session()
+        self.assertTrue(self.app.store.save())
+        with patch.object(s.threading.Thread, 'start'):
+            app2 = s.App()
+        self.assertEqual([t['id'] for t in app2.queue], ['1', '2', '3'])
+        self.assertEqual(app2.qpos, 1)
+        self.assertIsNone(app2.current)
+
+    def test_session_bad_position_ignored(self):
+        self.app.queue = [track(1)]
+        self.app.qpos = 0
+        self.app.snapshot_session()
+        self.app.store.session['pos'] = 9
+        self.app.store.save()
+        with patch.object(s.threading.Thread, 'start'):
+            app2 = s.App()
+        self.assertEqual(app2.queue, [])
+
     def test_home_keyboard_navigation(self):
         self.app.create_playlist('Rock')
         self.app.back()
