@@ -551,6 +551,36 @@ def _real_song(t):
     return not any(w in title for w in _MIX_WORDS)
 
 
+def smart_shuffle(tracks, previous_artist="", recent_ids=(), rng=None):
+    """Artist-spaced shuffle, without adding or dropping queue entries.
+
+    Choose the largest remaining artist bucket other than the last artist,
+    with random tie-breaking. Randomize songs within buckets but defer recent
+    plays. When only one artist remains, adjacent repeats are unavoidable.
+    """
+    import random
+    rng = rng or random
+    recent = set(recent_ids)
+    buckets = {}
+    for t in tracks:
+        artist = unicodedata.normalize("NFKC", t.get("artist") or "").casefold().strip()
+        buckets.setdefault(artist, []).append(t)
+    for group in buckets.values():
+        rng.shuffle(group)
+        group.sort(key=lambda t: t.get("id") in recent)
+    out = []
+    previous = unicodedata.normalize("NFKC", previous_artist).casefold().strip()
+    while buckets:
+        choices = [a for a in buckets if a != previous] or list(buckets)
+        largest = max(len(buckets[a]) for a in choices)
+        artist = rng.choice([a for a in choices if len(buckets[a]) == largest])
+        out.append(buckets[artist].pop(0))
+        if not buckets[artist]:
+            del buckets[artist]
+        previous = artist
+    return out
+
+
 # -------------------------------------------------------------- colors ---
 # per-song cover palettes — 8 families × 4 shades (bright → dark)
 # the family is derived from a hash of the seed, like Spotify's
@@ -1000,9 +1030,9 @@ class App:
             self.orig_queue = [dict(t) for t in self.queue]
             head = self.queue[:self.qpos + 1]
             tail = self.queue[self.qpos + 1:]
-            import random
-            random.shuffle(tail)
-            self.queue = head + tail
+            previous = head[-1].get("artist", "") if head else ""
+            recent = [t.get("id") for t in self.store.history[:10]]
+            self.queue = head + smart_shuffle(tail, previous, recent)
         elif self.orig_queue:
             cur = self.current
             self.queue = [dict(t) for t in self.orig_queue]
@@ -1011,6 +1041,7 @@ class App:
                     if t["id"] == cur["id"]:
                         self.qpos = i
                         break
+            self.orig_queue = None
 
     def _play_current(self):
         if not 0 <= self.qpos < len(self.queue):
@@ -1384,6 +1415,12 @@ class App:
             self.like(tracks[idx])
         elif kind == "queue":
             self.queue_revision += 1
+            removed = self.queue[idx]
+            if self.orig_queue is not None:
+                for oi, item in enumerate(self.orig_queue):
+                    if item == removed:
+                        del self.orig_queue[oi]
+                        break
             del self.queue[idx]
             if idx < self.qpos:
                 self.qpos -= 1
