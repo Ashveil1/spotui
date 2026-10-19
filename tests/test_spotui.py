@@ -356,6 +356,19 @@ class AppTests(unittest.TestCase):
             ui.v_playing(3, 29, 30, 120)
             self.assertTrue(any('Song 1' in str(c) for c in output.call_args_list))
 
+    def test_help_pages_on_short_screen(self):
+        from collections import defaultdict
+        self.app.pal = defaultdict(int)
+        scr = Mock()
+        scr.getmaxyx.return_value = (16, 72)
+        with patch.object(s, 'put') as output, patch.object(s, 'box'):
+            s.UI(self.app, scr).help(3, 72)
+        self.assertGreater(self.app.help_pages, 1)
+        self.assertTrue(all(c.args[1] < 16 for c in output.call_args_list))
+        self.app.show_help = True
+        s.handle_key(self.app, 'j')
+        self.assertEqual(self.app.help_page, 1)
+
 
 class MpvTests(unittest.TestCase):
     def test_stopped_player_cannot_restart(self):
