@@ -144,3 +144,7 @@ are decorative animation, not measured audio levels. Set
 
 `A` queues the selected song to play next. In the queue view, `J` / `K` move the
 selected upcoming song down / up. Non-finite numbers in a saved library are ignored.
+
+## Session restore
+
+The queue and position are saved in the library file and restored paused on the next launch. Press space to resume.
