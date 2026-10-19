@@ -48,6 +48,19 @@ class AppTests(unittest.TestCase):
             app2 = s.App()
         self.assertEqual(app2.queue, [])
 
+    def test_find_jumps_to_match(self):
+        self.app.store.liked = [dict(track(1), title='Alpha'), dict(track(2), title='Beta'),
+                                dict(track(3), title='Gamma', artist='Zed')]
+        self.app.push('liked')
+        s.handle_key(self.app, 'F')
+        self.assertEqual(self.app.mode, 'find')
+        for c in 'zed':
+            s.handle_key(self.app, c)
+        self.assertEqual(self.app.sel_row(), 2)
+        s.handle_key(self.app, '\n')
+        self.assertEqual(self.app.mode, 'normal')
+        self.assertEqual(len(self.app.store.liked), 3)
+
     def test_home_keyboard_navigation(self):
         self.app.create_playlist('Rock')
         self.app.back()
