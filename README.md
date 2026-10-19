@@ -104,3 +104,10 @@ wrap into the next row.
 While viewing a playlist, `e` renames it and `D` opens a delete confirmation.
 Deletion only happens after `y`; `n` or Esc cancels. Removing a playlist does not
 stop the current song or remove songs from Liked Songs.
+
+Shuffle (`s`) preserves the current song and the already-played prefix, spaces
+artists apart when the queue has enough variety, and defers recently played
+songs within each artist's group. It never inserts or drops queue entries.
+Turning shuffle off restores the original order, including queue edits. This is
+an artist-spaced shuffle, not a uniformly random permutation; with one dominant
+artist some adjacent repeats are unavoidable.

@@ -233,6 +233,30 @@ class AppTests(unittest.TestCase):
         s.handle_key(self.app, '\x1b')
         self.assertIsNone(self.app.pick_pending)
 
+    def test_shuffle_preserves_current_and_restores_order(self):
+        self.app.queue = [dict(track(i), artist=str(i % 3)) for i in range(12)]
+        original = list(self.app.queue)
+        self.app.qpos = 2
+        self.app.current = self.app.queue[2]
+        self.app._apply_shuffle(True)
+        self.assertEqual(self.app.queue[:3], original[:3])
+        self.assertCountEqual(self.app.queue, original)
+        self.app._apply_shuffle(False)
+        self.assertEqual(self.app.queue, original)
+        self.assertEqual(self.app.qpos, 2)
+
+    def test_shuffle_deleted_song_not_resurrected(self):
+        self.app.queue = [track(i) for i in range(6)]
+        self.app.qpos = 0
+        self.app.current = self.app.queue[0]
+        self.app._apply_shuffle(True)
+        removed = self.app.queue[3]['id']
+        self.app.push('queue')
+        self.app.sel['queue:'] = 3
+        self.app.delete_selected()
+        self.app._apply_shuffle(False)
+        self.assertNotIn(removed, [t['id'] for t in self.app.queue])
+
 
 class MpvTests(unittest.TestCase):
     def test_stopped_player_cannot_restart(self):
@@ -264,6 +288,29 @@ class MpvTests(unittest.TestCase):
         sock.recv.return_value = b'{"request_id":1,"error":"invalid parameter"}\n'
         with patch.object(s.socket, 'socket', return_value=sock):
             self.assertFalse(mpv.cmd(['loadfile', 'audio'], status=True))
+
+
+class ShuffleTests(unittest.TestCase):
+    def test_artist_spacing_across_seeds(self):
+        import random
+        for seed in range(40):
+            tracks = [dict(track(i), artist=str(i % 4)) for i in range(40)]
+            result = s.smart_shuffle(tracks, rng=random.Random(seed))
+            self.assertCountEqual(result, tracks)
+            self.assertTrue(all(a['artist'] != b['artist'] for a, b in zip(result, result[1:])))
+
+    def test_single_artist_and_duplicates_keep_all_entries(self):
+        tracks = [track(1), track(1), track(2)]
+        self.assertCountEqual(s.smart_shuffle(tracks), tracks)
+
+    def test_avoids_current_artist_at_boundary(self):
+        tracks = [dict(track(i), artist=str(i % 2)) for i in range(8)]
+        result = s.smart_shuffle(tracks, previous_artist='0')
+        self.assertEqual(result[0]['artist'], '1')
+
+    def test_recent_songs_deferred_within_artist(self):
+        result = s.smart_shuffle([track(i) for i in range(5)], recent_ids=['0', '1'])
+        self.assertTrue(all(t['id'] not in ['0', '1'] for t in result[:3]))
 
 
 if __name__ == '__main__':
