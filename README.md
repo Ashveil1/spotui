@@ -111,3 +111,22 @@ songs within each artist's group. It never inserts or drops queue entries.
 Turning shuffle off restores the original order, including queue edits. This is
 an artist-spaced shuffle, not a uniformly random permutation; with one dominant
 artist some adjacent repeats are unavoidable.
+
+## Scope and service terms
+
+SpotUI is an independent, experimental terminal player by Ash (Ashveil1). It
+uses YouTube search and streams resolved by yt-dlp, played through mpv. It is
+not affiliated with YouTube, Spotify or Apple and does not include their
+subscriptions, licensed catalogs, DRM playback, lossless catalog access,
+synchronized lyrics, offline-download rights or other paid-service entitlements.
+SpotUI itself contains no advertising. It cannot promise that third-party
+content or services will always be ad-free or available.
+
+This project is intended for personal, non-commercial use with content you
+have permission to access. That framing does not override platform terms or
+copyright. [YouTube's Terms of Service](https://www.youtube.com/static?template=terms)
+restrict automated access and use of content outside the ways the service
+expressly permits. Using yt-dlp or direct streams can conflict with those terms,
+and access can break or be restricted. Users are responsible for checking the
+terms and rights that apply to their use. Use official clients when those are
+required. This note is not legal advice.
