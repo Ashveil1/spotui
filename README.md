@@ -156,3 +156,5 @@ The queue and position are saved in the library file and restored paused on the 
 `[` and `]` change playback speed (0.75x, 1x, 1.25x, 1.5x, 2x). Speed resets to 1x when SpotUI restarts.
 
 `C` in the queue view clears the upcoming songs and keeps the current song and what already played.
+
+`X` in a playlist exports it as JSON to `~/spotui-exports/`. There is no import yet.

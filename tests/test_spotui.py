@@ -88,6 +88,15 @@ class AppTests(unittest.TestCase):
         s.handle_key(self.app, 'C')
         self.assertEqual(len(self.app.queue), 3)
 
+    def test_export_playlist_writes_json(self):
+        self.app.create_playlist('Road/Trip')
+        self.app.add_to_playlist(0, track(1))
+        with patch.object(s, 'EXPORT_DIR', Path(self.tmp.name) / 'out'):
+            path = self.app.export_playlist(0)
+        self.assertEqual(path.name, 'Road_Trip.json')
+        data = s.json.loads(path.read_text(encoding='utf-8'))
+        self.assertEqual(data['tracks'][0]['id'], '1')
+
     def test_home_keyboard_navigation(self):
         self.app.create_playlist('Rock')
         self.app.back()

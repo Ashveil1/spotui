@@ -53,6 +53,7 @@ def _yt_sub(args, timeout=75):
 
 CFG = Path.home() / ".config" / "spotui"
 STORE = CFG / "library.json"
+EXPORT_DIR = Path.home() / "spotui-exports"
 
 # ---------------------------------------------------------------- glyphs ---
 IC_LOGO = "◉"
@@ -1444,6 +1445,24 @@ class App:
         self.sel["queue:"] = j
         return True
 
+    def export_playlist(self, pi):
+        if not 0 <= pi < len(self.store.playlists):
+            return None
+        pl = self.store.playlists[pi]
+        safe = "".join(c if c.isalnum() or c in "-_ " else "_" for c in pl["name"]).strip() or "playlist"
+        path = EXPORT_DIR / f"{safe}.json"
+        try:
+            EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".json.part")
+            tmp.write_text(json.dumps({"name": pl["name"], "tracks": pl["tracks"]},
+                                      ensure_ascii=False, indent=1), encoding="utf-8")
+            tmp.replace(path)
+        except OSError as e:
+            self.toast_now(f"Export failed: {e}")
+            return None
+        self.toast_now(f"Exported to {path}")
+        return path
+
     def clear_upcoming(self):
         if self.qpos + 1 >= len(self.queue):
             self.toast_now("Nothing upcoming to clear")
@@ -2472,7 +2491,7 @@ class UI:
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("[ / ]", "speed down / up"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"),
             ("F", "find in a list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -2795,6 +2814,8 @@ def handle_key(app, k):
             app.rename_index = arg
             app.name_buf = app.store.playlists[arg]["name"]
             app.mode = "name"
+        elif k == "X" and kind == "playlist":
+            app.export_playlist(arg)
         elif k == "D" and kind == "playlist":
             app.delete_index = arg
             app.mode = "confirm_delete"
