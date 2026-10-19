@@ -858,6 +858,7 @@ class App:
         self.sleep_deadline = None
         self.sleep_minutes = 0
         self.drag_rect = None
+        self.last_store_error = None
         self.user = (os.environ.get("USER") or "u")[:1]
         # --- real cover art piping (thumbnails as half-block pixels) ---
         self.cover_ok = shutil.which("ffmpeg") is not None
@@ -1113,6 +1114,9 @@ class App:
                     and self.current.get("id") == track.get("id")):
                 self.queue = [track] + picks
                 self.qpos = 0
+                self.orig_queue = None
+                if self.shuffle:
+                    self._apply_shuffle(True)
                 self.toast_now("Radio on — more from "
                                f"{track.get('artist') or 'this artist'}")
             self._radio_busy = False
@@ -1331,6 +1335,9 @@ class App:
                        else "Sleep timer off")
 
     def tick(self):
+        if self.store.error and self.store.error != self.last_store_error:
+            self.toast_now(self.store.error)
+        self.last_store_error = self.store.error
         if self.sleep_deadline is not None and time.monotonic() >= self.sleep_deadline:
             self.sleep_deadline = None
             self.sleep_minutes = 0
@@ -1652,13 +1659,13 @@ class UI:
         items = [("liked", IC_HEART, "Liked Songs")]
         for i, pl in enumerate(app.store.playlists):
             items.append(("playlist", IC_NOTE, pl["name"], i))
-        top, bot = y0 + 8, y1 - 1
+        top, bot = y0 + 8, y1 - (2 if app.sleep_deadline is not None else 1)
         vis = max(1, bot - top)
         app.soff_max = max(0, len(items) - vis)
         app.soff = max(0, min(app.soff, app.soff_max))
         for row, i in enumerate(range(app.soff, len(items))):
             y = top + row
-            if y >= y1 - 1:
+            if y >= bot:
                 break
             item = items[i]
             k, ic, label = item[0], item[1], item[2]
@@ -2647,6 +2654,14 @@ def handle_mouse(app):
         _, mx, my, _, bstate = curses.getmouse()
     except curses.error:
         return
+    modal = app.show_help or app.mode in ("name", "pick", "confirm_delete")
+    if modal:
+        app.drag_rect = None
+        if bstate & (curses.BUTTON4_PRESSED | getattr(curses, "BUTTON5_PRESSED", 0)):
+            if app.mode == "pick":
+                step = -1 if bstate & curses.BUTTON4_PRESSED else 1
+                app.pick_idx = max(0, min(len(app.pick_rows) - 1, app.pick_idx + step))
+            return
     if app.drag_rect is not None and bstate & (curses.REPORT_MOUSE_POSITION | curses.BUTTON1_RELEASED):
         r = app.drag_rect
         start, width = r["arg"]
@@ -2825,10 +2840,11 @@ def run(scr):
     try:
         while not app.quit:
             app.frame += 1
-            app.tick()
-            if app.mpv.on_end.is_set():
-                app.mpv.on_end.clear()
-                app.next(auto=True)
+            with app.lock:
+                app.tick()
+                if app.mpv.on_end.is_set():
+                    app.mpv.on_end.clear()
+                    app.next(auto=True)
             try:
                 ui.draw()
             except curses.error:
@@ -2841,7 +2857,8 @@ def run(scr):
                 continue
             if k == curses.KEY_MOUSE:
                 try:
-                    handle_mouse(app)
+                    with app.lock:
+                        handle_mouse(app)
                 except Exception:
                     pass
                 continue
@@ -2849,7 +2866,8 @@ def run(scr):
                 if os.environ.get("SPOTUI_DEBUG"):
                     open("/tmp/spotui-debug.log", "a").write(
                         f"key={k!r} mode={app.mode}\n")
-                handle_key(app, k)
+                with app.lock:
+                    handle_key(app, k)
             except Exception:
                 pass
     finally:
