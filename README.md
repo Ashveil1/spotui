@@ -79,3 +79,16 @@ queue view (`v`) shows what is lined up.
 
 - RAM footprint (measured): TUI ~14 MiB idle / ~16 MiB while playing; mpv ~55–65 MiB. Searches never load yt-dlp into the app — they run in a short-lived helper process.
 - Audio only (no video) — mpv plays the bestaudio stream resolved by yt-dlp.
+
+## Development checks
+
+Run the offline regression tests without mpv, network access or third-party Python packages:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+GitHub Actions runs these tests on Python 3.9, 3.11 and 3.13. The suite covers
+mpv's IPC success replies, stale playback requests, queue navigation, playlist
+creation, mouse hit boundaries, volume limits and Thai recommendation titles.
+Live YouTube access and a working audio device still need a separate smoke test.
