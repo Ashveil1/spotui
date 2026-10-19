@@ -1336,6 +1336,7 @@ class App:
             self.sleep_minutes = 0
             self.load_token += 1
             self.loading = False
+            self.mpv.on_end.clear()
             self.mpv.cmd(["set_property", "pause", True])
             self.mpv.state["pause"] = True
             self.toast_now("Sleep timer - playback paused")
