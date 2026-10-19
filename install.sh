@@ -1,37 +1,31 @@
 #!/usr/bin/env bash
-# SpotUI installer — creates an isolated venv and installs yt-dlp.
-set -e
-cd "$(dirname "$0")"
+# Install into a project-local virtualenv, never into system Python.
+set -euo pipefail
+cd -- "$(dirname -- "$(readlink -f -- "$0")")"
 
-if ! command -v mpv >/dev/null 2>&1; then
-    echo "mpv not found. Install it first:  sudo pacman -S mpv"
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "Python 3.9+ is required." >&2
     exit 1
 fi
-
-if [ ! -d .venv ]; then
-    echo "Creating virtualenv…"
-    python3 -m venv .venv 2>/dev/null || {
-        echo "venv failed, falling back to --user install"
-        pip3 install --user --break-system-packages -q yt-dlp
-        mkdir -p .venv/bin
-        printf '#!/usr/bin/env python3\nimport yt_dlp.yt_dlp as y\ny.main()\n' > .venv/bin/yt-dlp 2>/dev/null || true
-        chmod +x .venv/bin/yt-dlp 2>/dev/null || true
-        echo "Done (user install)."
-        exit 0
+if ! command -v mpv >/dev/null 2>&1; then
+    echo "mpv not found. Install it: sudo pacman -S mpv (Arch) or sudo apt install mpv (Debian/Ubuntu)." >&2
+    exit 1
+fi
+if [ ! -x .venv/bin/python ]; then
+    echo "Creating virtualenv..."
+    python3 -m venv .venv || {
+        echo "Could not create .venv. On Debian/Ubuntu install python3-venv, then retry." >&2
+        exit 1
     }
 fi
-
-echo "Installing yt-dlp…"
-.venv/bin/pip install -q --upgrade pip >/dev/null 2>&1 || true
-.venv/bin/pip install -q yt-dlp
-
+echo "Installing yt-dlp..."
+.venv/bin/python -m pip install yt-dlp
+.venv/bin/python -c 'import yt_dlp'
 mkdir -p "$HOME/.local/bin"
-ln -sf "$PWD/.venv/bin/yt-dlp" "$HOME/.local/bin/yt-dlp" 2>/dev/null || true
+ln -sf "$PWD/.venv/bin/yt-dlp" "$HOME/.local/bin/yt-dlp"
 ln -sf "$PWD/spotui" "$HOME/.local/bin/spotui"
-
 case ":$PATH:" in
     *":$HOME/.local/bin:"*) ;;
-    *) echo "⚠  $HOME/.local/bin not in PATH — add it to use 'spotui' from anywhere" ;;
+    *) echo "$HOME/.local/bin is not in PATH. Add it to run spotui from anywhere." ;;
 esac
-
-echo "✔ SpotUI ready. Run it from anywhere with:  spotui"
+echo "SpotUI ready. Run: spotui"

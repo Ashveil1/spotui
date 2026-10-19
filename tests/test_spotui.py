@@ -114,6 +114,35 @@ class AppTests(unittest.TestCase):
             s.handle_mouse(self.app)
         self.app.toggle.assert_not_called()
 
+    def test_corrupt_library_is_never_overwritten(self):
+        s.STORE.write_text('{broken', encoding='utf-8')
+        store = s.Store()
+        self.assertTrue(store.error)
+        self.assertFalse(store.save())
+        self.assertEqual(s.STORE.read_text(), '{broken')
+
+    def test_malformed_library_fields_are_sanitized(self):
+        s.STORE.write_text('{"liked":[null,{}, {"id":"../bad"}, {"id":"valid"}], "volume":"oops", "playlists":null, "recent":42}')
+        store = s.Store()
+        self.assertEqual([t['id'] for t in store.liked], ['valid'])
+        self.assertEqual(store.liked[0]['title'], 'Unknown title')
+        self.assertEqual(store.volume, 70)
+        self.assertEqual(store.playlists, [])
+
+    def test_concurrent_saves_keep_valid_json(self):
+        import threading
+        import json
+        self.app.store.liked = [track(1)]
+        results = []
+        threads = [threading.Thread(target=lambda: results.append(self.app.store.save())) for _ in range(12)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertTrue(all(results))
+        self.assertEqual(json.loads(s.STORE.read_text())['liked'][0]['id'], '1')
+        self.assertEqual(list(s.CFG.iterdir()), [s.STORE])
+
 
 class MpvTests(unittest.TestCase):
     def test_load_checks_command_success_not_null_data(self):
