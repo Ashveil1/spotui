@@ -9,6 +9,7 @@ Layout mimics Spotify desktop: top bar with search pill, black sidebar,
 import curses
 import json
 import locale
+import math
 import os
 import re
 import signal
@@ -271,7 +272,8 @@ class Store:
                 if not isinstance(t.get(key), str):
                     t[key] = default
             t["url"] = f"https://www.youtube.com/watch?v={t['id']}"
-            if not isinstance(t.get("dur"), (int, float)):
+            if (not isinstance(t.get("dur"), (int, float)) or isinstance(t.get("dur"), bool)
+                    or not math.isfinite(t["dur"]) or t["dur"] < 0):
                 t["dur"] = None
             out.append(t)
         return out
@@ -303,6 +305,8 @@ class Store:
             self.similar[key] = self._tracks(self.similar.get(key))
         try:
             self.last_search = float(d.get("last_search") or 0)
+            if not math.isfinite(self.last_search):
+                self.last_search = 0.0
         except (ValueError, TypeError):
             pass
         try:
@@ -1377,6 +1381,27 @@ class App:
             self.orig_queue.append(dict(t))
         self.toast_now(f"Added to queue: {t['title'][:30]}")
 
+    def play_next(self, t):
+        if not t:
+            return
+        if not self.current:
+            self.play([t], 0)
+            return
+        self.queue_revision += 1
+        self.queue.insert(self.qpos + 1, dict(t))
+        if self.shuffle and self.orig_queue is not None:
+            self.orig_queue.append(dict(t))
+        self.toast_now(f"Plays next: {t['title'][:30]}")
+
+    def move_queue(self, idx, d):
+        j = idx + d
+        if not (self.qpos < idx < len(self.queue) and self.qpos < j < len(self.queue)):
+            return False
+        self.queue_revision += 1
+        self.queue[idx], self.queue[j] = self.queue[j], self.queue[idx]
+        self.sel["queue:"] = j
+        return True
+
     def create_playlist(self, name):
         name = name.strip() or "New Playlist"
         self.store.playlists.append({"name": name, "tracks": []})
@@ -2367,7 +2392,7 @@ class UI:
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"),
             ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -2642,6 +2667,10 @@ def handle_key(app, k):
                 app.open_pick(t)
             else:
                 app.toast_now("Nothing selected — play or pick a song first")
+        elif k == "A":
+            app.play_next(app.track_under() or app.current)
+        elif k in ("J", "K") and kind == "queue":
+            app.move_queue(app.sel_row(), 1 if k == "J" else -1)
         elif k == "a":
             app.add_queue(app.track_under() or app.current)
         elif k == "l":
