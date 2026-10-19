@@ -280,6 +280,7 @@ class Store:
 
     def _load(self):
         self.error = None
+        self.session = {"queue": [], "pos": 0}
         self._save_lock = threading.Lock()
         self._corrupt = False
         try:
@@ -298,6 +299,12 @@ class Store:
         for pl in d.get("playlists", []) if isinstance(d.get("playlists"), list) else []:
             if isinstance(pl, dict) and isinstance(pl.get("name"), str):
                 self.playlists.append(dict(name=pl["name"], tracks=self._tracks(pl.get("tracks"))))
+        sess = d.get("session") if isinstance(d.get("session"), dict) else {}
+        self.session = {"queue": self._tracks(sess.get("queue"))[:500]}
+        try:
+            self.session["pos"] = int(sess.get("pos", 0))
+        except (ValueError, TypeError):
+            self.session["pos"] = 0
         self.recent = [q for q in d.get("recent", []) if isinstance(q, str)][:8] if isinstance(d.get("recent"), list) else []
         cache = d.get("similar")
         self.similar = dict(cache) if isinstance(cache, dict) else {}
@@ -331,6 +338,7 @@ class Store:
                         "recent": self.recent, "history": self.history,
                         "similar": self.similar, "last_search": self.last_search,
                         "volume": self.volume,
+                        "session": self.session,
                     }, f, ensure_ascii=False, indent=1)
                     f.flush()
                     os.fsync(f.fileno())
@@ -843,6 +851,7 @@ class App:
         self.qpos = -1
         self.orig_queue = None
         self.current = None
+        self.restore_session()
         self.loading = False
         self.load_token = 0
         self._last_row = None
@@ -1075,6 +1084,7 @@ class App:
                  if isinstance(x, dict) and x.get("id") != rec.get("id")]
             h.insert(0, rec)
             self.store.history = h[:30]
+            self.snapshot_session()
             self.store.save()
         except Exception:
             pass
@@ -1283,6 +1293,20 @@ class App:
             # channel instead of walking down the result list
             if vk.split(":")[0] in ("search", "similar", "history"):
                 self._start_radio(tracks[idx])
+
+    def snapshot_session(self):
+        keep = ("id", "title", "artist", "dur", "url")
+        self.store.session = {
+            "queue": [{k: t.get(k) for k in keep} for t in self.queue[:500]],
+            "pos": self.qpos}
+
+    def restore_session(self):
+        q = self.store.session.get("queue") or []
+        pos = self.store.session.get("pos", 0)
+        if q and 0 <= pos < len(q) and not self.queue:
+            self.queue = [dict(t) for t in q]
+            self.qpos = pos
+            self.queue_revision += 1
 
     def toggle(self):
         if self.current:
@@ -2970,6 +2994,7 @@ def run(scr):
             app.pal.restore()
         except Exception:
             pass
+        app.snapshot_session()
         app.store.save()
         app.mpv.stop()
 
