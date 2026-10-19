@@ -336,7 +336,7 @@ class Mpv:
                     return False
             return self.alive()
 
-    def cmd(self, arr):
+    def cmd(self, arr, *, status=False):
         if not self.alive():
             return None
         with self.slock:
@@ -367,7 +367,8 @@ class Mpv:
                             continue
                         if d.get("request_id") == rid:
                             s.close()
-                            return d.get("data") if d.get("error") == "success" else None
+                            return (d.get("error") == "success") if status else (
+                                d.get("data") if d.get("error") == "success" else None)
                 s.close()
             except Exception:
                 return None
@@ -378,7 +379,7 @@ class Mpv:
             return False
         self.last_load = time.time()
         self.was_idle = False
-        ok = self.cmd(["loadfile", url, "replace"])
+        ok = self.cmd(["loadfile", url, "replace"], status=True)
         self.cmd(["set_property", "pause", False])
         return bool(ok)
 
@@ -736,6 +737,9 @@ class App:
         self.orig_queue = None
         self.current = None
         self.loading = False
+        self.load_token = 0
+        self._last_row = None
+        self._last_row_t = 0.0
         self.shuffle = False
         self.repeat = 0               # 0 off, 1 all, 2 one
         self.frame = 0
@@ -805,6 +809,8 @@ class App:
         return self.sel.get(self.key(), 0)
 
     def move_sel(self, d, n):
+        if self.stack[-1][0] == "home":
+            n = 1 + len(self.store.playlists)
         if n <= 0:
             return
         k = self.key()
@@ -905,7 +911,7 @@ class App:
 
     # ------------------------------------------------------------- play ---
     def play(self, tracks, pos):
-        if not tracks:
+        if not tracks or not 0 <= pos < len(tracks):
             return
         self.orig_queue = None
         self.queue = [dict(t) for t in tracks]
@@ -932,11 +938,15 @@ class App:
                         break
 
     def _play_current(self):
+        if not 0 <= self.qpos < len(self.queue):
+            return
+        self.load_token += 1
+        token = self.load_token
+        self.mpv.on_end.clear()
         t = self.queue[self.qpos]
         self.current = t
         self.loading = True
-        self._note_history(t)
-        threading.Thread(target=self._resolve_load, args=(t,),
+        threading.Thread(target=self._resolve_load, args=(t, token),
                          daemon=True).start()
 
     def _note_history(self, t):
@@ -1095,8 +1105,8 @@ class App:
         # one entry per song title — the shelf must not repeat one song
         uniq, seen_titles = [], set()
         for t in items:
-            k = re.sub(r"[^a-z0-9]+", "",
-                       (t.get("title") or "").lower())
+            k = "".join(c for c in unicodedata.normalize(
+                "NFKC", t.get("title") or "").casefold() if c.isalnum())
             if not k or k in seen_titles:
                 continue
             seen_titles.add(k)
@@ -1114,22 +1124,30 @@ class App:
                 break
         return picks
 
-    def _resolve_load(self, track):
+    def _resolve_load(self, track, token=None):
+        token = self.load_token if token is None else token
         try:
             if not HAVE_YTDL:
                 raise RuntimeError("yt-dlp not installed — run install.sh")
             url = resolve_url(track["url"])
             if not url:
                 raise RuntimeError("no stream found")
-            if not self.mpv.load(url):
-                raise RuntimeError("mpv failed to start")
-            self.loading = False
+            with self.lock:
+                if token != self.load_token:
+                    return
+                if not self.mpv.load(url):
+                    raise RuntimeError("mpv failed to start")
+                self.loading = False
+                self._note_history(track)
         except Exception as e:
-            self.loading = False
-            self.toast_now(f"Couldn't play — {e}")
+            with self.lock:
+                if token != self.load_token:
+                    return
+                self.loading = False
+                self.toast_now(f"Couldn't play — {e}")
 
     def play_row(self, vk, idx):
-        if vk == "queue":
+        if vk.split(":", 1)[0] == "queue":
             if 0 <= idx < len(self.queue):
                 self.qpos = idx
                 self._play_current()
@@ -1187,7 +1205,7 @@ class App:
         else:
             v += (d or 0)
         self.mpv.set_vol(v)
-        self.store.volume = v
+        self.store.volume = self.mpv.state["vol"]
         self.store.save()
 
     # ------------------------------------------------------------ library --
@@ -1256,7 +1274,7 @@ class App:
             elif idx == self.qpos:
                 # deleted the playing row: mpv keeps playing it, so step
                 # the pointer back so auto-advance lands on the next song
-                self.qpos = max(0, self.qpos - 1)
+                self.qpos -= 1
 
     def open_pick(self, t):
         self.pick_pending = t
@@ -2238,9 +2256,9 @@ def handle_key(app, k):
                 app.name_buf = ""
                 app.mode = "normal"
                 if app.pick_pending:
-                    t = app.pick_pending
+                    app.add_to_playlist(len(app.store.playlists) - 1,
+                                        app.pick_pending)
                     app.pick_pending = None
-                    app.open_pick(t)
                 return
             if k == "\x1b":
                 app.name_buf = ""
@@ -2277,7 +2295,7 @@ def handle_key(app, k):
                 app.name_buf = ""
             else:
                 app.add_to_playlist(app.pick_idx - 1, app.pick_pending)
-            app.pick_pending = None
+                app.pick_pending = None
         elif k == "\x1b" or k == 27 or k == "q":
             app.mode = "normal"
             app.pick_pending = None
@@ -2407,8 +2425,8 @@ def handle_mouse(app):
         else:
             app.move_sel(3, len(app.view_tracks()))
         return
-    if not (bstate & (curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED
-                      | curses.BUTTON1_CLICKED)):
+    if not (bstate & (curses.BUTTON1_PRESSED | curses.BUTTON1_CLICKED
+                      | curses.BUTTON1_DOUBLE_CLICKED | curses.BUTTON1_TRIPLE_CLICKED)):
         return
     dbl = bool(bstate & (curses.BUTTON1_DOUBLE_CLICKED
                          | curses.BUTTON1_TRIPLE_CLICKED))
@@ -2416,7 +2434,7 @@ def handle_mouse(app):
     blocked = app.show_help or app.mode in ("name", "pick")
     allowed = {"helpclose", "pickrow", "create"}
     for r in reversed(app.rects):
-        if not (r["x0"] <= mx < r["x1"] and r["y0"] <= my <= r["y1"]):
+        if not (r["x0"] <= mx < r["x1"] and r["y0"] <= my < r["y1"]):
             continue
         act, arg = r["act"], r["arg"]
         if blocked and act not in allowed:

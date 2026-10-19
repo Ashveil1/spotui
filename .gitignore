@@ -12,3 +12,5 @@ venv/
 # Generated knowledge-graph output (regenerate with graphify)
 graphify-out/cache/
 graphify-out/cost.json
+
+.pytest_cache/
