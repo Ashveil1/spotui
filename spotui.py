@@ -890,6 +890,43 @@ class Pal:
             return 0
 
 
+def daily_mixes(store, n=3):
+    """Mixes built only from songs already in the library, grouped by artist.
+
+    Ranks artists by play count plus how many of their songs you saved; each
+    mix is that artist's songs plus songs by artists you also listen to.
+    """
+    pool, seen = [], set()
+    for src in (store.liked, store.history, store.similar.get("items", []),
+                *[p["tracks"] for p in store.playlists]):
+        for t in src:
+            if t.get("id") not in seen and t.get("title"):
+                seen.add(t["id"])
+                pool.append(t)
+    by_artist = {}
+    for t in pool:
+        a = unicodedata.normalize("NFKC", t.get("artist") or "").casefold().strip()
+        if a:
+            by_artist.setdefault(a, []).append(t)
+    def score(a):
+        played = sum(p["n"] for p in store.plays.values()
+                     if unicodedata.normalize("NFKC", p["artist"]).casefold().strip() == a)
+        return played * 2 + len(by_artist[a])
+    ranked = [a for a in sorted(by_artist, key=lambda a: (-score(a), a))
+              if len(by_artist[a]) >= 2][:n]
+    others = [a for a in sorted(by_artist, key=lambda a: (-score(a), a))]
+    mixes = []
+    for i, a in enumerate(ranked):
+        tracks = list(by_artist[a])
+        extra = [x for x in others if x != a and x not in ranked[:i]][:3]
+        for x in extra:
+            tracks += by_artist[x][:3]
+        mixes.append(dict(name=f"Daily Mix {i + 1}", artist=by_artist[a][0]["artist"],
+                          with_=[by_artist[x][0]["artist"] for x in extra[:2]],
+                          tracks=tracks))
+    return mixes
+
+
 def stats_summary(plays, top=6):
     """(total plays, unique songs, top artists, top songs) from play counts."""
     total = sum(p["n"] for p in plays.values())
@@ -1439,6 +1476,16 @@ class App:
         self.shuffle = not self.shuffle
         self._apply_shuffle(self.shuffle)
         self.toast_now(f"Shuffle {'on' if self.shuffle else 'off'}")
+
+    def play_mix(self, i):
+        mixes = daily_mixes(self.store)
+        if not 0 <= i < len(mixes):
+            return
+        m = mixes[i]
+        recent = [t.get("id") for t in self.store.history[:10]]
+        tracks = smart_shuffle(m["tracks"], "", recent)
+        self.play(tracks, 0)
+        self.toast_now(f"{m['name']}: {m['artist']} and more")
 
     def cycle_shuffle_mode(self):
         i = SHUFFLE_MODES.index(self.store.shuffle_mode)
@@ -2147,6 +2194,7 @@ class UI:
         if y1 - y0 >= 27 and app.store.history:
             y = self._home_hero(app, pal, scr, y, y1, x0, W)
         y = self._home_tiles(app, pal, scr, y, y1, x0, W)
+        y = self._home_mixes(app, pal, scr, y, y1, x0, W)
         y = self._home_similar(app, pal, scr, y, y1, x0, W)
         y = self._home_history(app, pal, scr, y, y1, x0, W)
         y = self._home_liked(app, pal, scr, y, y1, x0, W)
@@ -2224,6 +2272,24 @@ class UI:
             self.homerow(y, x0 + 2, w, t, i, title_w)
             n += 1
         return y0 + 2 + n
+
+    def _home_mixes(self, app, pal, scr, y0, y1, x0, W):
+        mixes = daily_mixes(app.store)
+        if not mixes or y0 + 6 >= y1 - 1:
+            return y0
+        put(scr, y0, x0 + 2, "Your mixes", pal["text"], curses.A_BOLD)
+        put(scr, y0, x0 + 14, "· press 1-3 to play", pal["faint"])
+        cw = 26
+        per = max(1, (W - x0 - 4) // cw)
+        for i, m in enumerate(mixes[:per]):
+            x = x0 + 2 + i * cw
+            draw_art(scr, y0 + 1, x, 8, 3, m["artist"], pal, icon=str(i + 1))
+            put(scr, y0 + 1, x + 10, wcut(m["name"], cw - 12), pal["text"], curses.A_BOLD)
+            put(scr, y0 + 2, x + 10, wcut(m["artist"], cw - 12), pal["dim"])
+            if m["with_"]:
+                put(scr, y0 + 3, x + 10, wcut("+ " + ", ".join(m["with_"]), cw - 12), pal["faint"])
+            self.hit(x, y0 + 1, cw - 1, 3, "mix", i)
+        return y0 + 5
 
     def _home_similar(self, app, pal, scr, y0, y1, x0, W):
         """'Made for you' — same-vibe picks, cached, refreshed in background."""
@@ -3030,6 +3096,8 @@ def handle_key(app, k):
             app.toggle_shuffle()
         elif k == "S":
             app.cycle_shuffle_mode()
+        elif k in ("1", "2", "3") and kind == "home":
+            app.play_mix(int(k) - 1)
         elif k == "i":
             app.push("stats")
         elif k == "t":
@@ -3174,6 +3242,8 @@ def handle_mouse(app):
             app.name_buf = ""
         elif act == "tile":
             app.push(arg[0], arg[1])
+        elif act == "mix":
+            app.play_mix(arg)
         elif act == "recent":
             app.query = arg
             app.mode = "search"
