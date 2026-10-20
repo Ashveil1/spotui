@@ -38,6 +38,19 @@ spotui           # run — from anywhere (installer links it into ~/.local/bin)
 
 มีอนิเมชั่นเปิดแอป (equalizer + wordmark) — กดปุ่มใดก็ได้เพื่อข้าม; จอแคบจะข้ามให้เอง
 
+### Arch Linux (works from fish, bash or zsh)
+
+```
+sudo pacman -S --needed git python mpv ffmpeg
+git clone https://github.com/Ashveil1/spotui ~/spotui
+cd ~/spotui
+./install.sh
+fish_add_path ~/.local/bin     # fish only, if the installer says it is not in PATH
+spotui
+```
+
+ffmpeg is optional (cover art). Termux is untested.
+
 ## Keys
 
 | Key | Action | Key | Action |
