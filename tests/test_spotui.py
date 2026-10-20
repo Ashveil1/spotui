@@ -187,6 +187,10 @@ class AppTests(unittest.TestCase):
             ui._reveal(3, 15, 0, 80)
             self.assertFalse(fill.called)
 
+    def test_mpv_socket_uses_tempdir(self):
+        with patch.object(s.tempfile, 'gettempdir', return_value='/data/tmp'):
+            self.assertTrue(s.Mpv().sock_path.startswith('/data/tmp/spotui-'))
+
     def test_home_keyboard_navigation(self):
         self.app.create_playlist('Rock')
         self.app.back()
