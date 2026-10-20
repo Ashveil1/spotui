@@ -67,7 +67,8 @@ ffmpeg is optional (cover art). Termux is untested.
 | `f` | Now Playing | `t` | sleep timer |
 | `J` / `K` | reorder queue | `W` | save queue as playlist |
 | `C` | clear upcoming queue | `X` | export playlist JSON |
-| `R` | new "Made for you" picks | `?` | help |
+| `R` | new "Made for you" picks | `T` | cycle color theme |
+| `?` | help | | |
 | `Backspace` | back | `q` | quit |
 
 Mouse works too: click anything (rows, tiles, sidebar items, playlists,
@@ -175,3 +176,5 @@ The queue and position are saved in the library file and restored paused on the 
 `C` in the queue view clears the upcoming songs and keeps the current song and what already played.
 
 `X` in a playlist exports it as JSON to `~/spotui-exports/`. Import one with `python3 spotui.py --import file.json` while SpotUI is closed.
+
+`T` cycles color themes (Spotify, Aurora, Sunset, Ocean, Rose, Amber). Themes redefine terminal palette slots, so they need a terminal that allows it (most do; tmux and `NO_COLOR` do not). The choice is saved.

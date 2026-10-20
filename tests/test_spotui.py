@@ -111,6 +111,19 @@ class AppTests(unittest.TestCase):
         src.write_text('[1,2]', encoding='utf-8')
         self.assertFalse(s.import_playlist(src)[0])
 
+    def test_theme_cycle_persists(self):
+        self.app.pal = Mock()
+        self.app.pal.apply_theme.return_value = True
+        s.handle_key(self.app, 'T')
+        self.assertEqual(self.app.store.theme, s.THEME_NAMES[1])
+        self.assertEqual(s.Store().theme, s.THEME_NAMES[1])
+
+    def test_theme_refused_without_palette(self):
+        self.app.pal = Mock()
+        self.app.pal.apply_theme.return_value = False
+        s.handle_key(self.app, 'T')
+        self.assertEqual(self.app.store.theme, s.THEME_NAMES[0])
+
     def test_home_keyboard_navigation(self):
         self.app.create_playlist('Rock')
         self.app.back()

@@ -255,6 +255,7 @@ class Store:
         self.similar = {}            # cached "made for you" shelf
         self.last_search = 0.0       # when the last search happened
         self.volume = 70
+        self.theme = THEME_NAMES[0]
         self._load()
 
     @staticmethod
@@ -317,6 +318,8 @@ class Store:
                 self.last_search = 0.0
         except (ValueError, TypeError):
             pass
+        if d.get("theme") in THEMES:
+            self.theme = d["theme"]
         try:
             self.volume = max(0, min(100, int(d.get("volume", 70))))
         except (ValueError, TypeError):
@@ -339,7 +342,7 @@ class Store:
                         "recent": self.recent, "history": self.history,
                         "similar": self.similar, "last_search": self.last_search,
                         "volume": self.volume,
-                        "session": self.session,
+                        "session": self.session, "theme": self.theme,
                     }, f, ensure_ascii=False, indent=1)
                     f.flush()
                     os.fsync(f.fileno())
@@ -612,6 +615,16 @@ FAMS = [
     [(93, 109, 222), (65, 77, 157), (47, 56, 113), (28, 33, 70)],   # indigo
 ]
 
+THEMES = {
+    # name: accent, background, hover, raised (pill), avatar  (0-255 RGB)
+    "Spotify":  ((29, 185, 84),  (18, 18, 18),  (31, 31, 31),  (42, 42, 42),  (83, 83, 83)),
+    "Aurora":   ((167, 139, 250), (16, 14, 30),  (30, 26, 52),  (40, 35, 70),  (90, 80, 140)),
+    "Sunset":   ((251, 146, 60),  (24, 16, 14),  (42, 28, 24),  (58, 38, 32),  (120, 80, 60)),
+    "Ocean":    ((56, 189, 248),  (10, 20, 30),  (20, 36, 52),  (28, 50, 72),  (60, 100, 130)),
+    "Rose":     ((244, 114, 182), (26, 14, 22),  (44, 26, 38),  (60, 36, 52),  (130, 70, 105)),
+    "Amber":    ((250, 204, 21),  (20, 18, 10),  (38, 34, 18),  (52, 46, 24),  (110, 98, 50)),
+}
+THEME_NAMES = list(THEMES)
 ART_SLOTS = 50                    # 8 fams × 4 shades: slots 50–81
 
 
@@ -748,26 +761,39 @@ class Pal:
             self.cpmax = max(i + 16, curses.COLOR_PAIRS - 32)
         except Exception:
             self.cpmax = i + 16
+        self.theme = THEME_NAMES[0]
+        self.orig = {}
         self._truecolor()
 
+    def can_theme(self):
+        try:
+            return (not self.mono) and self.n >= 256 and curses.can_change_color()
+        except curses.error:
+            return False
+
+    def apply_theme(self, name):
+        """Re-skin by redefining palette slots; False without palette support."""
+        if name not in THEMES or not self.can_theme():
+            return False
+        self.theme = name
+        self._truecolor()
+        return True
+
     def _truecolor(self):
-        """Exact Spotify palette: redefine terminal color slots (0-1000 RGB)."""
-        self.orig = {}
+        """Theme palette: redefine terminal color slots (0-1000 RGB)."""
         if self.mono:
             return
+        acc, bg, hov, pill, av = THEMES[self.theme]
+        k = lambda c: tuple(v * 1000 // 255 for v in c)
+        shade = lambda f: tuple(int(v * f) for v in acc)
         slots = {
-            41: (114, 725, 329),   # 41: #1DB954 Spotify green
-            40: (114, 725, 329),   # same, for gradient top
-            34: (71, 541, 247),    # #128a3f
-            28: (47, 361, 165),    # #0c5c2a
-            22: (27, 208, 110),    # #07351c
-            233: (71, 71, 71),     # #121212 main bg
-            235: (122, 122, 122),  # #1f1f1f hover
-            236: (142, 142, 142),  # #242424
-            237: (162, 162, 162),  # #2a2a2a pill
-            238: (83, 83, 83),     # #535353 avatar
-            244: (106, 106, 106),  # #6a6a6a faint text
-            250: (179, 179, 179),  # #b3b3b3 dim text
+            41: k(acc), 40: k(acc),
+            34: k(shade(.76)), 28: k(shade(.5)), 22: k(shade(.28)),
+            233: k(bg), 235: k(hov),
+            236: k(tuple((a + b) // 2 for a, b in zip(hov, pill))),
+            237: k(pill), 238: k(av),
+            244: k((140, 140, 140)),  # faint text
+            250: k((179, 179, 179)),  # #b3b3b3 dim text
         }
         for fi, shades in enumerate(FAMS):
             for k, rgb in enumerate(shades):
@@ -777,10 +803,11 @@ class Pal:
             if not curses.can_change_color():
                 return
             for slot, rgb in slots.items():
-                self.orig[slot] = curses.color_content(slot)
+                if slot not in self.orig:
+                    self.orig[slot] = curses.color_content(slot)
                 curses.init_color(slot, *rgb)
         except curses.error:
-            self.orig = {}
+            pass
 
     def restore(self):
         for slot, rgb in getattr(self, "orig", {}).items():
@@ -1376,6 +1403,16 @@ class App:
         self.store.save()
 
     # ------------------------------------------------------------ library --
+    def cycle_theme(self):
+        i = THEME_NAMES.index(self.store.theme) if self.store.theme in THEMES else 0
+        name = THEME_NAMES[(i + 1) % len(THEME_NAMES)]
+        if self.pal is None or not self.pal.apply_theme(name):
+            self.toast_now("Themes need a terminal with palette support (not NO_COLOR)")
+            return
+        self.store.theme = name
+        self.store.save()
+        self.toast_now(f"Theme: {name}")
+
     def cycle_sleep(self):
         options = [0, 15, 30, 60, 90]
         self.sleep_minutes = options[(options.index(self.sleep_minutes) + 1) % len(options)]
@@ -2492,7 +2529,7 @@ class UI:
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"),
             ("F", "find in a list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -2799,6 +2836,8 @@ def handle_key(app, k):
             app.toggle_shuffle()
         elif k == "t":
             app.cycle_sleep()
+        elif k == "T":
+            app.cycle_theme()
         elif k == "R":
             app.refresh_similar(force=True)
             app.toast_now("Finding new picks…")
@@ -3038,6 +3077,7 @@ def run(scr):
 
     app = App()
     app.pal = Pal(scr)
+    app.pal.apply_theme(app.store.theme)
     app._last_row = None
     app._last_row_t = 0.0
     ui = UI(app, scr)
