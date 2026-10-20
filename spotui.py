@@ -2034,38 +2034,82 @@ class UI:
         if not track:
             put(scr, y0 + 3, x0 + 2, "Search for a song with / to begin", pal["dim"])
             return
-        ah = max(2, min(10, height - 7))
-        aw = min(30, max(8, width // 3))
-        wide = width >= 72
+        if app.queue:
+            pos = f"{app.qpos + 1} of {len(app.queue)}"
+            put(scr, y0 + 1, x0 + 2 + width - dlen(pos), pos, pal["faint"])
+        wide = width >= 56
+        aw = min(36, max(8, width * 2 // 5)) if wide else min(30, max(8, width // 3))
+        ah = max(3, min(aw // 2 + 1, height - (4 if wide else 12)))
         ax = x0 + 2 if wide else x0 + 2 + max(0, (width - aw) // 2)
         ay = y0 + 3
         draw_art(scr, ay, ax, aw, ah, track["id"], pal, icon=IC_NOTE,
                  art=app.cover_for(track["id"], aw, ah))
         tx = ax + aw + 4 if wide else x0 + 2
-        ty = ay + 1 if wide else ay + ah + 1
+        ty = ay if wide else ay + ah + 1
         tw = max(8, W - tx - 3)
         put(scr, ty, tx, wcut(track["title"], tw), pal["text"], curses.A_BOLD)
         put(scr, ty + 1, tx, wcut(track["artist"], tw), pal["dim"])
         state = "Connecting..." if app.loading else ("Paused" if app.mpv.state["pause"] else
                  "Stopped" if app.mpv.state["idle"] else "Playing")
-        if ty + 3 < y1 - 1:
-            label = state if app.speed == 1.0 else f"{state}  {app.speed:g}x"
-            put(scr, ty + 3, tx, wcut(label, tw), pal["green"])
-        if ty + 6 < y1 - 1:
-            n = min(20, tw)
+        # chips: state, shuffle mode, repeat, speed
+        chips = [(state, True)]
+        if app.shuffle:
+            chips.append(("Shuffle " + SHUFFLE_LABEL[app.store.shuffle_mode].split(" ")[0], True))
+        if app.repeat:
+            chips.append(("Repeat one" if app.repeat == 2 else "Repeat all", True))
+        if app.speed != 1.0:
+            chips.append((f"{app.speed:g}x", True))
+        cx, cy = tx, ty + 3
+        for label, _on in chips:
+            w = dlen(label) + 2
+            if cx + w > tx + tw:
+                break
+            if cy < y1 - 1:
+                fill(scr, cy, cx, w, pal["pill"])
+                put(scr, cy, cx + 1, label, pal["pgreen"], curses.A_BOLD)
+            cx += w + 1
+        # large progress bar (click or drag to seek)
+        st = app.mpv.state
+        by = cy + 2
+        if by < y1 - 1 and tw >= 20:
+            el, du = fmt_t(st.get("pos")), fmt_t(st.get("dur")) if st.get("dur") else "-:--"
+            bx0 = tx + dlen(el) + 1
+            bw = max(6, tw - dlen(el) - dlen(du) - 2)
+            put(scr, by, tx, el, pal["dim"])
+            frac = (st["pos"] / st["dur"]) if st.get("dur") else 0.0
+            frac = max(0.0, min(1.0, frac))
+            knob = int(round(frac * (bw - 1)))
+            for i in range(bw):
+                if i < knob:
+                    put(scr, by, bx0 + i, "━", pal["green"])
+                elif i == knob:
+                    put(scr, by, bx0 + i, "●", pal["green"], curses.A_BOLD)
+                else:
+                    put(scr, by, bx0 + i, "─", pal["faint"])
+            put(scr, by, bx0 + bw + 1, du, pal["dim"])
+            self.hit(bx0, by, bw, 1, "seek", (bx0, bw))
+        ey = by + 2
+        if ey + 1 < y1 - 1:
+            n = min(24, tw)
             for i in range(n):
                 v = self.BARS_PAT[(i + app.frame // 2) % len(self.BARS_PAT)]
                 ch = "▁" if state != "Playing" or app.reduced_motion else "▁▂▃▄▅▆▇█"[v]
-                put(scr, ty + 5, tx + i, ch, pal["green"])
-            put(scr, ty + 6, tx, "visual animation, not audio levels", pal["faint"])
-        if wide and ty + 9 < y1 - 1:
-            next_index = app.qpos + 1
-            put(scr, ty + 8, tx, "UP NEXT", pal["faint"], curses.A_BOLD)
-            if 0 <= next_index < len(app.queue):
-                nxt = app.queue[next_index]
-                put(scr, ty + 9, tx, wcut(nxt["title"], tw), pal["dim"])
+                put(scr, ey, tx + i, ch, pal["green"])
+            put(scr, ey + 1, tx, "visual animation, not audio levels", pal["faint"])
+        # up next
+        uy = max(ay + ah + 1, ey + 3) if not wide else ay + ah + 1
+        if wide and uy + 2 < y1 - 2:
+            put(scr, uy, x0 + 2, "UP NEXT", pal["faint"], curses.A_BOLD)
+            for j in range(3):
+                qi = app.qpos + 1 + j
+                if qi >= len(app.queue) or uy + 1 + j >= y1 - 2:
+                    break
+                nxt = app.queue[qi]
+                put(scr, uy + 1 + j, x0 + 2, f"{j + 1}", pal["faint"])
+                put(scr, uy + 1 + j, x0 + 5, wcut(nxt["title"], max(8, width // 2 - 8)), pal["text"])
+                put(scr, uy + 1 + j, x0 + 5 + width // 2 - 2, wcut(nxt["artist"], max(8, width // 2 - 6)), pal["dim"])
         if y1 - y0 >= 18:
-            put(scr, y1 - 2, x0 + 2, "Space pause   l like   P playlist   v queue   f back", pal["faint"])
+            put(scr, y1 - 2, x0 + 2, "Space pause   l like   P playlist   v queue   S shuffle mode   f back", pal["faint"])
 
     def v_home(self, y0, y1, x0, W):
         app, pal = self.app, self.pal
