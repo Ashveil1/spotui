@@ -2047,7 +2047,10 @@ class UI:
             time.strftime("%a %d %b", time.localtime()), pal["faint"])
         fill(scr, y0 + 2, x0 + 2, 6, pal["accent"])   # accent underline
 
-        y = self._home_tiles(app, pal, scr, y0 + 4, y1, x0, W)
+        y = y0 + 4
+        if y1 - y0 >= 27 and app.store.history:
+            y = self._home_hero(app, pal, scr, y, y1, x0, W)
+        y = self._home_tiles(app, pal, scr, y, y1, x0, W)
         y = self._home_similar(app, pal, scr, y, y1, x0, W)
         y = self._home_history(app, pal, scr, y, y1, x0, W)
         y = self._home_liked(app, pal, scr, y, y1, x0, W)
@@ -2055,6 +2058,25 @@ class UI:
         put(scr, y1 - 2, x0 + 2,
             "Type / to search · Enter opens · ? for shortcuts",
             pal["faint"])
+
+    def _home_hero(self, app, pal, scr, y0, y1, x0, W):
+        """'Continue listening' banner: big cover, title, one-click play."""
+        t = app.store.history[0]
+        aw, ah = 16, 5
+        bw = W - x0 - 4
+        for j in range(ah):
+            fill(scr, y0 + j, x0 + 2, bw, pal["pill"])
+        draw_art(scr, y0, x0 + 2, aw, ah, t["id"], pal, icon=IC_NOTE,
+                 art=app.cover_for(t["id"], aw, ah))
+        tx = x0 + 2 + aw + 3
+        tw = max(8, bw - aw - 14)
+        put(scr, y0 + 1, tx, "CONTINUE LISTENING", pal["pgreen"], curses.A_BOLD)
+        put(scr, y0 + 2, tx, wcut(t["title"], tw), pal["pill"], curses.A_BOLD)
+        put(scr, y0 + 3, tx, wcut(t["artist"], tw), pal["pilldim"])
+        bx = x0 + 2 + bw - 9
+        put(scr, y0 + 2, bx, f"  {IC_PLAY}  ", pal["btn"], curses.A_BOLD)
+        self.hit(x0 + 2, y0, bw, ah, "row", ("history:", 0, True))
+        return y0 + ah + 1
 
     def _home_tiles(self, app, pal, scr, y0, y1, x0, W):
         """Shortcut tiles: Liked Songs + your playlists."""
@@ -2105,7 +2127,7 @@ class UI:
                 break
             self.homerow(y, x0 + 2, w, t, i, title_w)
             n += 1
-        return y0 + 1 + n
+        return y0 + 2 + n
 
     def _home_similar(self, app, pal, scr, y0, y1, x0, W):
         """'Made for you' — same-vibe picks, cached, refreshed in background."""
@@ -2135,7 +2157,7 @@ class UI:
             put(scr, y0 + 4, x, wcut(t["title"], cw - 2), pal["text"])
             put(scr, y0 + 5, x, wcut(t["artist"], cw - 2), pal["dim"])
             self.hit(x, y0 + 1, cw - 1, 5, "row", ("similar:", i, True))
-        return y0 + 6
+        return y0 + 7
 
     def _home_history(self, app, pal, scr, y0, y1, x0, W):
         """'Recently played' — the real play history (mouse = play)."""
@@ -2148,11 +2170,11 @@ class UI:
         n = 0
         for i, t in enumerate(hist):
             y = y0 + 1 + i
-            if y >= y1 - 2 or i >= 5:
+            if y >= y1 - 2 or i >= 4:
                 break
             self.homerow(y, x0 + 2, w, t, i, title_w, vk="history:")
             n += 1
-        return y0 + 1 + n
+        return y0 + 2 + n
 
     def homerow(self, y, x0, w, t, idx, title_w, vk="liked:"):
         """Compact real-data line on home; mouse = play, hover = Spotify row."""
