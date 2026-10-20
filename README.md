@@ -49,7 +49,17 @@ fish_add_path ~/.local/bin     # fish only, if the installer says it is not in P
 spotui
 ```
 
-ffmpeg is optional (cover art). Termux is untested.
+ffmpeg is optional (cover art).
+
+### Termux (Android, untested on a real phone)
+
+```
+pkg install python mpv ffmpeg git
+git clone https://github.com/Ashveil1/spotui ~/spotui
+cd ~/spotui && ./install.sh && ./spotui
+```
+
+SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in the installer. I could not test audio on a real Android device. If mpv is silent, pass an output driver, for example `SPOTUI_MPV_ARGS="--ao=opensles" ./spotui`. Terminal palette themes need terminal support, so `T` may say it is unavailable and the app falls back to 256 colors.
 
 ## Keys
 

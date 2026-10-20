@@ -14,6 +14,7 @@ import os
 import re
 import signal
 import shutil
+import shlex
 import socket
 import subprocess
 import sys
@@ -375,7 +376,8 @@ class Store:
 # ------------------------------------------------------------------- mpv ---
 class Mpv:
     def __init__(self):
-        self.sock_path = f"/tmp/spotui-{os.getpid()}.mpv.sock"
+        self.sock_path = os.path.join(tempfile.gettempdir(),
+                                      f"spotui-{os.getpid()}.mpv.sock")
         self.proc = None
         self.state = {"idle": True, "pause": False, "pos": 0.0,
                       "dur": 0.0, "vol": 70}
@@ -406,7 +408,8 @@ class Mpv:
                      "--demuxer-max-back-bytes=2MiB",
                      "--cache-on-disk=no",
                      f"--input-ipc-server={self.sock_path}",
-                     f"--volume={self.state['vol']}"],
+                     f"--volume={self.state['vol']}"]
+                    + shlex.split(os.environ.get("SPOTUI_MPV_ARGS", "")),
                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL)
             except Exception:
