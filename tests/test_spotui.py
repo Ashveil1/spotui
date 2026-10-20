@@ -124,6 +124,23 @@ class AppTests(unittest.TestCase):
         s.handle_key(self.app, 'T')
         self.assertEqual(self.app.store.theme, s.THEME_NAMES[0])
 
+    def test_stats_summary_and_play_counts(self):
+        plays = {'a': dict(title='A', artist='X', n=3), 'b': dict(title='B', artist='X', n=2),
+                 'c': dict(title='C', artist='Y', n=4)}
+        total, uniq, ta, ts = s.stats_summary(plays)
+        self.assertEqual((total, uniq), (9, 3))
+        self.assertEqual(ta[0], ('X', 5))
+        self.assertEqual(ts[0][0], 'C')
+
+    def test_note_history_counts_and_persists(self):
+        self.app._note_history(track(1))
+        self.app._note_history(track(1))
+        self.assertEqual(s.Store().plays['1']['n'], 2)
+
+    def test_stats_key_opens_view(self):
+        s.handle_key(self.app, 'i')
+        self.assertEqual(self.app.stack[-1][0], 'stats')
+
     def test_home_keyboard_navigation(self):
         self.app.create_playlist('Rock')
         self.app.back()

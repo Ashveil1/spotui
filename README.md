@@ -178,3 +178,5 @@ The queue and position are saved in the library file and restored paused on the 
 `X` in a playlist exports it as JSON to `~/spotui-exports/`. Import one with `python3 spotui.py --import file.json` while SpotUI is closed.
 
 `T` cycles color themes (Spotify, Aurora, Sunset, Ocean, Rose, Amber). Themes redefine terminal palette slots, so they need a terminal that allows it (most do; tmux and `NO_COLOR` do not). The choice is saved.
+
+`i` opens listening stats: your most played artists and songs, counted from what you play in SpotUI (stored locally in the library file).
