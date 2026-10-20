@@ -191,6 +191,23 @@ class AppTests(unittest.TestCase):
         with patch.object(s.tempfile, 'gettempdir', return_value='/data/tmp'):
             self.assertTrue(s.Mpv().sock_path.startswith('/data/tmp/spotui-'))
 
+    def test_daily_mixes_from_library(self):
+        st = self.app.store
+        st.liked = [dict(track(i), artist='Alpha') for i in range(3)] + \
+                   [dict(track(10 + i), artist='Beta') for i in range(3)] + [dict(track(99), artist='Solo')]
+        st.plays = {'0': dict(title='t', artist='Alpha', n=5)}
+        mixes = s.daily_mixes(st)
+        self.assertEqual(mixes[0]['artist'], 'Alpha')
+        self.assertEqual(len(mixes), 2)           # Solo has one song: no mix
+        self.assertGreater(len(mixes[0]['tracks']), 3)
+        self.assertEqual(len({t['id'] for t in mixes[0]['tracks']}), len(mixes[0]['tracks']))
+
+    def test_mix_key_plays_on_home(self):
+        self.app.store.liked = [dict(track(i), artist='Alpha') for i in range(3)]
+        self.app._play_current = Mock()
+        s.handle_key(self.app, '1')
+        self.assertEqual(len(self.app.queue), 3)
+
     def test_home_keyboard_navigation(self):
         self.app.create_playlist('Rock')
         self.app.back()

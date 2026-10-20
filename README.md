@@ -194,3 +194,5 @@ The queue and position are saved in the library file and restored paused on the 
 `S` cycles shuffle modes and turns shuffle on: **Artist spread** (default), **Discovery** (songs you have played least first) and **Your mood** (your most played songs and artists first). Discovery and mood use the play counts SpotUI keeps locally, so they get better as you listen. All modes keep artists apart when the queue allows it and never add or drop songs. The mode is shown as a D or M next to the shuffle button.
 
 Views reveal top-down when you switch (about half a second). Set `SPOTUI_REDUCED_MOTION=1` to turn this and the other animations off.
+
+**Your mixes** on the home screen are built from songs already in your library (liked, history, playlists, Made for you), grouped around the artists you play most. Press `1`, `2` or `3` on the home screen, or click one, to play it shuffled. Nothing is fetched for them.
