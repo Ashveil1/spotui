@@ -141,6 +141,27 @@ class AppTests(unittest.TestCase):
         s.handle_key(self.app, 'i')
         self.assertEqual(self.app.stack[-1][0], 'stats')
 
+    def test_shuffle_modes_keep_all_tracks_and_bias(self):
+        import random
+        tracks = [dict(id=str(i), title=str(i), artist='A' if i < 3 else 'B') for i in range(6)]
+        plays = {'0': dict(n=9), '1': dict(n=9), '2': dict(n=9)}
+        for mode in s.SHUFFLE_MODES:
+            out = s.smart_shuffle(tracks, '', (), rng=random.Random(1), mode=mode, plays=plays)
+            self.assertEqual(sorted(t['id'] for t in out), sorted(t['id'] for t in tracks))
+        disc = s.smart_shuffle(tracks, '', (), rng=random.Random(1), mode='discovery', plays=plays)
+        mood = s.smart_shuffle(tracks, '', (), rng=random.Random(1), mode='mood', plays=plays)
+        self.assertEqual(disc[0]['artist'], 'B')
+        self.assertEqual(mood[0]['artist'], 'A')
+
+    def test_cycle_shuffle_mode_enables_and_persists(self):
+        self.app.queue = [track(i) for i in range(4)]
+        self.app.qpos = 0
+        s.handle_key(self.app, 'S')
+        self.assertTrue(self.app.shuffle)
+        self.assertEqual(self.app.store.shuffle_mode, 'discovery')
+        self.assertEqual(s.Store().shuffle_mode, 'discovery')
+        self.assertEqual(sorted(t['id'] for t in self.app.queue), ['0', '1', '2', '3'])
+
     def test_home_keyboard_navigation(self):
         self.app.create_playlist('Rock')
         self.app.back()
