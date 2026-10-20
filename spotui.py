@@ -256,6 +256,7 @@ class Store:
         self.last_search = 0.0       # when the last search happened
         self.volume = 70
         self.plays = {}
+        self.shuffle_mode = "spread"
         self.theme = THEME_NAMES[0]
         self._load()
 
@@ -329,6 +330,8 @@ class Store:
                     self.plays[k] = dict(title=v["title"],
                                          artist=str(v.get("artist") or "Unknown"),
                                          n=v["n"])
+        if d.get("shuffle_mode") in SHUFFLE_MODES:
+            self.shuffle_mode = d["shuffle_mode"]
         if d.get("theme") in THEMES:
             self.theme = d["theme"]
         try:
@@ -354,7 +357,7 @@ class Store:
                         "similar": self.similar, "last_search": self.last_search,
                         "volume": self.volume,
                         "session": self.session, "theme": self.theme,
-                        "plays": self.plays,
+                        "plays": self.plays, "shuffle_mode": self.shuffle_mode,
                     }, f, ensure_ascii=False, indent=1)
                     f.flush()
                     os.fsync(f.fileno())
@@ -582,7 +585,13 @@ def _real_song(t):
     return not any(w in title for w in _MIX_WORDS)
 
 
-def smart_shuffle(tracks, previous_artist="", recent_ids=(), rng=None):
+SHUFFLE_MODES = ("spread", "discovery", "mood")
+SHUFFLE_LABEL = {"spread": "Artist spread", "discovery": "Discovery (least played first)",
+                 "mood": "Your mood (most played first)"}
+
+
+def smart_shuffle(tracks, previous_artist="", recent_ids=(), rng=None,
+                  mode="spread", plays=None):
     """Artist-spaced shuffle, without adding or dropping queue entries.
 
     Choose the largest remaining artist bucket other than the last artist,
@@ -596,15 +605,27 @@ def smart_shuffle(tracks, previous_artist="", recent_ids=(), rng=None):
     for t in tracks:
         artist = unicodedata.normalize("NFKC", t.get("artist") or "").casefold().strip()
         buckets.setdefault(artist, []).append(t)
+    plays = plays or {}
+    count = lambda t: plays.get(str(t.get("id")), {}).get("n", 0)
     for group in buckets.values():
         rng.shuffle(group)
-        group.sort(key=lambda t: t.get("id") in recent)
+        if mode == "discovery":      # least played first
+            group.sort(key=lambda t: (t.get("id") in recent, count(t)))
+        elif mode == "mood":         # most played first
+            group.sort(key=lambda t: (t.get("id") in recent, -count(t)))
+        else:
+            group.sort(key=lambda t: t.get("id") in recent)
     out = []
     previous = unicodedata.normalize("NFKC", previous_artist).casefold().strip()
     while buckets:
         choices = [a for a in buckets if a != previous] or list(buckets)
-        largest = max(len(buckets[a]) for a in choices)
-        artist = rng.choice([a for a in choices if len(buckets[a]) == largest])
+        if mode in ("discovery", "mood"):
+            sign = 1 if mode == "discovery" else -1
+            artist = min(choices, key=lambda a: sign * sum(count(t) for t in buckets[a])
+                         / len(buckets[a]) + rng.random() * 0.5)
+        else:
+            largest = max(len(buckets[a]) for a in choices)
+            artist = rng.choice([a for a in choices if len(buckets[a]) == largest])
         out.append(buckets[artist].pop(0))
         if not buckets[artist]:
             del buckets[artist]
@@ -1122,7 +1143,8 @@ class App:
             tail = self.queue[self.qpos + 1:]
             previous = head[-1].get("artist", "") if head else ""
             recent = [t.get("id") for t in self.store.history[:10]]
-            self.queue = head + smart_shuffle(tail, previous, recent)
+            self.queue = head + smart_shuffle(tail, previous, recent, mode=self.store.shuffle_mode,
+                                              plays=self.store.plays)
         elif self.orig_queue:
             cur = self.current
             self.queue = [dict(t) for t in self.orig_queue]
@@ -1414,6 +1436,15 @@ class App:
         self.shuffle = not self.shuffle
         self._apply_shuffle(self.shuffle)
         self.toast_now(f"Shuffle {'on' if self.shuffle else 'off'}")
+
+    def cycle_shuffle_mode(self):
+        i = SHUFFLE_MODES.index(self.store.shuffle_mode)
+        self.store.shuffle_mode = SHUFFLE_MODES[(i + 1) % len(SHUFFLE_MODES)]
+        self.store.save()
+        self.shuffle = True
+        self._apply_shuffle(False)       # restore original order, then reshuffle
+        self._apply_shuffle(True)
+        self.toast_now("Shuffle: " + SHUFFLE_LABEL[self.store.shuffle_mode])
 
     def cycle_repeat(self):
         self.repeat = (self.repeat + 1) % 3
@@ -2554,6 +2585,9 @@ class UI:
         x = cx
         put(scr, y0, x, IC_SHUF,
             pal["bsgreen"] if app.shuffle else pal["bsdim"], curses.A_BOLD)
+        if app.shuffle and app.store.shuffle_mode != "spread":
+            put(scr, y0, x + 1, app.store.shuffle_mode[0].upper(),
+                pal["bsgreen"], curses.A_BOLD)
         self.hit(x, y0, 1, 1, "shuffle")
         x += 3
         put(scr, y0, x, IC_PREV, pal["bside"], curses.A_BOLD)
@@ -2624,7 +2658,7 @@ class UI:
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"),
             ("F", "find in a list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -2929,6 +2963,8 @@ def handle_key(app, k):
             app.like(app.track_under() or app.current)
         elif k == "s":
             app.toggle_shuffle()
+        elif k == "S":
+            app.cycle_shuffle_mode()
         elif k == "i":
             app.push("stats")
         elif k == "t":

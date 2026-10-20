@@ -180,3 +180,5 @@ The queue and position are saved in the library file and restored paused on the 
 `T` cycles color themes (Spotify, Aurora, Sunset, Ocean, Rose, Amber). Themes redefine terminal palette slots, so they need a terminal that allows it (most do; tmux and `NO_COLOR` do not). The choice is saved.
 
 `i` opens listening stats: your most played artists and songs, counted from what you play in SpotUI (stored locally in the library file).
+
+`S` cycles shuffle modes and turns shuffle on: **Artist spread** (default), **Discovery** (songs you have played least first) and **Your mood** (your most played songs and artists first). Discovery and mood use the play counts SpotUI keeps locally, so they get better as you listen. All modes keep artists apart when the queue allows it and never add or drop songs. The mode is shown as a D or M next to the shuffle button.
