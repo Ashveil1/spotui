@@ -162,6 +162,31 @@ class AppTests(unittest.TestCase):
         self.assertEqual(s.Store().shuffle_mode, 'discovery')
         self.assertEqual(sorted(t['id'] for t in self.app.queue), ['0', '1', '2', '3'])
 
+    def test_reveal_frame_math(self):
+        ui = s.UI.__new__(s.UI)
+        ui.app = self.app
+        ui.pal = {'text': 0}
+        ui.scr = Mock()
+        self.app.reduced_motion = False
+        with patch.object(s, 'fill') as fill:
+            self.app.frame = 5
+            ui._reveal(3, 15, 0, 80)          # first sight: no animation
+            self.assertFalse(fill.called)
+            self.app.push('queue')
+            self.app.frame = 6
+            ui._reveal(3, 15, 0, 80)          # view changed: partial reveal
+            self.assertTrue(fill.called)
+            fill.reset_mock()
+            self.app.frame = 6 + s.UI.REVEAL_FRAMES
+            ui._reveal(3, 15, 0, 80)          # animation finished
+            self.assertFalse(fill.called)
+            fill.reset_mock()
+            self.app.push('stats')
+            self.app.reduced_motion = True
+            self.app.frame += 1
+            ui._reveal(3, 15, 0, 80)
+            self.assertFalse(fill.called)
+
     def test_home_keyboard_navigation(self):
         self.app.create_playlist('Rock')
         self.app.back()

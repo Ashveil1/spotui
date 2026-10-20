@@ -1986,6 +1986,24 @@ class UI:
             self.v_playing(y0, y1, x0, W)
         elif kind == "stats":
             self.v_stats(y0, y1, x0, W)
+        self._reveal(y0, y1, x0, W)
+
+    REVEAL_FRAMES = 6
+
+    def _reveal(self, y0, y1, x0, W):
+        """Top-down reveal when the main view changes (skipped for reduced motion)."""
+        app = self.app
+        top = app.stack[-1]
+        if top != getattr(self, "_seen_view", None):
+            first = getattr(self, "_seen_view", None) is None
+            self._seen_view = top
+            self._view_t = -999 if first else app.frame
+        n = app.frame - getattr(self, "_view_t", -999)
+        if app.reduced_motion or not 0 <= n < self.REVEAL_FRAMES:
+            return
+        shown = (n + 1) * (y1 - y0) // self.REVEAL_FRAMES
+        for y in range(y0 + shown, y1):
+            fill(self.scr, y, x0, W - x0, self.pal["text"])
 
     def v_stats(self, y0, y1, x0, W):
         app, pal, scr = self.app, self.pal, self.scr
