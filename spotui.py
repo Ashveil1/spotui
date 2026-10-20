@@ -255,6 +255,7 @@ class Store:
         self.similar = {}            # cached "made for you" shelf
         self.last_search = 0.0       # when the last search happened
         self.volume = 70
+        self.plays = {}
         self.theme = THEME_NAMES[0]
         self._load()
 
@@ -318,6 +319,16 @@ class Store:
                 self.last_search = 0.0
         except (ValueError, TypeError):
             pass
+        pl = d.get("plays")
+        if isinstance(pl, dict):
+            for k, v in list(pl.items())[:2000]:
+                if (isinstance(k, str) and isinstance(v, dict)
+                        and isinstance(v.get("title"), str)
+                        and isinstance(v.get("n"), int) and not isinstance(v.get("n"), bool)
+                        and v["n"] > 0):
+                    self.plays[k] = dict(title=v["title"],
+                                         artist=str(v.get("artist") or "Unknown"),
+                                         n=v["n"])
         if d.get("theme") in THEMES:
             self.theme = d["theme"]
         try:
@@ -343,6 +354,7 @@ class Store:
                         "similar": self.similar, "last_search": self.last_search,
                         "volume": self.volume,
                         "session": self.session, "theme": self.theme,
+                        "plays": self.plays,
                     }, f, ensure_ascii=False, indent=1)
                     f.flush()
                     os.fsync(f.fileno())
@@ -854,6 +866,18 @@ class Pal:
             return 0
 
 
+def stats_summary(plays, top=6):
+    """(total plays, unique songs, top artists, top songs) from play counts."""
+    total = sum(p["n"] for p in plays.values())
+    artists = {}
+    for p in plays.values():
+        artists[p["artist"]] = artists.get(p["artist"], 0) + p["n"]
+    ta = sorted(artists.items(), key=lambda kv: (-kv[1], kv[0]))[:top]
+    ts = sorted(((p["title"], p["artist"], p["n"]) for p in plays.values()),
+                key=lambda r: (-r[2], r[0]))[:top]
+    return total, len(plays), ta, ts
+
+
 # ------------------------------------------------------------------- app ---
 class App:
     def __init__(self):
@@ -1130,6 +1154,14 @@ class App:
                  if isinstance(x, dict) and x.get("id") != rec.get("id")]
             h.insert(0, rec)
             self.store.history = h[:30]
+            pid = str(rec.get("id"))
+            p = self.store.plays.get(pid) or dict(
+                title=str(rec.get("title") or ""), artist=str(rec.get("artist") or "Unknown"), n=0)
+            p["n"] += 1
+            self.store.plays[pid] = p
+            if len(self.store.plays) > 2000:
+                for k in sorted(self.store.plays, key=lambda k: self.store.plays[k]["n"])[:200]:
+                    del self.store.plays[k]
             self.snapshot_session()
             self.store.save()
         except Exception:
@@ -1921,6 +1953,47 @@ class UI:
             self.v_queue(y0, y1, x0, W)
         elif kind == "playing":
             self.v_playing(y0, y1, x0, W)
+        elif kind == "stats":
+            self.v_stats(y0, y1, x0, W)
+
+    def v_stats(self, y0, y1, x0, W):
+        app, pal, scr = self.app, self.pal, self.scr
+        put(scr, y0 + 1, x0 + 2, "Your listening", pal["text"], curses.A_BOLD)
+        total, uniq, ta, ts = stats_summary(app.store.plays)
+        if not total:
+            put(scr, y0 + 3, x0 + 2, "Play some songs and your top artists and "
+                "songs will show up here.", pal["faint"])
+            return
+        put(scr, y0 + 1, x0 + 19, f"{total} plays  ·  {uniq} songs", pal["faint"])
+        inner = W - x0 - 4
+        half = inner >= 80
+        colw = (inner - 4) // 2 if half else inner
+        def block(y, x, w, title, rows):
+            put(scr, y, x, title, pal["dim"], curses.A_BOLD)
+            if not rows:
+                return
+            top = max(r[-1] for r in rows)
+            label_w = max(10, min(24, w // 2))
+            bar_w = max(4, w - label_w - 6)
+            for i, r in enumerate(rows):
+                yy = y + 2 + i * 2
+                if yy >= y1 - 1:
+                    break
+                n = r[-1]
+                put(scr, yy, x, f"{i + 1}", pal["faint"])
+                put(scr, yy, x + 3, wcut(r[0], label_w - 3), pal["text"])
+                filled = max(1, round(n / top * bar_w))
+                put(scr, yy, x + label_w, "█" * filled, pal["green"])
+                put(scr, yy, x + label_w + filled + 1, str(n), pal["faint"])
+                if len(r) == 3:
+                    put(scr, yy + 1, x + 3, wcut(r[1], label_w - 3), pal["faint"])
+        block(y0 + 3, x0 + 2, colw, "TOP ARTISTS", [(a, n) for a, n in ta])
+        if half:
+            block(y0 + 3, x0 + 2 + colw + 4, colw, "TOP SONGS", ts)
+        else:
+            gap = y0 + 3 + 2 + min(len(ta), 6) * 2 + 1
+            if gap + 4 < y1:
+                block(gap, x0 + 2, colw, "TOP SONGS", ts[:max(1, (y1 - gap - 3) // 2)])
 
     def v_playing(self, y0, y1, x0, W):
         app, pal, scr = self.app, self.pal, self.scr
@@ -2529,7 +2602,7 @@ class UI:
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"),
             ("F", "find in a list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -2834,6 +2907,8 @@ def handle_key(app, k):
             app.like(app.track_under() or app.current)
         elif k == "s":
             app.toggle_shuffle()
+        elif k == "i":
+            app.push("stats")
         elif k == "t":
             app.cycle_sleep()
         elif k == "T":
