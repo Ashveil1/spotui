@@ -42,16 +42,20 @@ spotui           # run — from anywhere (installer links it into ~/.local/bin)
 
 | Key | Action | Key | Action |
 |---|---|---|---|
-| `/` | search | `a` | add to queue |
+| `/` | search | `a` / `A` | add to queue / play next |
 | `j/k` ↑/↓ | move | `l` | like / unlike |
 | `Enter` | play | `s` | shuffle |
 | `Space` | play / pause | `r` | repeat off/all/one |
 | `n` / `p` | next / prev | `v` | queue view |
-| `R` | new "Made for you" picks | `P` | add to playlist |
-| `←` / `→` | seek ±10s | `c` | create playlist |
-| `+` / `-` | volume | `d` | delete from list |
-| `Backspace` | back | `?` | help |
-| `q` | quit | | |
+| `←` / `→` | seek ±10s | `P` | add to playlist |
+| `+` / `-` | volume | `c` | create playlist |
+| `[` / `]` | speed down / up | `e` / `D` | rename / delete playlist |
+| `F` | find in a list | `d` | delete from list |
+| `f` | Now Playing | `t` | sleep timer |
+| `J` / `K` | reorder queue | `W` | save queue as playlist |
+| `C` | clear upcoming queue | `X` | export playlist JSON |
+| `R` | new "Made for you" picks | `?` | help |
+| `Backspace` | back | `q` | quit |
 
 Mouse works too: click anything (rows, tiles, sidebar items, playlists,
 playlists rows, controls, toast — everything), drag the progress / volume
