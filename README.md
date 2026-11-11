@@ -67,6 +67,7 @@ SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in 
 |---|---|---|---|
 | `/` | search | `a` / `A` | add to queue / play next |
 | `j/k` ↑/↓ | move | `l` | like / unlike |
+| `g` / `G` | top / bottom of a list | | |
 | `Enter` | play | `s` | shuffle |
 | `Space` | play / pause | `r` | repeat off/all/one |
 | `n` / `p` | next / prev | `v` | queue view |
