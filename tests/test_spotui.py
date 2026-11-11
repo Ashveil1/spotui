@@ -445,6 +445,15 @@ class AppTests(unittest.TestCase):
         self.app.drop_autoplayed()
         self.assertEqual(self.app.toast[0], 'No autoplayed songs to drop')
 
+    def test_artist_plays(self):
+        self.app.store.plays = {
+            '1': dict(title='A', artist='Luna Waves', n=3),
+            '2': dict(title='B', artist='luna waves ', n=2),
+            '3': dict(title='C', artist='Neon Coast', n=7),
+        }
+        self.assertEqual(self.app.artist_plays('Luna Waves'), 5)
+        self.assertEqual(self.app.artist_plays('Unknown'), 0)
+
     def test_search_filter_defaults_to_all(self):
         self.assertEqual(self.app.search_filter, 'all')
 
