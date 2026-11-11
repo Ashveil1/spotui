@@ -297,6 +297,7 @@ class Store:
         self.plays = {}
         self.shuffle_mode = "spread"
         self.autoplay = True
+        self.time_left = False
         self.sort_mode = "default"
         self.theme = THEME_NAMES[0]
         self._load()
@@ -381,6 +382,8 @@ class Store:
             self.shuffle_mode = d["shuffle_mode"]
         if isinstance(d.get("autoplay"), bool):
             self.autoplay = d["autoplay"]
+        if isinstance(d.get("time_left"), bool):
+            self.time_left = d["time_left"]
         if d.get("sort_mode") in SORT_MODES:
             self.sort_mode = d["sort_mode"]
         if d.get("theme") in THEMES:
@@ -408,7 +411,7 @@ class Store:
                         "similar": self.similar, "last_search": self.last_search,
                         "volume": self.volume,
                         "session": self.session, "theme": self.theme,
-                        "plays": self.plays, "shuffle_mode": self.shuffle_mode, "autoplay": self.autoplay,
+                        "plays": self.plays, "shuffle_mode": self.shuffle_mode, "autoplay": self.autoplay, "time_left": self.time_left,
                         "sort_mode": self.sort_mode,
                     }, f, ensure_ascii=False, indent=1)
                     f.flush()
@@ -3239,7 +3242,12 @@ class UI:
         dur = st["dur"] or (cur or {}).get("dur") or 0
         pos = min(st["pos"], dur) if dur else st["pos"]
         frac = (pos / dur) if dur else 0.0
-        put(scr, y0 + 1, bx - 5, fmt_t(pos).rjust(4), pal["bsdim"])
+        if app.store.time_left and dur:
+            rem = "-" + fmt_t(max(0.0, dur - pos))
+            put(scr, y0 + 1, bx - 5 - max(0, len(rem) - 5), rem, pal["bsdim"])
+        else:
+            put(scr, y0 + 1, bx - 5, fmt_t(pos).rjust(4), pal["bsdim"])
+        self.hit(bx - 6, y0 + 1, 6, 1, "toggletime")
         for i in range(bw):
             if abs(i - frac * bw) < 0.5:
                 ch, p = "●", pal["bsgreen"]
@@ -3807,6 +3815,9 @@ def handle_mouse(app):
             app.push(arg[0], arg[1])
         elif act == "mix":
             app.play_mix(arg)
+        elif act == "toggletime":
+            app.store.time_left = not app.store.time_left
+            app.store.save()
         elif act == "recent":
             app.query = arg
             app.mode = "search"
