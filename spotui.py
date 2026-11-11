@@ -140,9 +140,9 @@ def fmt_added(v):
 
 VIEW_HINTS = {
     "search": "Enter plays \u00b7 a queues \u00b7 o opens artist",
-    "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 F finds \u00b7 o opens artist",
-    "playlist": "Enter plays \u00b7 a queues \u00b7 e renames \u00b7 X exports \u00b7 F finds",
-    "history": "Enter plays \u00b7 a queues \u00b7 F finds",
+    "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
+    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 e renames \u00b7 X exports \u00b7 F finds",
+    "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K reorders \u00b7 C clears upcoming \u00b7 W saves as playlist",
     "playing": "Space pause \u00b7 l like \u00b7 P playlist \u00b7 v queue \u00b7 S shuffle mode \u00b7 f back",
@@ -296,6 +296,7 @@ class Store:
         self.volume = 70
         self.plays = {}
         self.shuffle_mode = "spread"
+        self.sort_mode = "default"
         self.theme = THEME_NAMES[0]
         self._load()
 
@@ -371,6 +372,8 @@ class Store:
                                          n=v["n"])
         if d.get("shuffle_mode") in SHUFFLE_MODES:
             self.shuffle_mode = d["shuffle_mode"]
+        if d.get("sort_mode") in SORT_MODES:
+            self.sort_mode = d["sort_mode"]
         if d.get("theme") in THEMES:
             self.theme = d["theme"]
         try:
@@ -397,6 +400,7 @@ class Store:
                         "volume": self.volume,
                         "session": self.session, "theme": self.theme,
                         "plays": self.plays, "shuffle_mode": self.shuffle_mode,
+                        "sort_mode": self.sort_mode,
                     }, f, ensure_ascii=False, indent=1)
                     f.flush()
                     os.fsync(f.fileno())
@@ -672,6 +676,30 @@ def smart_shuffle(tracks, previous_artist="", recent_ids=(), rng=None,
             del buckets[artist]
         previous = artist
     return out
+
+
+SORT_MODES = ("default", "title", "artist", "added", "dur")
+SORT_LABEL = {"default": "Default", "title": "Title A-Z",
+              "artist": "Artist A-Z", "added": "Recently added",
+              "dur": "Longest first"}
+SORTABLE_KINDS = ("liked", "playlist", "history")
+
+
+def sort_tracks(tracks, mode):
+    """A sorted copy for list views - the stored order never changes."""
+    fold = lambda v: unicodedata.normalize("NFKC", v or "").casefold()
+    if mode == "title":
+        return sorted(tracks, key=lambda t: (fold(t.get("title")),
+                                             fold(t.get("artist"))))
+    if mode == "artist":
+        return sorted(tracks, key=lambda t: (fold(t.get("artist")),
+                                             fold(t.get("title"))))
+    if mode == "added":
+        return sorted(tracks, key=lambda t: t.get("added") or 0,
+                      reverse=True)
+    if mode == "dur":
+        return sorted(tracks, key=lambda t: t.get("dur") or 0, reverse=True)
+    return list(tracks)
 
 
 # -------------------------------------------------------------- colors ---
@@ -1072,16 +1100,17 @@ class App:
         if kind == "search":
             return self.results
         if kind == "liked":
-            return self.store.liked
+            return sort_tracks(self.store.liked, self.store.sort_mode)
         if kind == "playlist":
             try:
-                return self.store.playlists[int(arg)]["tracks"]
+                pl = self.store.playlists[int(arg)]
             except Exception:
                 return []
+            return sort_tracks(pl["tracks"], self.store.sort_mode)
         if kind == "queue":
             return self.queue
         if kind == "history":
-            return self.store.history
+            return sort_tracks(self.store.history, self.store.sort_mode)
         if kind == "artist":
             return self.artist_tracks(arg or "")
         if kind == "similar":
@@ -1538,6 +1567,20 @@ class App:
         self._apply_shuffle(True)
         self.toast_now("Shuffle: " + SHUFFLE_LABEL[self.store.shuffle_mode])
 
+    def cycle_sort(self):
+        i = SORT_MODES.index(self.store.sort_mode)
+        self.set_sort(SORT_MODES[(i + 1) % len(SORT_MODES)], cycle=True)
+
+    def set_sort(self, mode, cycle=False):
+        if mode not in SORT_MODES:
+            return
+        # clicking the active column again restores the original order
+        if not cycle and self.store.sort_mode == mode:
+            mode = "default"
+        self.store.sort_mode = mode
+        self.store.save()
+        self.toast_now("Sort: " + SORT_LABEL[mode])
+
     def cycle_repeat(self):
         self.repeat = (self.repeat + 1) % 3
         if self.repeat == 2:
@@ -1755,7 +1798,14 @@ class App:
         if not (0 <= idx < len(tracks)):
             return
         if kind == "playlist":
-            del self.store.playlists[arg]["tracks"][idx]
+            t = tracks[idx]
+            pl = self.store.playlists[arg]["tracks"]
+            for i, item in enumerate(pl):
+                if item is t:
+                    del pl[i]
+                    break
+            else:
+                return
             s = self.sel_row()
             if s >= len(tracks) - 1:
                 self.sel[self.key()] = max(0, len(tracks) - 2)
@@ -2623,8 +2673,8 @@ class UI:
             except IndexError:
                 return
         eyebrow = "HISTORY" if kind == "history" else "PLAYLIST"
-        tracks = pl["tracks"]
         vk = app.key()
+        tracks = app.view_tracks(vk)
 
         cy = y0 + 1
         # header gradient band in the collection's own colour family
@@ -2654,7 +2704,7 @@ class UI:
         self.hit(x0 + 12, by - 1, 3, 2, "repeat")
 
         ly = by + 2
-        self.list_header(ly, x0 + 2, W - x0 - 4, show_date=True)
+        self.list_header(ly, x0 + 2, W - x0 - 4, show_date=True, kind=kind)
         self.track_list(ly + 1, y1 - 2, x0 + 2, W - x0 - 4, tracks, vk,
                         show_date=True)
         self.hint(y1 - 2, x0, kind)
@@ -2737,20 +2787,40 @@ class UI:
         self.hint(y1 - 2, x0, "queue")
 
     # --------------------------------------------------------- list bits --
-    def list_header(self, y, x0, w, show_date):
-        """Column captions that share col_widths() with the rows below."""
+    def list_header(self, y, x0, w, show_date, kind=None):
+        """Column captions that share col_widths() with the rows below.
+
+        In sortable views the active column gets an arrow and every column
+        is clickable (click the active one again to restore the list order).
+        """
         pal = self.pal
         num_w, title_w, chan_w, date_w, dur_w, heart_w = \
             self.col_widths(w, show_date)
         tx = x0 + num_w
         cx = tx + title_w + 2
-        put(self.scr, y, tx, "TITLE", pal["faint"], curses.A_BOLD)
+        mode = self.app.store.sort_mode
+        sortable = kind in SORTABLE_KINDS
+
+        def cap(text, col):
+            return text + " \u25b2" if sortable and mode == col else text
+
+        put(self.scr, y, tx, cap("TITLE", "title"), pal["faint"],
+            curses.A_BOLD)
         if chan_w:
-            put(self.scr, y, cx, "CHANNEL", pal["faint"], curses.A_BOLD)
-        if show_date and date_w:
-            put(self.scr, y, cx + chan_w + 2, "DATE ADDED", pal["faint"],
+            put(self.scr, y, cx, cap("CHANNEL", "artist"), pal["faint"],
                 curses.A_BOLD)
-        put(self.scr, y, x0 + w - dur_w, "⏱", pal["faint"], curses.A_BOLD)
+        if show_date and date_w:
+            put(self.scr, y, cx + chan_w + 2, cap("DATE ADDED", "added"),
+                pal["faint"], curses.A_BOLD)
+        put(self.scr, y, x0 + w - dur_w, cap("\u23f1", "dur"), pal["faint"],
+            curses.A_BOLD)
+        if sortable:
+            self.hit(tx, y, title_w, 1, "sort", "title")
+            if chan_w:
+                self.hit(cx, y, chan_w, 1, "sort", "artist")
+            if show_date and date_w:
+                self.hit(cx + chan_w + 2, y, date_w, 1, "sort", "added")
+            self.hit(x0 + w - dur_w, y, dur_w, 1, "sort", "dur")
 
     def col_widths(self, w, show_date):
         num_w, dur_w, heart_w = 4, 7, 2
@@ -2988,7 +3058,7 @@ class UI:
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
             ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("y", "recently played"), ("o", "open artist"),
-            ("F", "find in a list"), ("l", "like / unlike"), ("s", "shuffle"),
+            ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
             ("c", "create playlist"), ("P", "add to playlist"),
@@ -3296,6 +3366,8 @@ def handle_key(app, k):
             app.add_queue(app.track_under() or app.current)
         elif k == "l":
             app.like(app.track_under() or app.current)
+        elif k == "m" and kind in SORTABLE_KINDS:
+            app.cycle_sort()
         elif k == "s":
             app.toggle_shuffle()
         elif k == "S":
@@ -3507,6 +3579,8 @@ def handle_mouse(app):
             app.push("playing")
         elif act == "queue":
             app.push("queue")
+        elif act == "sort":
+            app.set_sort(arg)
         elif act == "seek":
             bx, bw = arg
             frac = min(1.0, max(0.0, (mx - bx) / max(1, bw - 1)))

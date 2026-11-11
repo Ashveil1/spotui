@@ -899,3 +899,85 @@ class MouseDragTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class SortTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.refresh_similar = Mock()
+        self.app.store.liked = [
+            {"id": "b", "title": "Bravo", "artist": "Yara", "dur": 100,
+             "added": 200},
+            {"id": "a", "title": "alpha", "artist": "Zed", "dur": 300,
+             "added": 100},
+            {"id": "c", "title": "Charlie", "artist": "Xena", "dur": 200,
+             "added": 300},
+        ]
+
+    def _ids(self):
+        return [t["id"] for t in self.app.view_tracks("liked:")]
+
+    def test_default_keeps_store_order(self):
+        self.assertEqual(self.app.store.sort_mode, "default")
+        self.assertEqual(self._ids(), ["b", "a", "c"])
+
+    def test_title_sort_is_case_insensitive_copy(self):
+        self.app.store.sort_mode = "title"
+        self.assertEqual(self._ids(), ["a", "b", "c"])
+        # stored order untouched
+        self.assertEqual([t["id"] for t in self.app.store.liked],
+                         ["b", "a", "c"])
+
+    def test_artist_added_and_dur_sorts(self):
+        self.app.store.sort_mode = "artist"
+        self.assertEqual(self._ids(), ["c", "b", "a"])   # Xena, Yara, Zed
+        self.app.store.sort_mode = "added"
+        self.assertEqual(self._ids(), ["c", "b", "a"])   # newest first
+        self.app.store.sort_mode = "dur"
+        self.assertEqual(self._ids(), ["a", "c", "b"])   # longest first
+
+    def test_cycle_sort_rotates_and_saves(self):
+        seen = []
+        for _ in range(len(s.SORT_MODES)):
+            seen.append(self.app.store.sort_mode)
+            self.app.cycle_sort()
+        self.assertEqual(seen, list(s.SORT_MODES))
+        self.assertEqual(self.app.store.sort_mode, "default")
+
+    def test_set_sort_click_toggles_back_to_default(self):
+        self.app.set_sort("title")
+        self.assertEqual(self.app.store.sort_mode, "title")
+        self.app.set_sort("title")          # second click restores order
+        self.assertEqual(self.app.store.sort_mode, "default")
+
+    def test_delete_selected_removes_the_sorted_row_not_the_store_row(self):
+        self.app.store.sort_mode = "title"
+        self.app.store.playlists = [
+            {"name": "P", "tracks": [dict(t) for t in self.app.store.liked]}]
+        self.app.stack.append(("playlist", 0))
+        self.app.sel["playlist:0"] = 0      # 'alpha' under title sort
+        self.app.delete_selected()
+        remaining = [t["id"] for t in self.app.store.playlists[0]["tracks"]]
+        self.assertEqual(remaining, ["b", "c"])
+
+    def test_sort_mode_persists(self):
+        self.app.store.sort_mode = "artist"
+        self.app.store.save()
+        fresh = s.Store()
+        self.assertEqual(fresh.sort_mode, "artist")
+
+    def test_queue_and_search_ignore_sort(self):
+        self.app.store.sort_mode = "title"
+        self.app.queue = list(reversed(self.app.store.liked))
+        self.assertEqual([t["id"] for t in self.app.view_tracks("queue:")],
+                         ["c", "a", "b"])
