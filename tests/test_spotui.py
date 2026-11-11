@@ -1014,36 +1014,98 @@ class QueueDragTests(unittest.TestCase):
     def test_press_on_upcoming_row_starts_drag(self):
         self.app.rects = [self._row(2, 2)]
         self._mouse(5, 2, s.curses.BUTTON1_PRESSED)
-        self.assertEqual(self.app.drag_q, 2)
+        self.assertEqual(self.app.drag_row, ["queue:", 2])
 
     def test_press_on_now_playing_row_does_not_drag(self):
         self.app.rects = [self._row(1, 0)]       # idx == qpos
         self._mouse(5, 1, s.curses.BUTTON1_PRESSED)
-        self.assertIsNone(self.app.drag_q)
+        self.assertIsNone(self.app.drag_row)
 
     def test_motion_reorders_live(self):
-        self.app.drag_q = 2
+        self.app.drag_row = ["queue:", 2]
         self.app.rects = [self._row(4, 4)]
         self._mouse(5, 4, s.curses.REPORT_MOUSE_POSITION)
         self.assertEqual([t["id"] for t in self.app.queue],
                          ["0", "1", "3", "4", "2"])
-        self.assertEqual(self.app.drag_q, 4)
+        self.assertEqual(self.app.drag_row, ["queue:", 4])
         # selection follows the dragged song
         self.assertEqual(self.app.sel.get("queue:"), 4)
 
     def test_motion_cannot_cross_now_playing(self):
-        self.app.drag_q = 2
+        self.app.drag_row = ["queue:", 2]
         self.app.rects = [self._row(1, 0)]
         self._mouse(5, 1, s.curses.REPORT_MOUSE_POSITION)
         self.assertEqual([t["id"] for t in self.app.queue][0], "0")
-        self.assertEqual(self.app.drag_q, 1)     # stopped right after qpos
+        self.assertEqual(self.app.drag_row, ["queue:", 1])  # stops after qpos
 
     def test_release_ends_queue_drag(self):
-        self.app.drag_q = 3
+        self.app.drag_row = ["queue:", 3]
         self.app.rects = []
         self._mouse(5, 9, s.curses.BUTTON1_RELEASED
                     | s.curses.REPORT_MOUSE_POSITION)
-        self.assertIsNone(self.app.drag_q)
+        self.assertIsNone(self.app.drag_row)
+
+
+class PlaylistDragTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.refresh_similar = Mock()
+        self.app.store.playlists = [{"name": "P", "tracks": [
+            {"id": c, "title": c, "artist": "A", "dur": 60}
+            for c in "abcd"]}]
+        self.app.stack.append(("playlist", 0))
+
+    @staticmethod
+    def _row(y, idx):
+        return {"x0": 0, "x1": 20, "y0": y, "y1": y + 1,
+                "act": "row", "arg": ("playlist:0", idx, False)}
+
+    def _mouse(self, x, y, bstate):
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, x, y, 0, bstate)):
+            s.handle_mouse(self.app)
+
+    def _ids(self):
+        return [t["id"] for t in self.app.store.playlists[0]["tracks"]]
+
+    def test_press_starts_playlist_drag(self):
+        self.app.rects = [self._row(2, 1)]
+        self._mouse(5, 2, s.curses.BUTTON1_PRESSED)
+        self.assertEqual(self.app.drag_row, ["playlist:0", 1])
+
+    def test_motion_reorders_playlist_live(self):
+        self.app.drag_row = ["playlist:0", 0]
+        self.app.rects = [self._row(5, 2)]
+        self._mouse(5, 5, s.curses.REPORT_MOUSE_POSITION)
+        self.assertEqual(self._ids(), ["b", "c", "a", "d"])
+        self.assertEqual(self.app.drag_row, ["playlist:0", 2])
+
+    def test_no_drag_while_sorted(self):
+        self.app.store.sort_mode = "title"
+        self.app.rects = [self._row(2, 1)]
+        self._mouse(5, 2, s.curses.BUTTON1_PRESSED)
+        self.assertIsNone(self.app.drag_row)
+        self.assertEqual(self._ids(), ["a", "b", "c", "d"])
+
+    def test_queue_drag_ignores_playlist_rects(self):
+        # a queue drag hovering a playlist rect must not crash or reorder
+        self.app.queue = [{"id": str(i), "title": "t", "artist": "a",
+                           "dur": 1} for i in range(3)]
+        self.app.qpos = 0
+        self.app.drag_row = ["queue:", 1]
+        self.app.rects = [self._row(3, 0)]
+        self._mouse(5, 3, s.curses.REPORT_MOUSE_POSITION)
+        self.assertEqual([t["id"] for t in self.app.queue], ["0", "1", "2"])
 
 
 class PlaylistReorderTests(unittest.TestCase):
