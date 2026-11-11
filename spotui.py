@@ -1859,6 +1859,28 @@ class App:
                     out.append(t)
         return out
 
+    def search_artists(self, q, limit=5):
+        """Artists matching a query: library first, then the result list."""
+        norm = self._norm_artist(q)
+        if not norm:
+            return []
+        seen, out = set(), []
+
+        def scan(tracks):
+            for t in tracks:
+                a = (t.get("artist") or "").strip()
+                na = self._norm_artist(a)
+                if a and na not in seen and norm in na:
+                    seen.add(na)
+                    out.append(a)
+
+        scan(self.store.liked)
+        scan(self.store.history)
+        for pl in self.store.playlists:
+            scan(pl["tracks"])
+        scan(self.results)
+        return out[:limit]
+
 
 # ---------------------------------------------------------------- drawing --
 def put(scr, y, x, s, pair, attr=0):
@@ -2487,6 +2509,20 @@ class UI:
                 put(scr, y, x0 + 2, f"Type in the search bar above — press / "
                                     "to start", pal["faint"])
             return
+
+        artists = app.search_artists(app.query)
+        if artists:
+            put(scr, y0 + 1, x0 + 2, "Artists", pal["text"], curses.A_BOLD)
+            x = x0 + 10
+            for a in artists:
+                w = dlen(a) + 4
+                if x + w > W - 4:
+                    break
+                fill(scr, y0 + 1, x, w, pal["pill"])
+                put(scr, y0 + 1, x + 2, a, pal["pilldim"])
+                self.hit(x, y0 + 1, w, 1, "artist", a)
+                x += w + 1
+            y0 += 2
 
         tracks = app.results
         if not tracks:

@@ -797,5 +797,33 @@ class ArtistViewTests(unittest.TestCase):
         self.app._start_radio.assert_called_once()
 
 
+class SearchArtistChipTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.refresh_similar = Mock()
+
+    def test_matches_substring_casefold_library_first(self):
+        self.app.store.liked = [dict(track(1), artist="Luna Waves")]
+        self.app.store.history = [dict(track(2), artist="luna waves")]
+        self.app.results = [dict(track(3), artist="Lunar Echo"),
+                            dict(track(4), artist="Other")]
+        self.assertEqual(self.app.search_artists("LUNA"),
+                         ["Luna Waves", "Lunar Echo"])
+
+    def test_empty_query_and_limit(self):
+        self.assertEqual(self.app.search_artists(""), [])
+        self.app.store.liked = [dict(track(i), artist=f"Art {i}")
+                                for i in range(10)]
+        self.assertEqual(len(self.app.search_artists("art")), 5)
+
+
 if __name__ == '__main__':
     unittest.main()

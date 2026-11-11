@@ -86,7 +86,8 @@ SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in 
 
 Search is live: results appear as you type (after a short pause) —
 `Enter` keeps them and saves the query to recent searches, `Esc` just
-closes the bar.
+closes the bar. Matching artists from your library show as chips above
+the results; click one to open its artist page.
 
 Mouse works too: click anything (rows, tiles, sidebar items, playlists,
 playlists rows, controls, toast — everything), drag the progress / volume
