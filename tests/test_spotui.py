@@ -1325,7 +1325,8 @@ class ResumeTests(unittest.TestCase):
         tok = self.app.pending_seek[0]
         self.app.mpv.load = Mock(return_value=True)
         self.app.mpv.seek_abs = Mock()
-        with patch.object(s, "resolve_url", return_value="fake://s"):
+        with patch.object(s, "HAVE_YTDL", True), \
+                patch.object(s, "resolve_url", return_value="fake://s"):
             self.app._resolve_load(self.app.queue[1], tok)
         self.app.mpv.seek_abs.assert_called_once_with(42.0)
         self.assertIsNone(self.app.pending_seek)
