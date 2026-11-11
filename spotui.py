@@ -2887,9 +2887,16 @@ class UI:
         for j, name in enumerate(band):
             fill(scr, cy + j, x0, W - x0, pal[name.format(fi)])
         icon = {"liked": IC_HEART, "history": IC_HIST}.get(kind, IC_NOTE)
-        draw_art(scr, cy, x0 + 2, 10, 4, pl["name"], pal,
-                 icon=icon,
-                 art=app.cover_for(tracks[0]["id"] if tracks else None, 10, 4))
+        if kind == "playlist" and len(tracks) >= 4:
+            # Spotify-style 2x2 mosaic of the first four covers
+            for qi, t in enumerate(tracks[:4]):
+                draw_art(scr, cy + (qi // 2) * 2, x0 + 2 + (qi % 2) * 5,
+                         5, 2, t["id"], pal,
+                         art=app.cover_for(t["id"], 5, 2))
+        else:
+            draw_art(scr, cy, x0 + 2, 10, 4, pl["name"], pal,
+                     icon=icon,
+                     art=app.cover_for(tracks[0]["id"] if tracks else None, 10, 4))
         hx = x0 + 15
         put(scr, cy, hx, eyebrow, pal[f"g{fi}1"], curses.A_BOLD)
         put(scr, cy + 1, hx, wcut(pl["name"].upper(), W - hx - 4),
