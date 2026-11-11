@@ -1236,3 +1236,43 @@ class StatsMinutesTests(unittest.TestCase):
         st.plays = {"b": {"title": "B", "artist": "Y", "n": 0}} or {}
         st.plays = {}
         self.assertEqual(s.stats_minutes(st), "")
+
+
+class GTopBottomTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.refresh_similar = Mock()
+        self.app.store.liked = [{"id": c, "title": c, "artist": "A",
+                                 "dur": 60} for c in "abcde"]
+
+    def test_g_and_g_bottom(self):
+        self.app.push("liked")
+        self.app.sel["liked:"] = 3
+        s.handle_key(self.app, "g")
+        self.assertEqual(self.app.sel["liked:"], 0)
+        s.handle_key(self.app, "G")
+        self.assertEqual(self.app.sel["liked:"], 4)
+
+    def test_home_g_selects_last_tile(self):
+        self.app.store.playlists = [{"name": "P", "tracks": []},
+                                    {"name": "Q", "tracks": []}]
+        s.handle_key(self.app, "G")
+        self.assertEqual(self.app.sel["home:"], 2)
+        s.handle_key(self.app, "g")
+        self.assertEqual(self.app.sel["home:"], 0)
+
+    def test_empty_list_stays_at_zero(self):
+        self.app.store.liked = []
+        self.app.push("liked")
+        s.handle_key(self.app, "G")
+        self.assertEqual(self.app.sel["liked:"], 0)

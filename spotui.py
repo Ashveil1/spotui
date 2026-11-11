@@ -3101,6 +3101,7 @@ class UI:
         pal = self.pal
         rows = [
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
+            ("g / G", "top / bottom of a list"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
             ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("y", "recently played"), ("o", "open artist"),
@@ -3366,6 +3367,13 @@ def handle_key(app, k):
             app.toast_now("Find: type to jump, Enter to stay")
         elif k == " ":
             app.toggle()
+        elif k == "g":
+            app.sel[vk] = 0
+        elif k == "G":
+            if kind == "home":
+                app.sel[vk] = len(app.store.playlists)   # last tile
+            else:
+                app.sel[vk] = max(0, len(app.view_tracks()) - 1)
         elif k == "j":
             app.move_sel(1, len(app.view_tracks()))
         elif k == "k":
