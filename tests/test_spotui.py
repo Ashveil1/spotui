@@ -363,6 +363,84 @@ class AppTests(unittest.TestCase):
         indices = [c.args[6] for c in ui.row.call_args_list]
         self.assertIn(35, indices)
 
+    def test_autoplay_defaults_on_and_persists(self):
+        self.assertTrue(self.app.store.autoplay)
+        self.app.toggle_autoplay()
+        self.assertFalse(self.app.store.autoplay)
+        with patch.object(s.threading.Thread, 'start'):
+            app2 = s.App()
+        self.assertFalse(app2.store.autoplay)
+
+    def test_prefetch_fires_only_on_last_song(self):
+        self.app.queue = [track(1), track(2)]
+        self.app.qpos = 0
+        self.app.current = self.app.queue[0]
+        with patch.object(s.threading.Thread, 'start') as th:
+            self.app._maybe_autoplay()
+        th.assert_not_called()
+        self.app.qpos = 1
+        self.app.current = self.app.queue[1]
+        with patch.object(s.threading.Thread, 'start') as th:
+            self.app._maybe_autoplay()
+        th.assert_called_once()
+        self.assertTrue(self.app._auto_busy)
+
+    def test_prefetch_respects_toggle(self):
+        self.app.store.autoplay = False
+        self.app.queue = [track(1)]
+        self.app.qpos = 0
+        self.app.current = self.app.queue[0]
+        with patch.object(s.threading.Thread, 'start') as th:
+            self.app._maybe_autoplay()
+        th.assert_not_called()
+        self.assertFalse(self.app._auto_busy)
+
+    def test_autoplay_appends_new_songs(self):
+        self.app.current = track(1)
+        self.app.queue = [track(1)]
+        self.app.qpos = 0
+        rev, tok = self.app.queue_revision, self.app.load_token
+        with patch.object(s, '_ytdl_playlist', return_value=[track(2), track(3)]):
+            self.app._auto_busy = True
+            self.app._autoplay_worker(track(1), rev, tok)
+        self.assertCountEqual([t['id'] for t in self.app.queue], ['1', '2', '3'])
+        self.assertEqual(self.app.queue[0]['id'], '1')
+        self.assertFalse(self.app._auto_busy)
+
+    def test_autoplay_dedupes_queued_songs(self):
+        self.app.current = track(1)
+        self.app.queue = [track(1), track(2)]
+        self.app.qpos = 1
+        rev, tok = self.app.queue_revision, self.app.load_token
+        with patch.object(s, '_ytdl_playlist', return_value=[track(2), track(3)]):
+            self.app._autoplay_worker(track(1), rev, tok)
+        self.assertCountEqual([t['id'] for t in self.app.queue], ['1', '2', '3'])
+
+    def test_autoplay_dropped_after_queue_edit(self):
+        self.app.current = track(1)
+        self.app.queue = [track(1)]
+        rev, tok = self.app.queue_revision, self.app.load_token
+        self.app.add_queue(track(9))
+        with patch.object(s, '_ytdl_playlist', return_value=[track(3)]):
+            self.app._autoplay_worker(track(1), rev, tok)
+        self.assertEqual([t['id'] for t in self.app.queue], ['1', '9'])
+
+    def test_autoplay_advances_when_song_ended_during_fetch(self):
+        self.app.current = track(1)
+        self.app.queue = [track(1)]
+        self.app.qpos = 0
+        self.app.mpv.state['idle'] = True
+        self.app.next = Mock()
+        rev, tok = self.app.queue_revision, self.app.load_token
+        with patch.object(s, '_ytdl_playlist', return_value=[track(2)]):
+            self.app._autoplay_worker(track(1), rev, tok)
+        self.app.next.assert_called_once_with(auto=True)
+
+    def test_u_key_toggles_autoplay(self):
+        before = self.app.store.autoplay
+        s.handle_key(self.app, 'u')
+        self.assertEqual(self.app.store.autoplay, not before)
+
     def test_radio_does_not_overwrite_user_queue_edits(self):
         self.app.current = track(1)
         self.app.queue = [track(1)]
