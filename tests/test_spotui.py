@@ -1276,3 +1276,84 @@ class GTopBottomTests(unittest.TestCase):
         self.app.push("liked")
         s.handle_key(self.app, "G")
         self.assertEqual(self.app.sel["liked:"], 0)
+
+
+class ResumeTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.refresh_similar = Mock()
+        tr = lambda i: {"id": i, "title": i, "artist": "A", "dur": 200,
+                        "url": "u"}
+        self.app.queue = [tr("x"), tr("y"), tr("z")]
+        self.app.qpos = 1
+        self.app.store.history = [tr("y"), tr("x")]
+
+    def test_resume_sets_pending_seek_and_plays(self):
+        self.app._resume_t = 74.0
+        self.app.resume_session_or_play()
+        self.assertEqual(self.app.current["id"], "y")
+        self.assertEqual(self.app.pending_seek,
+                         (self.app.load_token, 74.0))
+        self.assertTrue(self.app.loading)
+
+    def test_resume_without_position_just_plays(self):
+        self.app._resume_t = 0.0
+        self.app.resume_session_or_play()
+        self.assertEqual(self.app.current["id"], "y")
+        self.assertIsNone(self.app.pending_seek)
+
+    def test_mismatched_history_plays_fresh(self):
+        self.app.store.history = [{"id": "other", "title": "o",
+                                   "artist": "B", "dur": 1, "url": "u"}]
+        self.app.resume_session_or_play()
+        self.assertEqual(self.app.current["id"], "other")
+        self.assertIsNone(self.app.pending_seek)
+
+    def test_pending_seek_applied_after_load(self):
+        self.app._resume_t = 42.0
+        self.app.resume_session_or_play()
+        tok = self.app.pending_seek[0]
+        self.app.mpv.load = Mock(return_value=True)
+        self.app.mpv.seek_abs = Mock()
+        with patch.object(s, "HAVE_YTDL", True), \
+                patch.object(s, "resolve_url", return_value="fake://s"):
+            self.app._resolve_load(self.app.queue[1], tok)
+        self.app.mpv.seek_abs.assert_called_once_with(42.0)
+        self.assertIsNone(self.app.pending_seek)
+
+    def test_stale_pending_seek_not_applied(self):
+        self.app._resume_t = 42.0
+        self.app.resume_session_or_play()
+        self.app.pending_seek = (self.app.load_token + 99, 42.0)
+        self.app.mpv.load = Mock(return_value=True)
+        self.app.mpv.seek_abs = Mock()
+        with patch.object(s, "resolve_url", return_value="fake://s"):
+            self.app._resolve_load(self.app.queue[1], self.app.load_token)
+        self.app.mpv.seek_abs.assert_not_called()
+
+    def test_snapshot_saves_and_keeps_position(self):
+        self.app.current = self.app.queue[1]
+        self.app.mpv.state.update(idle=False, pos=88.2)
+        self.app.snapshot_session()
+        self.assertEqual(self.app.store.session["t"], 88.2)
+        # quit with nothing playing keeps the old position
+        self.app.current = None
+        self.app.mpv.state.update(idle=True)
+        self.app.snapshot_session()
+        self.assertEqual(self.app.store.session["t"], 88.2)
+
+    def test_restore_reads_position(self):
+        self.app.store.session = {"queue": [], "pos": 0, "t": 33.5}
+        self.app.queue = []
+        self.app.restore_session()
+        self.assertEqual(self.app._resume_t, 33.5)
