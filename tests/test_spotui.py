@@ -407,6 +407,17 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.app.queue[0]['id'], '1')
         self.assertFalse(self.app._auto_busy)
 
+    def test_autoplay_marks_added_songs(self):
+        self.app.current = track(1)
+        self.app.queue = [track(1)]
+        self.app.qpos = 0
+        rev, tok = self.app.queue_revision, self.app.load_token
+        with patch.object(s, '_ytdl_playlist', return_value=[track(2), track(3)]):
+            self.app._auto_busy = True
+            self.app._autoplay_worker(track(1), rev, tok)
+        self.assertNotIn('auto', self.app.queue[0])
+        self.assertTrue(all(t.get('auto') for t in self.app.queue[1:]))
+
     def test_autoplay_dedupes_queued_songs(self):
         self.app.current = track(1)
         self.app.queue = [track(1), track(2)]
