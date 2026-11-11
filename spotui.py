@@ -145,7 +145,7 @@ VIEW_HINTS = {
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 W saves as playlist",
-    "playing": "Space pause \u00b7 l like \u00b7 P playlist \u00b7 v queue \u00b7 S shuffle mode \u00b7 f back",
+    "playing": "Space pause \u00b7 l like \u00b7 v queue \u00b7 S shuffle \u00b7 click Up Next to jump",
     "stats": "Backspace back \u00b7 ? for all shortcuts",
 }
 
@@ -2367,6 +2367,7 @@ class UI:
                 put(scr, uy + 1 + j, x0 + 2, f"{j + 1}", pal["faint"])
                 put(scr, uy + 1 + j, x0 + 5, wcut(nxt["title"], max(8, width // 2 - 8)), pal["text"])
                 put(scr, uy + 1 + j, x0 + 5 + width // 2 - 2, wcut(nxt["artist"], max(8, width // 2 - 6)), pal["dim"])
+                self.hit(x0 + 2, uy + 1 + j, width - 2, 1, "qjump", qi)
         if y1 - y0 >= 18:
             self.hint(y1 - 2, x0, "playing")
 
@@ -3626,6 +3627,11 @@ def handle_mouse(app):
             app.push("playing")
         elif act == "queue":
             app.push("queue")
+        elif act == "qjump":
+            # click an UP NEXT row in Now Playing to jump straight to it
+            if not blocked and 0 <= arg < len(app.queue) and arg != app.qpos:
+                app.qpos = arg
+                app._play_current()
         elif act == "sort":
             app.set_sort(arg)
         elif act == "seek":

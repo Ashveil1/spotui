@@ -1162,3 +1162,48 @@ class PlaylistReorderTests(unittest.TestCase):
         s.handle_key(self.app, "J")
         self.assertEqual(self._ids(), ["a", "b", "c", "d"])
         self.assertIn("sort", self.app.toast[0])
+
+
+class QJumpTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.refresh_similar = Mock()
+        self.app.queue = [{"id": str(i), "title": f"T{i}", "artist": "A",
+                           "dur": 60} for i in range(4)]
+        self.app.qpos = 0
+        self.app.current = self.app.queue[0]
+
+    def _mouse(self, x, y, bstate):
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, x, y, 0, bstate)):
+            s.handle_mouse(self.app)
+
+    def test_click_jumps_to_that_song(self):
+        self.app.rects = [{"x0": 0, "x1": 40, "y0": 3, "y1": 4,
+                           "act": "qjump", "arg": 2}]
+        self._mouse(5, 3, s.curses.BUTTON1_PRESSED)
+        self.assertEqual(self.app.qpos, 2)
+        self.assertEqual(self.app.current["id"], "2")
+
+    def test_click_current_song_is_a_noop(self):
+        self.app.rects = [{"x0": 0, "x1": 40, "y0": 3, "y1": 4,
+                           "act": "qjump", "arg": 0}]
+        self._mouse(5, 3, s.curses.BUTTON1_PRESSED)
+        self.assertEqual(self.app.qpos, 0)
+        self.assertFalse(self.app.loading)
+
+    def test_out_of_range_ignored(self):
+        self.app.rects = [{"x0": 0, "x1": 40, "y0": 3, "y1": 4,
+                           "act": "qjump", "arg": 9}]
+        self._mouse(5, 3, s.curses.BUTTON1_PRESSED)
+        self.assertEqual(self.app.qpos, 0)
