@@ -74,6 +74,7 @@ IC_NOTE = "♫"
 IC_SPK = "◁"
 IC_PLUS = "+"
 IC_HIST = "↺"
+IC_AUTO = "✦"
 
 SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 EQ_FRAMES = ["▁▄▂▆", "▄▂▆▁", "▂▆▁▄", "▆▁▄▂"]
@@ -1519,6 +1520,8 @@ class App:
                 picks = [t for t in picks if t.get("id") not in have]
                 if not picks:
                     return
+                for t in picks:   # tag so the UI can mark autoplayed songs
+                    t["auto"] = True
                 was_end = self.qpos == len(self.queue) - 1
                 self.queue.extend(picks)
                 if self.shuffle:
@@ -2615,6 +2618,8 @@ class UI:
             chips.append((f"{app.speed:g}x", True))
         if app.store.eq_preset != "off":
             chips.append(("EQ " + EQ_LABEL[app.store.eq_preset], True))
+        if app.store.autoplay:
+            chips.append(("Autoplay", True))
         cx, cy = tx, ty + 3
         for label, _on in chips:
             w = dlen(label) + 2
@@ -2665,7 +2670,11 @@ class UI:
                     break
                 nxt = app.queue[qi]
                 put(scr, uy + 1 + j, x0 + 2, f"{j + 1}", pal["faint"])
-                put(scr, uy + 1 + j, x0 + 5, wcut(nxt["title"], max(8, width // 2 - 8)), pal["text"])
+                ntw = max(8, width // 2 - 8)
+                put(scr, uy + 1 + j, x0 + 5, wcut(nxt["title"], ntw), pal["text"])
+                if nxt.get("auto") and dlen(nxt["title"]) + 2 < ntw:
+                    put(scr, uy + 1 + j,
+                        x0 + 5 + dlen(nxt["title"]) + 1, IC_AUTO, pal["accent"])
                 put(scr, uy + 1 + j, x0 + 5 + width // 2 - 2, wcut(nxt["artist"], max(8, width // 2 - 6)), pal["dim"])
                 self.hit(x0 + 2, uy + 1 + j, width - 2, 1, "qjump", qi)
         elif not wide and uy < y1 - 2 and app.qpos + 1 < len(app.queue):
@@ -3117,6 +3126,8 @@ class UI:
             left = fmt_remaining(app.queue[max(0, app.qpos):])
             if left:
                 label += f", {left}"
+            if any(t.get("auto") for t in app.queue):
+                label += f"  ·  {IC_AUTO} autoplay"
             put(scr, y0 + 1, x0 + 9, label, pal["faint"])
         y = y0 + 3
         if app.current:
@@ -3207,6 +3218,7 @@ class UI:
         if compact:
             num_w = 3
             date_w = 0
+        cx_safe = x0 + num_w + title_w + 2   # artist column start
 
         base = {"text": pal["hover"], "dim": pal["hdim"],
                 "green": pal["hgreen"], "faint": pal["hdim"]}
@@ -3230,6 +3242,10 @@ class UI:
         put(scr, y, tx, wcut(t["title"], title_w),
             pal["green"] if playing else cp(pal["text"]),
             curses.A_BOLD if (playing or selected) else 0)
+        if t.get("auto"):
+            ax = tx + min(dlen(t["title"]), title_w) + 1
+            if ax < cx_safe - 1:
+                put(scr, y, ax, IC_AUTO, cp(pal["accent"]))
 
         cx = tx + title_w + 2
         if chan_w:
