@@ -130,7 +130,7 @@ class AppTests(unittest.TestCase):
         total, uniq, ta, ts = s.stats_summary(plays)
         self.assertEqual((total, uniq), (9, 3))
         self.assertEqual(ta[0], ('X', 5))
-        self.assertEqual(ts[0][0], 'C')
+        self.assertEqual(ts[0], ('C', 'Y', 4, 'c'))
 
     def test_note_history_counts_and_persists(self):
         self.app._note_history(track(1))
