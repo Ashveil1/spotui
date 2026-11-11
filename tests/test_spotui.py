@@ -510,6 +510,37 @@ class AppTests(unittest.TestCase):
         jumps = [r for r in self.app.rects if r['act'] == 'qjump']
         self.assertTrue(jumps)
 
+    def _playerbar_puts(self):
+        from collections import defaultdict
+        self.app.queue = [track(1)]
+        self.app.current = track(1)
+        self.app.mpv.state.update(pos=74.0, dur=200.0, idle=False)
+        self.app.pal = defaultdict(int)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 140)
+        ui = s.UI(self.app, scr)
+        with patch.object(s, 'draw_art'), patch.object(s, 'put') as pt:
+            ui.playerbar(30, 120)
+        return [str(c.args[3]) for c in pt.call_args_list]
+
+    def test_playerbar_shows_elapsed_by_default(self):
+        texts = self._playerbar_puts()
+        self.assertIn('1:14', texts)
+        self.assertNotIn('-2:06', texts)
+
+    def test_playerbar_remaining_time_toggle(self):
+        self.app.store.time_left = True
+        texts = self._playerbar_puts()
+        self.assertIn('-2:06', texts)
+        self.assertNotIn('1:14', texts)
+
+    def test_time_left_persists(self):
+        self.app.store.time_left = True
+        self.app.store.save()
+        with patch.object(s.threading.Thread, 'start'):
+            app2 = s.App()
+        self.assertTrue(app2.store.time_left)
+
     def test_seek_toast_shows_target_position(self):
         self.app.mpv.state.update(pos=74.0, dur=200.0)
         self.app.mpv.seek_rel = Mock()
