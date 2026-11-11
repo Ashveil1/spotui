@@ -470,6 +470,46 @@ class AppTests(unittest.TestCase):
         self.assertEqual(len(da.call_args_list), 1)
         self.assertEqual(da.call_args_list[0].args[5], 'Mix')
 
+    def _playing_ui(self, width=120):
+        from collections import defaultdict
+        self.app.queue = [track(1), track(2), track(3)]
+        self.app.qpos = 0
+        self.app.current = self.app.queue[0]
+        self.app.pal = defaultdict(int)
+        self.app.cover_for = Mock(return_value=None)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 140)
+        ui = s.UI(self.app, scr)
+        ui.hint = Mock()
+        return ui
+
+    def test_now_playing_has_clickable_heart(self):
+        ui = self._playing_ui()
+        with patch.object(s, 'draw_art'):
+            ui.v_playing(0, 34, 24, 120)
+        hearts = [r for r in self.app.rects if r['act'] == 'likesong']
+        self.assertEqual(len(hearts), 1)
+        self.assertEqual(hearts[0]['arg']['id'], '1')
+
+    def test_now_playing_heart_reflects_liked_state(self):
+        ui = self._playing_ui()
+        self.app.liked_ids.add('1')
+        with patch.object(s, 'draw_art'), patch.object(s, 'put') as pt:
+            ui.v_playing(0, 34, 24, 120)
+        glyphs = [c.args[3] for c in pt.call_args_list]
+        self.assertIn(s.IC_HEART, glyphs)
+
+    def test_now_playing_narrow_shows_up_next(self):
+        ui = self._playing_ui()
+        self.app.rects = []
+        with patch.object(s, 'draw_art'), patch.object(s, 'put') as pt:
+            ui.v_playing(0, 34, 24, 64)   # width 40 < 56 -> narrow
+        texts = [str(c.args[3]) for c in pt.call_args_list]
+        self.assertIn('Next', texts)
+        self.assertTrue(any('Song 2' in t for t in texts))
+        jumps = [r for r in self.app.rects if r['act'] == 'qjump']
+        self.assertTrue(jumps)
+
     def test_seek_toast_shows_target_position(self):
         self.app.mpv.state.update(pos=74.0, dur=200.0)
         self.app.mpv.seek_rel = Mock()
