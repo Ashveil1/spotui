@@ -1035,6 +1035,18 @@ def stats_minutes(store):
     return f"{m // 60} hr {m % 60} min" if m >= 60 else f"{m} min"
 
 
+def stats_week(store):
+    """Plays in the last 7 days, from the (capped) history list."""
+    try:
+        cutoff = time.time() - 7 * 86400
+        return sum(1 for h in store.history
+                   if isinstance(h, dict)
+                   and math.isfinite(float(h.get("added") or 0))
+                   and float(h.get("added") or 0) >= cutoff)
+    except (TypeError, ValueError):
+        return 0
+
+
 def stats_summary(plays, top=6):
     """(total plays, unique songs, top artists, top songs) from play counts."""
     total = sum(p["n"] for p in plays.values())
@@ -2475,7 +2487,10 @@ class UI:
         head = f"{total} plays  \u00b7  {uniq} songs"
         mins = stats_minutes(app.store)
         if mins:
-            head += f"  \u00b7  about {mins} listened"
+            head += f"  \u00b7  ~{mins}"
+        week = stats_week(app.store)
+        if week:
+            head += f"  \u00b7  {week} this week"
         put(scr, y0 + 1, x0 + 19, head, pal["faint"])
         inner = W - x0 - 4
         half = inner >= 80
