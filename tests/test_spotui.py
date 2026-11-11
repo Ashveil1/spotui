@@ -738,5 +738,64 @@ class FuzzRegressionTests(unittest.TestCase):
         self.assertEqual(s.fmt_added(""), "\u2014")
 
 
+class ArtistViewTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.refresh_similar = Mock()
+
+    def _lib(self):
+        a = dict(track(1), artist="Luna Waves")
+        b = dict(track(2), artist="luna waves ")
+        c = dict(track(3), artist="Other")
+        self.app.store.liked = [a]
+        self.app.store.history = [dict(track(1), artist="Luna Waves"), c]
+        self.app.store.playlists = [{"name": "P", "tracks": [b]}]
+        return a, b, c
+
+    def test_artist_tracks_dedupes_and_matches_casefold(self):
+        self._lib()
+        out = self.app.artist_tracks("LUNA waves")
+        self.assertEqual([t["id"] for t in out], ["1", "2"])
+
+    def test_view_tracks_artist(self):
+        self._lib()
+        self.app.push("artist", "Luna Waves")
+        self.assertEqual(len(self.app.view_tracks()), 2)
+
+    def test_o_opens_artist_of_selection(self):
+        self._lib()
+        self.app.push("liked")
+        s.handle_key(self.app, "o")
+        self.assertEqual(self.app.stack[-1], ("artist", "Luna Waves"))
+
+    def test_o_without_track_toasts(self):
+        s.handle_key(self.app, "o")
+        self.assertEqual(self.app.stack[-1], ("home", None))
+
+    def test_enter_on_empty_artist_searches_youtube(self):
+        with patch.object(s, "HAVE_YTDL", True):
+            self.app.push("artist", "Nobody Here")
+            s.handle_key(self.app, "\n")
+            self.assertEqual(self.app.mode, "search")
+            self.assertEqual(self.app.query, "Nobody Here")
+            self.assertTrue(self.app.searching)
+
+    def test_play_from_artist_starts_radio(self):
+        self._lib()
+        self.app.push("artist", "Luna Waves")
+        self.app._start_radio = Mock()
+        self.app.play_row("artist:Luna Waves", 1)
+        self.assertEqual(self.app.current["id"], "2")
+        self.app._start_radio.assert_called_once()
+
+
 if __name__ == '__main__':
     unittest.main()
