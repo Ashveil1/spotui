@@ -298,6 +298,7 @@ class Store:
         self.shuffle_mode = "spread"
         self.autoplay = True
         self.time_left = False
+        self.eq_preset = "off"
         self.sort_mode = "default"
         self.theme = THEME_NAMES[0]
         self._load()
@@ -384,6 +385,8 @@ class Store:
             self.autoplay = d["autoplay"]
         if isinstance(d.get("time_left"), bool):
             self.time_left = d["time_left"]
+        if d.get("eq_preset") in EQ_PRESETS:
+            self.eq_preset = d["eq_preset"]
         if d.get("sort_mode") in SORT_MODES:
             self.sort_mode = d["sort_mode"]
         if d.get("theme") in THEMES:
@@ -411,7 +414,7 @@ class Store:
                         "similar": self.similar, "last_search": self.last_search,
                         "volume": self.volume,
                         "session": self.session, "theme": self.theme,
-                        "plays": self.plays, "shuffle_mode": self.shuffle_mode, "autoplay": self.autoplay, "time_left": self.time_left,
+                        "plays": self.plays, "shuffle_mode": self.shuffle_mode, "autoplay": self.autoplay, "time_left": self.time_left, "eq_preset": self.eq_preset,
                         "sort_mode": self.sort_mode,
                     }, f, ensure_ascii=False, indent=1)
                     f.flush()
@@ -543,6 +546,9 @@ class Mpv:
     def set_speed(self, v):
         self.cmd(["set_property", "speed", float(v)])
 
+    def set_eq(self, preset):
+        self.cmd(["set_property", "af", EQ_FILTER.get(preset, "")])
+
     def seek_abs(self, t):
         self.cmd(["set_property", "time-pos", max(0.0, float(t))])
 
@@ -643,6 +649,12 @@ def _real_song(t):
 
 
 SHUFFLE_MODES = ("spread", "discovery", "mood")
+EQ_PRESETS = ("off", "bass", "vocal", "treble")
+EQ_LABEL = {"off": "Off", "bass": "Bass boost", "vocal": "Vocal",
+            "treble": "Treble boost"}
+EQ_FILTER = {"bass": "bass=g=8",
+             "vocal": "equalizer=f=2500:w=1500:g=5",
+             "treble": "treble=g=6"}
 SHUFFLE_LABEL = {"spread": "Artist spread", "discovery": "Discovery (least played first)",
                  "mood": "Your mood (most played first)"}
 
@@ -1041,6 +1053,7 @@ class App:
         self.store = Store()
         self.mpv = Mpv()
         self.mpv.state["vol"] = self.store.volume
+        self.mpv.set_eq(self.store.eq_preset)
         self.pal = None
         self.lock = threading.RLock()
         self.stack = [("home", None)]
@@ -1888,6 +1901,14 @@ class App:
         self.mpv.set_speed(self.speed)
         self.toast_now(f"Speed {self.speed:g}x")
 
+    def cycle_eq(self):
+        i = EQ_PRESETS.index(self.store.eq_preset)
+        self.store.eq_preset = EQ_PRESETS[(i + 1) % len(EQ_PRESETS)]
+        self.mpv.set_eq(self.store.eq_preset)
+        self.store.save()
+        p = self.store.eq_preset
+        self.toast_now("Equalizer: " + ("off" if p == "off" else EQ_LABEL[p]))
+
     def create_playlist(self, name):
         name = name.strip() or "New Playlist"
         self.store.playlists.append({"name": name, "tracks": []})
@@ -2493,6 +2514,8 @@ class UI:
             chips.append(("Repeat one" if app.repeat == 2 else "Repeat all", True))
         if app.speed != 1.0:
             chips.append((f"{app.speed:g}x", True))
+        if app.store.eq_preset != "off":
+            chips.append(("EQ " + EQ_LABEL[app.store.eq_preset], True))
         cx, cy = tx, ty + 3
         for label, _on in chips:
             w = dlen(label) + 2
@@ -3293,7 +3316,7 @@ class UI:
             ("g / G", "top / bottom of a list"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -3643,6 +3666,8 @@ def handle_key(app, k):
             app.cycle_repeat()
         elif k == "u":
             app.toggle_autoplay()
+        elif k == "E":
+            app.cycle_eq()
         elif k == "f":
             if kind == "playing":
                 app.back()
