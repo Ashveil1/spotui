@@ -2474,8 +2474,12 @@ class UI:
         tx = ax + aw + 4 if wide else x0 + 2
         ty = ay if wide else ay + ah + 1
         tw = max(8, W - tx - 3)
-        put(scr, ty, tx, wcut(track["title"], tw), pal["text"], curses.A_BOLD)
+        put(scr, ty, tx, wcut(track["title"], tw - 4), pal["text"], curses.A_BOLD)
         put(scr, ty + 1, tx, wcut(track["artist"], tw), pal["dim"])
+        liked_now = track["id"] in app.liked_ids
+        put(scr, ty, tx + tw - 2, IC_HEART if liked_now else IC_HEARTO,
+            pal["green"] if liked_now else pal["sdim"], curses.A_BOLD)
+        self.hit(tx + tw - 3, ty, 3, 1, "likesong", track)
         state = "Connecting..." if app.loading else ("Paused" if app.mpv.state["pause"] else
                  "Stopped" if app.mpv.state["idle"] else "Playing")
         # chips: state, shuffle mode, repeat, speed
@@ -2516,7 +2520,10 @@ class UI:
             put(scr, by, bx0 + bw + 1, du, pal["dim"])
             self.hit(bx0, by, bw, 1, "seek", (bx0, bw))
         ey = by + 2
-        if ey + 1 < y1 - 1:
+        # narrow: the bars are decorative - drop them when the up-next row
+        # would not fit below them
+        bars = wide or ey + 3 < y1 - 2
+        if bars and ey + 1 < y1 - 1:
             n = min(24, tw)
             for i in range(n):
                 v = self.BARS_PAT[(i + app.frame // 2) % len(self.BARS_PAT)]
@@ -2524,7 +2531,7 @@ class UI:
                 put(scr, ey, tx + i, ch, pal["green"])
             put(scr, ey + 1, tx, "visual animation, not audio levels", pal["faint"])
         # up next
-        uy = max(ay + ah + 1, ey + 3) if not wide else ay + ah + 1
+        uy = ay + ah + 1 if wide else ((ey + 3) if bars else (by + 2))
         if wide and uy + 2 < y1 - 2:
             put(scr, uy, x0 + 2, "UP NEXT", pal["faint"], curses.A_BOLD)
             for j in range(3):
@@ -2536,6 +2543,12 @@ class UI:
                 put(scr, uy + 1 + j, x0 + 5, wcut(nxt["title"], max(8, width // 2 - 8)), pal["text"])
                 put(scr, uy + 1 + j, x0 + 5 + width // 2 - 2, wcut(nxt["artist"], max(8, width // 2 - 6)), pal["dim"])
                 self.hit(x0 + 2, uy + 1 + j, width - 2, 1, "qjump", qi)
+        elif not wide and uy < y1 - 2 and app.qpos + 1 < len(app.queue):
+            nxt = app.queue[app.qpos + 1]
+            put(scr, uy, x0 + 2, "Next", pal["faint"], curses.A_BOLD)
+            put(scr, uy, x0 + 8, wcut(f"{nxt['title']} - {nxt['artist']}",
+                                      width - 8), pal["dim"])
+            self.hit(x0 + 2, uy, width - 2, 1, "qjump", app.qpos + 1)
         if y1 - y0 >= 18:
             self.hint(y1 - 2, x0, "playing")
 
