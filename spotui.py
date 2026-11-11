@@ -2125,6 +2125,13 @@ class App:
         self.pick_idx = 0
         self.mode = "pick"
 
+    def remove_recent(self, q):
+        """Forget one recent search (the \u00d7 on its pill)."""
+        if q in self.store.recent:
+            self.store.recent.remove(q)
+            self.store.save()
+            self.toast_now(f"Removed search: {q}")
+
     def _record_search(self, q):
         """Remember a submitted search and reseed the made-for-you shelf."""
         q = q.strip()
@@ -2941,7 +2948,7 @@ class UI:
         x = x0 + 2
         y = y0 + 2
         for q in recs:
-            w = dlen(q) + 4
+            w = dlen(q) + 5
             if x + w > W - 4:
                 x = x0 + 2
                 y += 2
@@ -2949,7 +2956,9 @@ class UI:
                 break
             fill(scr, y, x, w, pal["pill"])
             put(scr, y, x + 2, q, pal["pilldim"])
-            self.hit(x, y, w, 1, "recent", q)
+            put(scr, y, x + w - 2, "\u00d7", pal["faint"])
+            self.hit(x, y, w - 2, 1, "recent", q)
+            self.hit(x + w - 2, y, 2, 1, "delrecent", q)
             x += w + 1
         return y + 1
 
@@ -2968,13 +2977,15 @@ class UI:
             y = y0 + 3
             x = x0 + 2
             for q in app.store.recent:
-                w = dlen(q) + 4
+                w = dlen(q) + 5
                 if x + w > W - 4:
                     x = x0 + 2
                     y += 2
                 fill(scr, y, x, w, pal["pill"])
                 put(scr, y, x + 2, q, pal["pilldim"])
-                self.hit(x, y, w, 1, "recent", q)
+                put(scr, y, x + w - 2, "\u00d7", pal["faint"])
+                self.hit(x, y, w - 2, 1, "recent", q)
+                self.hit(x + w - 2, y, 2, 1, "delrecent", q)
                 x += w + 1
             if not app.store.recent:
                 put(scr, y, x0 + 2, f"Type in the search bar above — press / "
@@ -4054,6 +4065,8 @@ def handle_mouse(app):
             app.play([arg], 0, source="Listening stats")
         elif act == "dropauto":
             app.drop_autoplayed()
+        elif act == "delrecent":
+            app.remove_recent(arg)
         elif act == "shuffle":
             app.toggle_shuffle()
         elif act == "repeat":
