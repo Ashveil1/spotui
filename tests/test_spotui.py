@@ -484,6 +484,26 @@ class AppTests(unittest.TestCase):
         self.assertNotIn('auto', self.app.queue[0])
         self.assertTrue(all(t.get('auto') for t in self.app.queue[1:]))
 
+    def test_queue_header_counts_upcoming_autoplayed(self):
+        from collections import defaultdict
+        self.app.current = track(1)
+        self.app.queue = [track(1), track(2), track(3), track(4)]
+        self.app.queue[0]['auto'] = True   # already playing: excluded
+        self.app.queue[2]['auto'] = True
+        self.app.queue[3]['auto'] = True
+        self.app.qpos = 1
+        self.app.pal = defaultdict(int)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        ui.hint = Mock()
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(t)):
+            ui.v_queue(0, 30, 24, 120)
+        self.assertIn(f'  \u00b7  {s.IC_AUTO} 2 autoplayed', texts)
+
     def test_autoplay_dedupes_queued_songs(self):
         self.app.current = track(1)
         self.app.queue = [track(1), track(2)]
