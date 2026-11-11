@@ -141,7 +141,7 @@ def fmt_added(v):
 VIEW_HINTS = {
     "search": "Enter plays \u00b7 a queues \u00b7 o opens artist",
     "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
-    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames",
+    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K or drag reorders \u00b7 e renames",
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 W saves as playlist",
@@ -1060,7 +1060,7 @@ class App:
         self.speed = 1.0
         self.sleep_minutes = 0
         self.drag_rect = None
-        self.drag_q = None             # queue index being dragged, if any
+        self.drag_row = None           # [view key, index] being row-dragged
         self.last_store_error = None
         self.user = (os.environ.get("USER") or "u")[:1]
         # --- real cover art piping (thumbnails as half-block pixels) ---
@@ -3487,26 +3487,32 @@ def handle_mouse(app):
     modal = app.show_help or app.mode in ("name", "pick", "confirm_delete")
     if modal:
         app.drag_rect = None
-        app.drag_q = None
+        app.drag_row = None
         if bstate & (curses.BUTTON4_PRESSED | getattr(curses, "BUTTON5_PRESSED", 0)):
             if app.mode == "pick":
                 step = -1 if bstate & curses.BUTTON4_PRESSED else 1
                 app.pick_idx = max(0, min(len(app.pick_rows) - 1, app.pick_idx + step))
             return
-    if app.drag_q is not None and bstate & (curses.REPORT_MOUSE_POSITION | curses.BUTTON1_RELEASED):
+    if app.drag_row is not None and bstate & (curses.REPORT_MOUSE_POSITION | curses.BUTTON1_RELEASED):
         if bstate & curses.REPORT_MOUSE_POSITION:
+            vk0 = app.drag_row[0]
             for r in app.rects:
-                if r["act"] == "row" and r["arg"][0] == "queue:" and \
+                if r["act"] == "row" and r["arg"][0] == vk0 and \
                         r["x0"] <= mx < r["x1"] and r["y0"] <= my < r["y1"]:
                     target = r["arg"][1]
-                    while app.drag_q != target:
-                        d = 1 if target > app.drag_q else -1
-                        if not app.move_queue(app.drag_q, d):
+                    while app.drag_row[1] != target:
+                        d = 1 if target > app.drag_row[1] else -1
+                        if vk0 == "queue:":
+                            ok = app.move_queue(app.drag_row[1], d)
+                        else:
+                            ok = app.move_in_playlist(
+                                int(vk0.split(":", 1)[1]), app.drag_row[1], d)
+                        if not ok:
                             break
-                        app.drag_q += d
+                        app.drag_row[1] += d
                     break
         if bstate & curses.BUTTON1_RELEASED:
-            app.drag_q = None
+            app.drag_row = None
         return
     if app.drag_rect is not None and bstate & (curses.REPORT_MOUSE_POSITION | curses.BUTTON1_RELEASED):
         r = app.drag_rect
@@ -3547,9 +3553,12 @@ def handle_mouse(app):
         act, arg = r["act"], r["arg"]
         if act in ("seek", "vol") and not blocked and bstate & curses.BUTTON1_PRESSED:
             app.drag_rect = r
-        if act == "row" and arg[0] == "queue:" and arg[1] > app.qpos \
-                and not blocked and bstate & curses.BUTTON1_PRESSED:
-            app.drag_q = arg[1]
+        if act == "row" and not blocked and bstate & curses.BUTTON1_PRESSED:
+            if arg[0] == "queue:" and arg[1] > app.qpos:
+                app.drag_row = ["queue:", arg[1]]
+            elif arg[0].split(":")[0] == "playlist" \
+                    and app.store.sort_mode == "default":
+                app.drag_row = [arg[0], arg[1]]
         if blocked and act not in allowed:
             return
         if act == "noop":
