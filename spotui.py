@@ -138,6 +138,18 @@ def fmt_added(v):
     return str(v) if v else "—"
 
 
+VIEW_HINTS = {
+    "search": "Enter plays \u00b7 a queues \u00b7 o opens artist",
+    "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 F finds \u00b7 o opens artist",
+    "playlist": "Enter plays \u00b7 a queues \u00b7 e renames \u00b7 X exports \u00b7 F finds",
+    "history": "Enter plays \u00b7 a queues \u00b7 F finds",
+    "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
+    "queue": "J/K reorders \u00b7 C clears upcoming \u00b7 W saves as playlist",
+    "playing": "Space pause \u00b7 l like \u00b7 P playlist \u00b7 v queue \u00b7 S shuffle mode \u00b7 f back",
+    "stats": "Backspace back \u00b7 ? for all shortcuts",
+}
+
+
 def fmt_remaining(tracks):
     """'N min left' / 'N hr M min left' for the queue's unplayed tail."""
     tot = sum(t.get("dur") or 0 for t in tracks)
@@ -2207,6 +2219,7 @@ class UI:
             gap = y0 + 3 + 2 + min(len(ta), 6) * 2 + 1
             if gap + 4 < y1:
                 block(gap, x0 + 2, colw, "TOP SONGS", ts[:max(1, (y1 - gap - 3) // 2)])
+        self.hint(y1 - 2, x0, "stats")
 
     def v_playing(self, y0, y1, x0, W):
         app, pal, scr = self.app, self.pal, self.scr
@@ -2291,7 +2304,7 @@ class UI:
                 put(scr, uy + 1 + j, x0 + 5, wcut(nxt["title"], max(8, width // 2 - 8)), pal["text"])
                 put(scr, uy + 1 + j, x0 + 5 + width // 2 - 2, wcut(nxt["artist"], max(8, width // 2 - 6)), pal["dim"])
         if y1 - y0 >= 18:
-            put(scr, y1 - 2, x0 + 2, "Space pause   l like   P playlist   v queue   S shuffle mode   f back", pal["faint"])
+            self.hint(y1 - 2, x0, "playing")
 
     def v_home(self, y0, y1, x0, W):
         app, pal = self.app, self.pal
@@ -2593,8 +2606,9 @@ class UI:
 
         put(scr, fy0, x0 + 2, "All", pal["text"], curses.A_BOLD)
         self.list_header(fy0 + 1, x0 + 2, mw - 4, show_date=False)
-        self.track_list(fy0 + 2, y1, x0 + 2, mw - 4, tracks, "search:",
+        self.track_list(fy0 + 2, y1 - 2, x0 + 2, mw - 4, tracks, "search:",
                         show_date=False)
+        self.hint(y1 - 2, x0, "search")
 
     def v_collection(self, y0, y1, x0, W, kind, arg):
         app, pal = self.app, self.pal
@@ -2641,8 +2655,9 @@ class UI:
 
         ly = by + 2
         self.list_header(ly, x0 + 2, W - x0 - 4, show_date=True)
-        self.track_list(ly + 1, y1, x0 + 2, W - x0 - 4, tracks, vk,
+        self.track_list(ly + 1, y1 - 2, x0 + 2, W - x0 - 4, tracks, vk,
                         show_date=True)
+        self.hint(y1 - 2, x0, kind)
         if not tracks and kind == "history":
             put(scr, ly + 2, x0 + 5,
                 "Songs you play will show up here.", pal["faint"])
@@ -2706,7 +2721,7 @@ class UI:
                 "to add it", pal["faint"])
             return
         # Reuse list scrolling but retain original queue indices for input.
-        visible = max(0, y1 - y - 2)
+        visible = max(0, y1 - y - 3)   # one row spare for the hint line
         selected = app.sel.get("queue:", first)
         offset = max(first, app.off.get("queue:", first))
         if selected >= first:
@@ -2719,6 +2734,7 @@ class UI:
         for j, qi in enumerate(range(offset, min(offset + visible, len(app.queue)))):
             self.row(y + 1 + j, x0 + 2, W - x0 - 4, app.queue[qi], qi,
                      "queue:", qi, show_date=False)
+        self.hint(y1 - 2, x0, "queue")
 
     # --------------------------------------------------------- list bits --
     def list_header(self, y, x0, w, show_date):
@@ -2805,6 +2821,12 @@ class UI:
         self.hit(x0, y, w, 1, "row", (vk, real_idx, False))
         if chan_w and t.get("artist"):
             self.hit(cx, y, chan_w, 1, "artist", t["artist"])
+
+    def hint(self, y, x0, kind):
+        """Context key hints on a view's bottom row."""
+        text = VIEW_HINTS.get(kind)
+        if text:
+            put(self.scr, y, x0 + 2, text, self.pal["faint"])
 
     def track_list(self, y0, y1, x0, w, tracks, vk, show_date):
         app, pal = self.app, self.pal
