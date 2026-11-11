@@ -445,6 +445,9 @@ class AppTests(unittest.TestCase):
         self.app.drop_autoplayed()
         self.assertEqual(self.app.toast[0], 'No autoplayed songs to drop')
 
+    def test_search_filter_defaults_to_all(self):
+        self.assertEqual(self.app.search_filter, 'all')
+
     def test_remove_recent(self):
         self.app.store.recent = ['alpha', 'beta', 'gamma']
         self.app.remove_recent('beta')

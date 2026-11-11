@@ -1150,6 +1150,7 @@ class App:
         self.sleep_deadline = None
         self.speed = 1.0
         self.sleep_minutes = 0
+        self.search_filter = "all"   # search filter chips: all/songs/artists
         self.drag_rect = None
         self.drag_row = None           # [view key, index] being row-dragged
         self.last_store_error = None
@@ -2992,7 +2993,40 @@ class UI:
                                     "to start", pal["faint"])
             return
 
-        artists = app.search_artists(app.query)
+        # filter chips: All / Songs / Artists (mouse, like Spotify's)
+        fx = x0 + 2
+        for fname in ("All", "Songs", "Artists"):
+            fsel = app.search_filter == fname.lower()
+            fch = dlen(fname) + 2
+            if fsel:
+                fill(scr, y0 + 1, fx, fch, pal["pill"])
+                put(scr, y0 + 1, fx + 1, fname, pal["text"], curses.A_BOLD)
+            else:
+                put(scr, y0 + 1, fx + 1, fname, pal["dim"])
+            self.hit(fx, y0 + 1, fch, 1, "sfilter", fname.lower())
+            fx += fch + 1
+        y0 += 2
+
+        if app.search_filter == "artists":
+            rows_a = app.search_artists(app.query, limit=20)
+            put(scr, y0 + 1, x0 + 2, "Artists", pal["text"], curses.A_BOLD)
+            if not rows_a:
+                put(scr, y0 + 3, x0 + 2,
+                    f"No artists matching \u201c{wcut(app.query, mw - 30)}\u201d",
+                    pal["dim"])
+                return
+            for i, a in enumerate(rows_a):
+                ay = y0 + 2 + i
+                if ay >= y1 - 2:
+                    break
+                put(scr, ay, x0 + 2, f"{i + 1}", pal["faint"])
+                put(scr, ay, x0 + 6, wcut(a, mw - 20), pal["text"])
+                put(scr, ay, x0 + 8 + min(dlen(a), mw - 20), "Artist",
+                    pal["faint"])
+                self.hit(x0 + 2, ay, mw - 4, 1, "artist", a)
+            return
+
+        artists = app.search_artists(app.query) if app.search_filter == "all" else []
         if artists:
             put(scr, y0 + 1, x0 + 2, "Artists", pal["text"], curses.A_BOLD)
             x = x0 + 10
@@ -4067,6 +4101,8 @@ def handle_mouse(app):
             app.drop_autoplayed()
         elif act == "delrecent":
             app.remove_recent(arg)
+        elif act == "sfilter":
+            app.search_filter = arg
         elif act == "shuffle":
             app.toggle_shuffle()
         elif act == "repeat":
