@@ -2145,8 +2145,17 @@ class UI:
                 icp = pal["sgreen"] if k == "liked" else pal["sdim"]
                 txp = pal["sdim"]
             put(scr, y, 3, ic, icp)
-            name = wcut(label, SW - 10)
+            if k == "liked":
+                n = len(app.store.liked)
+            elif k == "history":
+                n = len(app.store.history)
+            else:
+                n = len(app.store.playlists[item[3]]["tracks"])
+            cnt = str(n) if n else ""
+            name = wcut(label, SW - 10 - len(cnt))
             put(scr, y, 6, name, txp)
+            if cnt:
+                put(scr, y, SW - 3 - len(cnt), cnt, pal["sfaint"])
             arg = item[3] if len(item) > 3 else None
             self.hit(1, y, SW - 2, 1, "libitem", (k, arg))
         # overflow indicators when items run off-screen
