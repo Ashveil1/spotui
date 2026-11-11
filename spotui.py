@@ -145,7 +145,7 @@ VIEW_HINTS = {
     "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K or drag reorders \u00b7 e renames",
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
-    "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 W saves as playlist",
+    "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
     "playing": "Space pause \u00b7 l like \u00b7 v queue \u00b7 S shuffle \u00b7 click Up Next to jump",
     "stats": "Click a top artist to open it \u00b7 a top song plays \u00b7 Backspace back",
 }
@@ -1974,6 +1974,26 @@ class App:
         self.sel["queue:"] = max(0, min(self.sel.get("queue:", 0), len(self.queue) - 1))
         self.toast_now(f"Cleared {n} upcoming songs")
 
+    def drop_autoplayed(self):
+        """Remove autoplay-added songs from the queue (never the playing one)."""
+        marked = [i for i, t in enumerate(self.queue)
+                  if t.get("auto") and i != self.qpos]
+        if not marked:
+            self.toast_now("No autoplayed songs to drop")
+            return
+        self.queue_revision += 1
+        drop = set(marked)
+        self.queue = [t for i, t in enumerate(self.queue) if i not in drop]
+        if self.orig_queue is not None:
+            ids = {t.get("id") for t in self.queue}
+            self.orig_queue = [t for t in self.orig_queue
+                               if t.get("id") in ids]
+        self.qpos -= sum(1 for i in marked if i < self.qpos)
+        self.qpos = max(0, min(self.qpos, len(self.queue) - 1))
+        self.sel["queue:"] = max(0, min(self.sel.get("queue:", 0),
+                                        len(self.queue) - 1))
+        self.toast_now(f"Dropped {len(marked)} autoplayed songs")
+
     def save_queue_as_playlist(self):
         keep = ("id", "title", "artist", "dur", "url")
         seen, tracks = set(), []
@@ -3152,9 +3172,12 @@ class UI:
             left = fmt_remaining(app.queue[max(0, app.qpos):])
             if left:
                 label += f", {left}"
-            if any(t.get("auto") for t in app.queue):
-                label += f"  ·  {IC_AUTO} autoplay"
             put(scr, y0 + 1, x0 + 9, label, pal["faint"])
+            if any(t.get("auto") for t in app.queue):
+                legend = f"  ·  {IC_AUTO} autoplay"
+                lx = x0 + 9 + dlen(label)
+                put(scr, y0 + 1, lx, legend, pal["faint"])
+                self.hit(lx, y0 + 1, dlen(legend), 1, "dropauto")
         y = y0 + 3
         if app.current:
             put(scr, y, x0 + 2, "Now playing", pal["dim"], curses.A_BOLD)
@@ -3468,7 +3491,7 @@ class UI:
             ("g / G", "top / bottom of a list"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "drop autoplayed songs"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -3776,6 +3799,8 @@ def handle_key(app, k):
             app.play_next(app.track_under() or app.current)
         elif k == "C" and kind == "queue":
             app.clear_upcoming()
+        elif k == "D" and kind == "queue":
+            app.drop_autoplayed()
         elif k == "W" and kind == "queue":
             app.save_queue_as_playlist()
         elif k in ("J", "K") and kind == "queue":
@@ -4019,6 +4044,8 @@ def handle_mouse(app):
                 app.play(tracks, 0, source=app._source_for_vk(vk2))
         elif act == "playtrack":
             app.play([arg], 0, source="Listening stats")
+        elif act == "dropauto":
+            app.drop_autoplayed()
         elif act == "shuffle":
             app.toggle_shuffle()
         elif act == "repeat":
