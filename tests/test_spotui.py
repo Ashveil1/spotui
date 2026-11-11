@@ -1044,3 +1044,59 @@ class QueueDragTests(unittest.TestCase):
         self._mouse(5, 9, s.curses.BUTTON1_RELEASED
                     | s.curses.REPORT_MOUSE_POSITION)
         self.assertIsNone(self.app.drag_q)
+
+
+class PlaylistReorderTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.refresh_similar = Mock()
+        self.app.store.playlists = [{"name": "P", "tracks": [
+            {"id": c, "title": c, "artist": "A", "dur": 60}
+            for c in "abcd"]}]
+        self.app.stack.append(("playlist", 0))
+
+    def _ids(self):
+        return [t["id"] for t in self.app.store.playlists[0]["tracks"]]
+
+    def test_j_moves_down_and_selection_follows(self):
+        self.app.sel["playlist:0"] = 1
+        s.handle_key(self.app, "J")
+        self.assertEqual(self._ids(), ["a", "c", "b", "d"])
+        self.assertEqual(self.app.sel["playlist:0"], 2)
+
+    def test_k_moves_up(self):
+        self.app.sel["playlist:0"] = 2
+        s.handle_key(self.app, "K")
+        self.assertEqual(self._ids(), ["a", "c", "b", "d"])
+
+    def test_edges_do_nothing(self):
+        self.app.sel["playlist:0"] = 0
+        s.handle_key(self.app, "K")
+        self.assertEqual(self._ids(), ["a", "b", "c", "d"])
+        self.app.sel["playlist:0"] = 3
+        s.handle_key(self.app, "J")
+        self.assertEqual(self._ids(), ["a", "b", "c", "d"])
+
+    def test_reorder_persists(self):
+        self.app.sel["playlist:0"] = 0
+        s.handle_key(self.app, "J")
+        fresh = s.Store()
+        self.assertEqual([t["id"] for t in fresh.playlists[0]["tracks"]],
+                         ["b", "a", "c", "d"])
+
+    def test_blocked_while_sorted(self):
+        self.app.store.sort_mode = "title"
+        self.app.sel["playlist:0"] = 1
+        s.handle_key(self.app, "J")
+        self.assertEqual(self._ids(), ["a", "b", "c", "d"])
+        self.assertIn("sort", self.app.toast[0])
