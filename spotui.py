@@ -1709,6 +1709,21 @@ class App:
         names = ["Repeat off", "Repeat all", "Repeat one"]
         self.toast_now(names[self.repeat])
 
+    def seek(self, delta):
+        """Arrow-key seek with position feedback, like Spotify's overlay."""
+        self.mpv.seek_rel(delta)
+        st = self.mpv.state
+        try:
+            pos = float(st.get("pos") or 0.0) + delta
+            dur = float(st.get("dur") or 0.0)
+        except (TypeError, ValueError):
+            pos, dur = 0.0, 0.0
+        target = max(0.0, pos)
+        if dur:
+            target = min(target, dur)
+        sign = "+" if delta > 0 else "-"
+        self.toast_now(f"{sign}{abs(delta)}s - {fmt_t(target)}")
+
     def vol(self, d=None, absolute=None):
         v = self.mpv.state["vol"]
         if absolute is not None:
@@ -1718,6 +1733,7 @@ class App:
         self.mpv.set_vol(v)
         self.store.volume = self.mpv.state["vol"]
         self.store.save()
+        self.toast_now(f"Volume {self.mpv.state['vol']}")
 
     # ------------------------------------------------------------ library --
     def cycle_theme(self):
@@ -3637,9 +3653,9 @@ def handle_key(app, k):
     elif k == curses.KEY_UP:
         app.move_sel(-1, len(app.view_tracks()))
     elif k == curses.KEY_RIGHT:
-        app.mpv.seek_rel(10)
+        app.seek(10)
     elif k == curses.KEY_LEFT:
-        app.mpv.seek_rel(-10)
+        app.seek(-10)
     elif k in (curses.KEY_ENTER, 10, 13):
         if kind == "home":
             handle_key(app, "\n")

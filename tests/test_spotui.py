@@ -436,6 +436,32 @@ class AppTests(unittest.TestCase):
             self.app._autoplay_worker(track(1), rev, tok)
         self.app.next.assert_called_once_with(auto=True)
 
+    def test_seek_toast_shows_target_position(self):
+        self.app.mpv.state.update(pos=74.0, dur=200.0)
+        self.app.mpv.seek_rel = Mock()
+        self.app.seek(10)
+        self.app.mpv.seek_rel.assert_called_once_with(10)
+        self.assertEqual(self.app.toast[0], "+10s - 1:24")
+
+    def test_seek_toast_clamps_at_duration(self):
+        self.app.mpv.state.update(pos=196.0, dur=200.0)
+        self.app.mpv.seek_rel = Mock()
+        self.app.seek(10)
+        self.assertEqual(self.app.toast[0], "+10s - 3:20")
+
+    def test_seek_backwards_floors_at_zero(self):
+        self.app.mpv.state.update(pos=3.0, dur=200.0)
+        self.app.mpv.seek_rel = Mock()
+        self.app.seek(-10)
+        self.assertEqual(self.app.toast[0], "-10s - 0:00")
+
+    def test_volume_change_toasts_level(self):
+        self.app.mpv.state["vol"] = 70
+        self.app.vol(5)
+        self.assertEqual(self.app.toast[0], "Volume 75")
+        self.app.vol(-10)
+        self.assertEqual(self.app.toast[0], "Volume 65")
+
     def test_u_key_toggles_autoplay(self):
         before = self.app.store.autoplay
         s.handle_key(self.app, 'u')
