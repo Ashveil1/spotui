@@ -79,6 +79,7 @@ SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in 
 | `f` | Now Playing | `t` | sleep timer |
 | `J` / `K` | reorder queue | `W` | save queue as playlist |
 | `C` | clear upcoming queue | `X` | export playlist JSON |
+| `D` | drop autoplayed songs (queue) | | |
 | `R` | new "Made for you" picks | `T` | cycle color theme |
 | `i` | listening stats | `S` | shuffle mode |
 | `y` | recently played | `1`-`3` | play a daily mix (home) |
@@ -192,7 +193,7 @@ put. Non-finite numbers in a saved library are ignored.
 
 The queue and position are saved in the library file and restored on the next launch. The Home screen shows a **Continue listening** card with where you stopped ("left off at 1:14") - click it to resume the song at that exact position.
 
-When the last queued song starts, **autoplay** quietly lines up similar songs so the music never just stops (`u` toggles it, on by default). `E` cycles equalizer presets (off, bass boost, vocal, treble boost) through mpv's audio filters. Clicking the elapsed time in the playerbar switches it to a countdown. Playlist headers show a 2x2 mosaic of the first four covers.
+When the last queued song starts, **autoplay** quietly lines up similar songs so the music never just stops (`u` toggles it, on by default). Songs autoplay added are marked with a ✦ in the queue and in Now Playing's Up Next, so you can tell them from your own picks; `D` in the queue view drops just those. Now Playing also shows where the queue started from ("From Late Night Drive"), and the queue view has a seekable progress line under the Now playing row. `E` cycles equalizer presets (off, bass boost, vocal, treble boost) through mpv's audio filters. Clicking the elapsed time in the playerbar switches it to a countdown. Playlist headers show a 2x2 mosaic of the first four covers.
 
 `F` (in Liked, playlists, history, queue) finds and jumps to the first song whose title or artist matches what you type; Enter keeps the selection.
 
@@ -208,7 +209,7 @@ When the last queued song starts, **autoplay** quietly lines up similar songs so
 
 `T` cycles color themes (Spotify, Aurora, Sunset, Ocean, Rose, Amber). Themes redefine terminal palette slots, so they need a terminal that allows it (most do; tmux and `NO_COLOR` do not). The choice is saved.
 
-`i` opens listening stats: your most played artists and songs, counted from what you play in SpotUI (stored locally in the library file).
+`i` opens listening stats: your most played artists and songs, counted from what you play in SpotUI (stored locally in the library file). The header shows how much you played this week, with a per-day activity chart below it. Click a top artist to open its page, or a top song to play it.
 
 `S` cycles shuffle modes and turns shuffle on: **Artist spread** (default), **Discovery** (songs you have played least first) and **Your mood** (your most played songs and artists first). Discovery and mood use the play counts SpotUI keeps locally, so they get better as you listen. All modes keep artists apart when the queue allows it and never add or drop songs. The mode is shown as a D or M next to the shuffle button.
 

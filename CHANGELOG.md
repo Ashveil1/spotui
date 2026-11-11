@@ -64,5 +64,25 @@ Looks:
   Home's Continue listening card resumes the song at that second (#53)
 - Narrow-terminal fixes for the playerbar and home shelves (#52)
 
+And later still:
+
+Stats (`i`):
+- "N this week" in the header, and a per-day activity chart for the last
+  7 days (#62, #63)
+- Top artists and songs are clickable: open the artist, play the song (#64)
+
+Autoplay and the queue:
+- Songs autoplay added show a ✦ next to their title in the queue and in
+  Now Playing's Up Next; an "Autoplay" chip shows in Now Playing while
+  it's on (#65)
+- `D` in the queue view (or clicking the ✦ legend) drops only the songs
+  autoplay added (#67)
+- The queue's Now playing row has a progress line; clicking or dragging
+  it seeks (#68)
+
+Now Playing:
+- "From <playlist / search / artist>" line under the artist; songs
+  autoplay picked say "From Autoplay" (#66)
+
 All changes above are covered by the offline test suite
-(`python3 -m unittest discover -s tests`), 156 tests at the time of writing.
+(`python3 -m unittest discover -s tests`), 169 tests at the time of writing.
