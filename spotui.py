@@ -3183,6 +3183,14 @@ class UI:
             put(scr, y, x0 + 2, "Now playing", pal["dim"], curses.A_BOLD)
             self.row(y + 1, x0 + 2, W - x0 - 4, app.current, 0,
                      "queue:", app.qpos, show_date=False, current=True)
+            st = app.mpv.state
+            if not st["idle"] and st["dur"] > 0 and W - x0 - 6 >= 10:
+                bw = W - x0 - 6
+                fill_n = int(bw * min(1.0, max(0.0, st["pos"] / st["dur"])))
+                put(scr, y + 2, x0 + 3, "\u2501" * fill_n, pal["green"])
+                put(scr, y + 2, x0 + 3 + fill_n, "\u2500" * (bw - fill_n),
+                    pal["dim"])
+                self.hit(x0 + 3, y + 2, bw, 1, "seek", (x0 + 3, bw))
             y += 3
         put(scr, y, x0 + 2, "Next up", pal["dim"], curses.A_BOLD)
         first = max(0, app.qpos + 1)
