@@ -74,6 +74,7 @@ SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in 
 | `+` / `-` | volume | `c` | create playlist |
 | `[` / `]` | speed down / up | `e` / `D` | rename / delete playlist |
 | `F` | find in a list | `d` | delete from list |
+| `m` | sort list (title/artist/date/duration) | | |
 | `f` | Now Playing | `t` | sleep timer |
 | `J` / `K` | reorder queue | `W` | save queue as playlist |
 | `C` | clear upcoming queue | `X` | export playlist JSON |
@@ -91,8 +92,10 @@ the results; click one to open its artist page.
 
 Mouse works too: click anything (rows, tiles, sidebar items, playlists,
 playlists rows, controls, toast — everything), drag the progress / volume
-bars, and the wheel scrolls the list — or the sidebar when the cursor is
-over it. `Ctrl+Z` suspends cleanly; the screen repaints on resume.
+bars, click a column header to sort by it (click the active column again to
+restore the original order), and the wheel scrolls the list — or the
+sidebar when the cursor is over it. `Ctrl+Z` suspends cleanly; the screen
+repaints on resume.
 
 ## Where is my data?
 
@@ -191,7 +194,9 @@ The queue and position are saved in the library file and restored paused on the 
 
 `[` and `]` change playback speed (0.75x, 1x, 1.25x, 1.5x, 2x). Speed resets to 1x when SpotUI restarts.
 
-`C` in the queue view clears the upcoming songs and keeps the current song and what already played.
+`C` in the queue view clears the upcoming songs and keeps the current song and what already played. The header of the queue view shows how many songs are lined up and about how long is left.
+
+`m` in Liked Songs, a playlist or Recently Played cycles the sort order: default, title A-Z, artist A-Z, recently added, longest first. The choice is saved and applies to all three views. Sorting only changes how the list is shown - the stored order never changes, and playing, liking or deleting always acts on the row you see.
 
 `X` in a playlist exports it as JSON to `~/spotui-exports/`. Import one with `python3 spotui.py --import file.json` while SpotUI is closed.
 
