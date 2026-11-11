@@ -73,6 +73,7 @@ IC_QUEUE = "≣"
 IC_NOTE = "♫"
 IC_SPK = "◁"
 IC_PLUS = "+"
+IC_HIST = "↺"
 
 SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 EQ_FRAMES = ["▁▄▂▆", "▄▂▆▁", "▂▆▁▄", "▆▁▄▂"]
@@ -121,6 +122,13 @@ def fmt_t(sec):
     except (TypeError, ValueError):
         return "–:––"
     return f"{sec // 60}:{sec % 60:02d}"
+
+
+def fmt_added(v):
+    """Date cell for a track: liked stores 'YYYY-MM-DD', history an epoch."""
+    if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
+        return time.strftime("%Y-%m-%d", time.localtime(v))
+    return str(v) if v else "—"
 
 
 def fmt_total(tracks):
@@ -1935,7 +1943,8 @@ class UI:
         put(scr, y, SW - 3, IC_PLUS, pal["sdim"], curses.A_BOLD)
         self.hit(SW - 4, y, 2, 1, "create")
 
-        items = [("liked", IC_HEART, "Liked Songs")]
+        items = [("liked", IC_HEART, "Liked Songs"),
+                 ("history", IC_HIST, "Recently Played")]
         for i, pl in enumerate(app.store.playlists):
             items.append(("playlist", IC_NOTE, pl["name"], i))
         top, bot = y0 + 8, y1 - (2 if app.sleep_deadline is not None else 1)
@@ -2028,7 +2037,7 @@ class UI:
             self.v_home(y0, y1, x0, W)
         elif kind == "search":
             self.v_search(y0, y1, x0, W)
-        elif kind in ("liked", "playlist"):
+        elif kind in ("liked", "playlist", "history"):
             self.v_collection(y0, y1, x0, W, kind, arg)
         elif kind == "queue":
             self.v_queue(y0, y1, x0, W)
@@ -2473,12 +2482,14 @@ class UI:
         scr = self.scr
         if kind == "liked":
             pl = {"name": "Liked Songs", "tracks": app.store.liked}
+        elif kind == "history":
+            pl = {"name": "Recently Played", "tracks": app.store.history}
         else:
             try:
                 pl = app.store.playlists[arg]
             except IndexError:
                 return
-        eyebrow = "PLAYLIST"
+        eyebrow = "HISTORY" if kind == "history" else "PLAYLIST"
         tracks = pl["tracks"]
         vk = app.key()
 
@@ -2488,8 +2499,9 @@ class UI:
         band = ["g{0}1", "g{0}1", "g{0}2", "g{0}3"]
         for j, name in enumerate(band):
             fill(scr, cy + j, x0, W - x0, pal[name.format(fi)])
+        icon = {"liked": IC_HEART, "history": IC_HIST}.get(kind, IC_NOTE)
         draw_art(scr, cy, x0 + 2, 10, 4, pl["name"], pal,
-                 icon=(IC_HEART if kind == "liked" else IC_NOTE),
+                 icon=icon,
                  art=app.cover_for(tracks[0]["id"] if tracks else None, 10, 4))
         hx = x0 + 15
         put(scr, cy, hx, eyebrow, pal[f"g{fi}1"], curses.A_BOLD)
@@ -2512,6 +2524,9 @@ class UI:
         self.list_header(ly, x0 + 2, W - x0 - 4, show_date=True)
         self.track_list(ly + 1, y1, x0 + 2, W - x0 - 4, tracks, vk,
                         show_date=True)
+        if not tracks and kind == "history":
+            put(scr, ly + 2, x0 + 5,
+                "Songs you play will show up here.", pal["faint"])
 
     def v_queue(self, y0, y1, x0, W):
         app, pal = self.app, self.pal
@@ -2618,7 +2633,8 @@ class UI:
 
         if show_date and date_w:
             dx = cx + chan_w + 2
-            put(scr, y, dx, wcut(t.get("added") or "—", date_w), pal["faint"])
+            put(scr, y, dx, wcut(fmt_added(t.get("added")), date_w),
+                pal["faint"])
 
         lx = x0 + w - dur_w - heart_w - 2
         liked = t["id"] in app.liked_ids
@@ -2789,7 +2805,7 @@ class UI:
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("y", "recently played"),
             ("F", "find in a list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -3100,6 +3116,8 @@ def handle_key(app, k):
             app.play_mix(int(k) - 1)
         elif k == "i":
             app.push("stats")
+        elif k == "y":
+            app.push("history")
         elif k == "t":
             app.cycle_sleep()
         elif k == "T":

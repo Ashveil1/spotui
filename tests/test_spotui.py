@@ -622,5 +622,38 @@ class ShuffleTests(unittest.TestCase):
         self.assertTrue(all(t['id'] not in ['0', '1'] for t in result[:3]))
 
 
+class HistoryViewTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.refresh_similar = Mock()
+
+    def test_fmt_added_handles_epoch_string_and_empty(self):
+        import time as _t
+        epoch = 1767225600
+        self.assertEqual(s.fmt_added(epoch),
+                         _t.strftime("%Y-%m-%d", _t.localtime(epoch)))
+        self.assertEqual(s.fmt_added("2026-01-02"), "2026-01-02")
+        self.assertEqual(s.fmt_added(None), "\u2014")
+        self.assertEqual(s.fmt_added(0), "\u2014")
+
+    def test_history_view_tracks(self):
+        t = track(1)
+        self.app.store.history = [t]
+        self.app.push("history")
+        self.assertEqual(self.app.view_tracks(), [t])
+
+    def test_y_opens_recently_played(self):
+        s.handle_key(self.app, "y")
+        self.assertEqual(self.app.stack[-1], ("history", None))
+
+
 if __name__ == '__main__':
     unittest.main()
