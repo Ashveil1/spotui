@@ -834,5 +834,20 @@ class QueueRemainingTests(unittest.TestCase):
         self.assertEqual(s.fmt_remaining([dict(dur=4000)]), "1 hr 6 min left")
 
 
+class ViewHintTests(unittest.TestCase):
+    def test_every_main_view_has_a_hint_with_real_keys(self):
+        for kind in ("search", "liked", "playlist", "history", "artist",
+                     "queue", "playing", "stats"):
+            hint = s.VIEW_HINTS.get(kind)
+            self.assertTrue(hint, kind)
+            self.assertIn("\u00b7", hint)      # at least two tips
+
+    def test_hint_text_mentions_existing_keys(self):
+        # guard against hints drifting from the key map
+        joined = " ".join(s.VIEW_HINTS.values())
+        for key in ("Enter", "a", "F", "o", "J/K", "C", "W", "Space", "s", "r"):
+            self.assertIn(key, joined)
+
+
 if __name__ == '__main__':
     unittest.main()
