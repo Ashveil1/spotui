@@ -407,6 +407,24 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.app.queue[0]['id'], '1')
         self.assertFalse(self.app._auto_busy)
 
+    def test_play_records_source(self):
+        self.app.play([track(1)], 0, source='Liked Songs')
+        self.assertEqual(self.app.play_source, 'Liked Songs')
+        self.app.play([track(2)], 0)
+        self.assertIsNone(self.app.play_source)
+
+    def test_source_for_vk(self):
+        self.assertEqual(self.app._source_for_vk('history:'), 'Recently Played')
+        self.assertEqual(self.app._source_for_vk('liked:'), 'Liked Songs')
+        self.assertEqual(self.app._source_for_vk('artist:Muse'), 'Muse')
+        self.assertIsNone(self.app._source_for_vk('queue:'))
+        self.app.query = 'daft punk'
+        self.assertEqual(self.app._source_for_vk('search:'),
+                         'Search "daft punk"')
+        self.app.store.playlists = [{'name': 'Gym', 'tracks': []}]
+        self.assertEqual(self.app._source_for_vk('playlist:0'), 'Gym')
+        self.assertEqual(self.app._source_for_vk('playlist:9'), 'Playlist')
+
     def test_autoplay_marks_added_songs(self):
         self.app.current = track(1)
         self.app.queue = [track(1)]
