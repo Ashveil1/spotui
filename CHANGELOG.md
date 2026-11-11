@@ -44,5 +44,25 @@ Fixes and hardening:
   time/date formatting (#35)
 - Test suite: fixed a race that made search tests flaky in CI (#40)
 
+Later the same day:
+
+Playback:
+- Autoplay: when the last queued song starts, similar songs are fetched and
+  appended so the music keeps going (`u` toggles, on by default) (#54)
+- Arrow-key seeks and volume changes show feedback toasts with the landing
+  position / new level (#55)
+- Click the playerbar time to count down instead of up; remembered across
+  restarts (#58)
+- Equalizer presets on `E` (off, bass boost, vocal, treble boost) through
+  mpv audio filters, with a chip in Now Playing (#59)
+
+Looks:
+- Playlist headers show a 2x2 mosaic of the first four covers (#56)
+- Now Playing has a clickable heart next to the title, and narrow terminals
+  get a "Next: ..." row (#57)
+- Resume where you left off: the session saves the playback position and
+  Home's Continue listening card resumes the song at that second (#53)
+- Narrow-terminal fixes for the playerbar and home shelves (#52)
+
 All changes above are covered by the offline test suite
-(`python3 -m unittest discover -s tests`), 126 tests at the time of writing.
+(`python3 -m unittest discover -s tests`), 156 tests at the time of writing.

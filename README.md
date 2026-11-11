@@ -82,7 +82,8 @@ SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in 
 | `R` | new "Made for you" picks | `T` | cycle color theme |
 | `i` | listening stats | `S` | shuffle mode |
 | `y` | recently played | `1`-`3` | play a daily mix (home) |
-| `o` | open artist | | |
+| `o` | open artist | `u` | autoplay on/off |
+| `E` | equalizer preset | | |
 | `?` | help | | |
 | `Backspace` | back | `q` | quit |
 
@@ -189,7 +190,9 @@ put. Non-finite numbers in a saved library are ignored.
 
 ## Session restore
 
-The queue and position are saved in the library file and restored paused on the next launch. Press space to resume.
+The queue and position are saved in the library file and restored on the next launch. The Home screen shows a **Continue listening** card with where you stopped ("left off at 1:14") - click it to resume the song at that exact position.
+
+When the last queued song starts, **autoplay** quietly lines up similar songs so the music never just stops (`u` toggles it, on by default). `E` cycles equalizer presets (off, bass boost, vocal, treble boost) through mpv's audio filters. Clicking the elapsed time in the playerbar switches it to a countdown. Playlist headers show a 2x2 mosaic of the first four covers.
 
 `F` (in Liked, playlists, history, queue) finds and jumps to the first song whose title or artist matches what you type; Enter keeps the selection.
 
