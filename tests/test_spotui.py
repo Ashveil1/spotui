@@ -1207,3 +1207,32 @@ class QJumpTests(unittest.TestCase):
                            "act": "qjump", "arg": 9}]
         self._mouse(5, 3, s.curses.BUTTON1_PRESSED)
         self.assertEqual(self.app.qpos, 0)
+
+
+class StatsMinutesTests(unittest.TestCase):
+    def _store(self):
+        st = s.Store.__new__(s.Store)     # bare store, no disk
+        st.liked = [{"id": "a", "title": "A", "artist": "X", "dur": 200},
+                    {"id": "b", "title": "B", "artist": "Y", "dur": 100}]
+        st.history = [{"id": "c", "title": "C", "artist": "Z", "dur": 60}]
+        st.playlists = []
+        return st
+
+    def test_sums_known_durations(self):
+        st = self._store()
+        st.plays = {"a": {"title": "A", "artist": "X", "n": 3},     # 600s
+                    "c": {"title": "C", "artist": "Z", "n": 2},     # 120s
+                    "zz": {"title": "?", "artist": "?", "n": 50}}   # no dur
+        # 720s = 12 min
+        self.assertEqual(s.stats_minutes(st), "12 min")
+
+    def test_hours_format(self):
+        st = self._store()
+        st.plays = {"a": {"title": "A", "artist": "X", "n": 18}}    # 60 min
+        self.assertEqual(s.stats_minutes(st), "1 hr 0 min")
+
+    def test_under_a_minute_is_empty(self):
+        st = self._store()
+        st.plays = {"b": {"title": "B", "artist": "Y", "n": 0}} or {}
+        st.plays = {}
+        self.assertEqual(s.stats_minutes(st), "")

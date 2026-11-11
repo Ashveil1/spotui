@@ -993,6 +993,24 @@ def daily_mixes(store, n=3):
     return mixes
 
 
+def stats_minutes(store):
+    """Rough listening time: play counts x duration, songs we know the
+    length of. Songs without a known duration are skipped, so this is a
+    floor - shown as 'about'."""
+    dur = {}
+    pools = [store.liked, store.history] + [pl["tracks"]
+                                            for pl in store.playlists]
+    for tracks in pools:
+        for t in tracks:
+            if t.get("id") and t.get("dur"):
+                dur.setdefault(t["id"], t["dur"])
+    sec = sum(p["n"] * dur.get(k, 0) for k, p in store.plays.items())
+    if sec < 60:
+        return ""
+    m = sec // 60
+    return f"{m // 60} hr {m % 60} min" if m >= 60 else f"{m} min"
+
+
 def stats_summary(plays, top=6):
     """(total plays, unique songs, top artists, top songs) from play counts."""
     total = sum(p["n"] for p in plays.values())
@@ -2262,7 +2280,11 @@ class UI:
             put(scr, y0 + 3, x0 + 2, "Play some songs and your top artists and "
                 "songs will show up here.", pal["faint"])
             return
-        put(scr, y0 + 1, x0 + 19, f"{total} plays  ·  {uniq} songs", pal["faint"])
+        head = f"{total} plays  \u00b7  {uniq} songs"
+        mins = stats_minutes(app.store)
+        if mins:
+            head += f"  \u00b7  about {mins} listened"
+        put(scr, y0 + 1, x0 + 19, head, pal["faint"])
         inner = W - x0 - 4
         half = inner >= 80
         colw = (inner - 4) // 2 if half else inner
