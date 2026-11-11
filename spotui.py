@@ -296,6 +296,7 @@ class Store:
         self.volume = 70
         self.plays = {}
         self.shuffle_mode = "spread"
+        self.autoplay = True
         self.sort_mode = "default"
         self.theme = THEME_NAMES[0]
         self._load()
@@ -378,6 +379,8 @@ class Store:
                                          n=v["n"])
         if d.get("shuffle_mode") in SHUFFLE_MODES:
             self.shuffle_mode = d["shuffle_mode"]
+        if isinstance(d.get("autoplay"), bool):
+            self.autoplay = d["autoplay"]
         if d.get("sort_mode") in SORT_MODES:
             self.sort_mode = d["sort_mode"]
         if d.get("theme") in THEMES:
@@ -405,7 +408,7 @@ class Store:
                         "similar": self.similar, "last_search": self.last_search,
                         "volume": self.volume,
                         "session": self.session, "theme": self.theme,
-                        "plays": self.plays, "shuffle_mode": self.shuffle_mode,
+                        "plays": self.plays, "shuffle_mode": self.shuffle_mode, "autoplay": self.autoplay,
                         "sort_mode": self.sort_mode,
                     }, f, ensure_ascii=False, indent=1)
                     f.flush()
@@ -1078,6 +1081,7 @@ class App:
         self._sim_busy = False
         self._sim_at = 0.0
         self._radio_busy = False
+        self._auto_busy = False
         self.quit = False
         self.show_help = False
         self.help_page = 0
@@ -1304,6 +1308,7 @@ class App:
         self.loading = True
         threading.Thread(target=self._resolve_load, args=(t, token),
                          daemon=True).start()
+        self._maybe_autoplay()
 
     def _note_history(self, t):
         """Remember what was actually played (newest first, capped)."""
@@ -1375,6 +1380,70 @@ class App:
                 self.toast_now("Radio on — more from "
                                f"{track.get('artist') or 'this artist'}")
             self._radio_busy = False
+
+    # --------------------------------------------------------- autoplay --
+    def toggle_autoplay(self):
+        self.store.autoplay = not self.store.autoplay
+        self.store.save()
+        self.toast_now("Autoplay " + ("on — the music continues after the queue"
+                       if self.store.autoplay else "off"))
+
+    def _maybe_autoplay(self):
+        """Prefetch similar songs when the last queued song starts, so the
+        music keeps going instead of stopping at the end of the queue."""
+        if not self.store.autoplay or self._auto_busy or self._radio_busy:
+            return
+        if not self.current or self.qpos < len(self.queue) - 1:
+            return
+        self._auto_busy = True
+        threading.Thread(target=self._autoplay_worker,
+                         args=(dict(self.current), self.queue_revision,
+                               self.load_token), daemon=True).start()
+
+    def _autoplay_worker(self, track, revision, token):
+        import random
+        items = []
+        try:
+            items = _ytdl_playlist(_radio_url(track["id"]), n=60)
+        except Exception:
+            items = []
+        items = [t for t in items
+                 if t.get("id") != track.get("id") and _real_song(t)]
+        random.shuffle(items)
+        picks, per_artist = [], {}
+        for t in items:
+            a = (t.get("artist") or "").lower()
+            if per_artist.get(a, 0) >= 2:
+                continue
+            per_artist[a] = per_artist.get(a, 0) + 1
+            picks.append(t)
+            if len(picks) >= 25:
+                break
+        advance = False
+        with self.lock:
+            try:
+                if not (picks and not self.quit
+                        and revision == self.queue_revision
+                        and token == self.load_token and self.current
+                        and self.current.get("id") == track.get("id")):
+                    return
+                have = {t.get("id") for t in self.queue}
+                picks = [t for t in picks if t.get("id") not in have]
+                if not picks:
+                    return
+                was_end = self.qpos == len(self.queue) - 1
+                self.queue.extend(picks)
+                if self.shuffle:
+                    self.orig_queue = None
+                    self._apply_shuffle(True)
+                self.toast_now("Autoplay — more from "
+                               f"{track.get('artist') or 'this artist'}")
+                # the song may already have ended while we fetched
+                advance = was_end and self.mpv.state["idle"]
+            finally:
+                self._auto_busy = False
+        if advance:
+            self.next(auto=True)
 
     # ------------------------------------------------- made-for-you shelf --
     def _similar_seed(self):
@@ -3180,7 +3249,7 @@ class UI:
             ("g / G", "top / bottom of a list"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -3528,6 +3597,8 @@ def handle_key(app, k):
             app.toast_now("Finding new picks…")
         elif k == "r":
             app.cycle_repeat()
+        elif k == "u":
+            app.toggle_autoplay()
         elif k == "f":
             if kind == "playing":
                 app.back()
