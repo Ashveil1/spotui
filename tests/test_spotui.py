@@ -655,5 +655,69 @@ class HistoryViewTests(unittest.TestCase):
         self.assertEqual(self.app.stack[-1], ("history", None))
 
 
+class LiveSearchTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json'),
+                            ('HAVE_YTDL', True)]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.refresh_similar = Mock()
+        self.app.push("search")
+        self.app.mode = "search"
+        self.app.query = "hello"
+
+    def test_fires_after_debounce_without_recording(self):
+        self.app._edit_t = s.time.time() - 1.0
+        self.app.tick()
+        self.assertTrue(self.app.searching)
+        self.assertEqual(self.app.live_q, "hello")
+        self.assertEqual(self.app.store.recent, [])       # live != submitted
+        self.app.refresh_similar.assert_not_called()
+
+    def test_waits_for_debounce(self):
+        self.app._edit_t = s.time.time()
+        self.app.tick()
+        self.assertFalse(self.app.searching)
+        self.assertEqual(self.app.live_q, "")
+
+    def test_skips_query_already_showing(self):
+        self.app.live_q = "hello"
+        self.app._edit_t = s.time.time() - 1.0
+        self.app.tick()
+        self.assertFalse(self.app.searching)
+
+    def test_no_live_search_outside_search_mode(self):
+        self.app.mode = "normal"
+        self.app._edit_t = s.time.time() - 1.0
+        self.app.tick()
+        self.assertFalse(self.app.searching)
+
+    def test_submit_records_without_second_search(self):
+        self.app.live_q = "hello"
+        s.handle_key(self.app, "\n")
+        self.assertEqual(self.app.mode, "normal")
+        self.assertEqual(self.app.store.recent[0], "hello")
+        self.assertFalse(self.app.searching)             # results already live
+        self.app.refresh_similar.assert_called_once()
+
+    def test_submit_new_query_searches_and_records(self):
+        s.handle_key(self.app, "\n")
+        self.assertEqual(self.app.mode, "normal")
+        self.assertTrue(self.app.searching)
+        self.assertEqual(self.app.store.recent[0], "hello")
+
+    def test_keystrokes_bump_edit_time(self):
+        self.app._edit_t = 0.0
+        s.handle_key(self.app, "!")
+        self.assertGreater(self.app._edit_t, 0.0)
+        self.assertEqual(self.app.query, "hello!")
+
+
 if __name__ == '__main__':
     unittest.main()
