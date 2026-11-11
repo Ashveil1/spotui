@@ -2237,6 +2237,12 @@ class App:
     def _norm_artist(name):
         return unicodedata.normalize("NFKC", name or "").casefold().strip()
 
+    def artist_plays(self, name):
+        """Total local play count for one artist (0 when never played)."""
+        norm = self._norm_artist(name)
+        return sum(p["n"] for p in self.store.plays.values()
+                   if self._norm_artist(p.get("artist")) == norm)
+
     def artist_tracks(self, name):
         """Every song by this artist across the library, deduped, liked first."""
         norm = self._norm_artist(name)
@@ -3021,7 +3027,12 @@ class UI:
                     break
                 put(scr, ay, x0 + 2, f"{i + 1}", pal["faint"])
                 put(scr, ay, x0 + 6, wcut(a, mw - 20), pal["text"])
-                put(scr, ay, x0 + 8 + min(dlen(a), mw - 20), "Artist",
+                n_songs = len(app.artist_tracks(a))
+                n_plays = app.artist_plays(a)
+                detail = (f"{n_songs} songs \u00b7 {n_plays} plays"
+                          if n_songs and n_plays else
+                          f"{n_songs} songs" if n_songs else "Artist")
+                put(scr, ay, x0 + 8 + min(dlen(a), mw - 20), detail,
                     pal["faint"])
                 self.hit(x0 + 2, ay, mw - 4, 1, "artist", a)
             return
@@ -3183,6 +3194,9 @@ class UI:
             sub = (fmt_total(tracks) + " in your library"
                    if app.artist_tracks(name) else
                    fmt_total(tracks) + " - from YouTube")
+            nplays = app.artist_plays(name)
+            if nplays:
+                sub += f" \u00b7 {nplays} plays"
         elif name in app._artist_busy:
             sub = "Searching YouTube..."
         else:
