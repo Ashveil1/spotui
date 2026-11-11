@@ -80,6 +80,7 @@ SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in 
 | `R` | new "Made for you" picks | `T` | cycle color theme |
 | `i` | listening stats | `S` | shuffle mode |
 | `y` | recently played | `1`-`3` | play a daily mix (home) |
+| `o` | open artist | | |
 | `?` | help | | |
 | `Backspace` | back | `q` | quit |
 

@@ -1059,6 +1059,8 @@ class App:
             return self.queue
         if kind == "history":
             return self.store.history
+        if kind == "artist":
+            return self.artist_tracks(arg or "")
         if kind == "similar":
             return (self.store.similar or {}).get("items") or []
         return []
@@ -1448,7 +1450,7 @@ class App:
             self.play(tracks, idx)
             # a search pick keeps the music going with the same artist /
             # channel instead of walking down the result list
-            if vk.split(":")[0] in ("search", "similar", "history"):
+            if vk.split(":")[0] in ("search", "similar", "history", "artist"):
                 self._start_radio(tracks[idx])
 
     def snapshot_session(self):
@@ -1839,6 +1841,24 @@ class App:
         idx = self.sel_row()
         return tracks[idx] if 0 <= idx < len(tracks) else None
 
+    @staticmethod
+    def _norm_artist(name):
+        return unicodedata.normalize("NFKC", name or "").casefold().strip()
+
+    def artist_tracks(self, name):
+        """Every song by this artist across the library, deduped, liked first."""
+        norm = self._norm_artist(name)
+        seen, out = set(), []
+        sources = [self.store.liked, self.store.history, self.queue]
+        sources += [pl["tracks"] for pl in self.store.playlists]
+        for src in sources:
+            for t in src:
+                if self._norm_artist(t.get("artist")) == norm \
+                        and t["id"] not in seen:
+                    seen.add(t["id"])
+                    out.append(t)
+        return out
+
 
 # ---------------------------------------------------------------- drawing --
 def put(scr, y, x, s, pair, attr=0):
@@ -2089,6 +2109,8 @@ class UI:
             self.v_search(y0, y1, x0, W)
         elif kind in ("liked", "playlist", "history"):
             self.v_collection(y0, y1, x0, W, kind, arg)
+        elif kind == "artist":
+            self.v_artist(y0, y1, x0, W)
         elif kind == "queue":
             self.v_queue(y0, y1, x0, W)
         elif kind == "playing":
@@ -2578,6 +2600,42 @@ class UI:
             put(scr, ly + 2, x0 + 5,
                 "Songs you play will show up here.", pal["faint"])
 
+    def v_artist(self, y0, y1, x0, W):
+        app, pal = self.app, self.pal
+        scr = self.scr
+        _, name = app.stack[-1]
+        name = name or ""
+        tracks = app.view_tracks()
+        vk = app.key()
+        cy = y0 + 1
+        fi = art_fam(name)
+        band = ["g{0}1", "g{0}1", "g{0}2", "g{0}3"]
+        for j, nm in enumerate(band):
+            fill(scr, cy + j, x0, W - x0, pal[nm.format(fi)])
+        draw_art(scr, cy, x0 + 2, 10, 4, name, pal, icon=IC_NOTE,
+                 art=app.cover_for(tracks[0]["id"] if tracks else None, 10, 4))
+        hx = x0 + 15
+        put(scr, cy, hx, "ARTIST", pal[f"g{fi}1"], curses.A_BOLD)
+        put(scr, cy + 1, hx, wcut(name.upper() or "UNKNOWN", W - hx - 4),
+            pal[f"g{fi}1"], curses.A_BOLD)
+        sub = (fmt_total(tracks) + " in your library") if tracks \
+            else "Nothing in your library yet"
+        put(scr, cy + 2, hx, sub, pal[f"g{fi}d"])
+        by = cy + 4
+        put(scr, by, x0 + 3, f" {IC_PLAY} ", pal["btn"], curses.A_BOLD)
+        self.hit(x0 + 2, by - 1 if by else by, 5, 2, "playall", (vk, tracks))
+        put(scr, by, x0 + 9, IC_SHUF,
+            pal["green"] if app.shuffle else pal["dim"], curses.A_BOLD)
+        self.hit(x0 + 8, by - 1, 3, 2, "shuffle")
+        ly = by + 2
+        self.list_header(ly, x0 + 2, W - x0 - 4, show_date=True)
+        self.track_list(ly + 1, y1, x0 + 2, W - x0 - 4, tracks, vk,
+                        show_date=True)
+        if not tracks:
+            put(scr, ly + 2, x0 + 5,
+                f"Press Enter to search YouTube for {wcut(name, 30)}",
+                pal["faint"])
+
     def v_queue(self, y0, y1, x0, W):
         app, pal = self.app, self.pal
         scr = self.scr
@@ -2695,6 +2753,8 @@ class UI:
             cp(pal["dim"]))
 
         self.hit(x0, y, w, 1, "row", (vk, real_idx, False))
+        if chan_w and t.get("artist"):
+            self.hit(cx, y, chan_w, 1, "artist", t["artist"])
 
     def track_list(self, y0, y1, x0, w, tracks, vk, show_date):
         app, pal = self.app, self.pal
@@ -2855,7 +2915,7 @@ class UI:
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("y", "recently played"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -3111,7 +3171,8 @@ def handle_key(app, k):
             app.mode = "search"
         elif k == "?":
             app.show_help = True
-        elif k == "F" and kind in ("liked", "playlist", "history", "queue", "similar"):
+        elif k == "F" and kind in ("liked", "playlist", "history", "queue",
+                                   "similar", "artist"):
             app.find_buf = ""
             app.mode = "find"
             app.toast_now("Find: type to jump, Enter to stay")
@@ -3135,6 +3196,10 @@ def handle_key(app, k):
             elif kind == "search":
                 if app.results:
                     app.play_row("search:", app.sel_row())
+            elif kind == "artist" and not app.view_tracks(vk):
+                app.mode = "search"
+                app.query = arg or ""
+                app.do_search(app.query)
             else:
                 app.play_row(vk, app.sel_row())
         elif k == "n":
@@ -3167,6 +3232,12 @@ def handle_key(app, k):
             app.play_mix(int(k) - 1)
         elif k == "i":
             app.push("stats")
+        elif k == "o":
+            t = app.track_under() or app.current
+            if t and (t.get("artist") or "").strip():
+                app.push("artist", t["artist"].strip())
+            else:
+                app.toast_now("No artist for this song")
         elif k == "y":
             app.push("history")
         elif k == "t":
@@ -3222,6 +3293,10 @@ def handle_key(app, k):
     elif k in (curses.KEY_ENTER, 10, 13):
         if kind == "home":
             handle_key(app, "\n")
+        elif kind == "artist" and not app.view_tracks(vk):
+            app.mode = "search"
+            app.query = arg or ""
+            app.do_search(app.query)
         else:
             app.play_row(vk, app.sel_row())
     elif k in (curses.KEY_BACKSPACE, 127, 8, 263):
@@ -3306,6 +3381,8 @@ def handle_mouse(app):
             app.push(arg)
         elif act == "libitem":
             app.push(arg[0], arg[1])
+        elif act == "artist":
+            app.push("artist", arg)
         elif act == "create":
             app.mode = "name"
             app.name_buf = ""
