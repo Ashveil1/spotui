@@ -3242,8 +3242,10 @@ class UI:
             if left:
                 label += f", {left}"
             put(scr, y0 + 1, x0 + 9, label, pal["faint"])
-            if any(t.get("auto") for t in app.queue):
-                legend = f"  ·  {IC_AUTO} autoplay"
+            n_auto = sum(1 for t in app.queue[max(0, app.qpos):]
+                         if t.get("auto"))
+            if n_auto:
+                legend = f"  ·  {IC_AUTO} {n_auto} autoplayed"
                 lx = x0 + 9 + dlen(label)
                 put(scr, y0 + 1, lx, legend, pal["faint"])
                 self.hit(lx, y0 + 1, dlen(legend), 1, "dropauto")
