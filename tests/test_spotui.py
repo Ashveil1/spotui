@@ -608,6 +608,34 @@ class AppTests(unittest.TestCase):
                                   dict(track(2), added=float('inf'))]
         self.assertEqual(s.stats_week(self.app.store), 0)
 
+    def test_stats_days_buckets_by_local_day(self):
+        import time as _t
+        lt = _t.localtime()
+        today0 = _t.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday,
+                            0, 0, 0, 0, 0, -1))
+        self.app.store.history = [
+            dict(track(1), added=today0 + 3600),              # today
+            dict(track(2), added=today0 + 7200),              # today
+            dict(track(3), added=today0 - 3600),              # yesterday
+            dict(track(4), added=today0 - 6 * 86400 + 60),    # 6 days ago
+            dict(track(5), added=today0 - 9 * 86400),         # outside
+            dict(track(6), added=None),
+        ]
+        days = s.stats_days(self.app.store)
+        self.assertEqual(len(days), 7)
+        self.assertEqual([n for _, n in days], [1, 0, 0, 0, 0, 1, 2])
+        labels = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+        self.assertEqual([lab for lab, _ in days],
+                         [labels[_t.localtime(today0 - (6 - i) * 86400).tm_wday]
+                          for i in range(7)])
+
+    def test_stats_days_tolerates_bad_timestamps(self):
+        self.app.store.history = [dict(track(1), added='not-a-number'),
+                                  dict(track(2), added=float('nan')),
+                                  dict(track(3), added=float('inf'))]
+        self.assertEqual([n for _, n in s.stats_days(self.app.store)],
+                         [0] * 7)
+
     def test_seek_toast_shows_target_position(self):
         self.app.mpv.state.update(pos=74.0, dur=200.0)
         self.app.mpv.seek_rel = Mock()

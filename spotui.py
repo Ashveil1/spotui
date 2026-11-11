@@ -1047,6 +1047,34 @@ def stats_week(store):
         return 0
 
 
+def stats_days(store):
+    """Plays per local day for the last 7 days, oldest first, today last.
+
+    Counted from the (capped) history list, like stats_week(). Entries with
+    missing or non-finite timestamps are ignored; future timestamps and
+    anything older than 6 days fall outside the window.
+    """
+    lt = time.localtime()
+    today0 = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday,
+                          0, 0, 0, 0, 0, -1))
+    counts = [0] * 7
+    for h in store.history:
+        if not isinstance(h, dict):
+            continue
+        try:
+            ts = float(h.get("added") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(ts):
+            continue
+        idx = int((ts - today0) // 86400)
+        if -6 <= idx <= 0:
+            counts[6 + idx] += 1
+    labels = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+    return [(labels[time.localtime(today0 - (6 - i) * 86400).tm_wday],
+             counts[i]) for i in range(7)]
+
+
 def stats_summary(plays, top=6):
     """(total plays, unique songs, top artists, top songs) from play counts."""
     total = sum(p["n"] for p in plays.values())
@@ -2495,6 +2523,21 @@ class UI:
         inner = W - x0 - 4
         half = inner >= 80
         colw = (inner - 4) // 2 if half else inner
+        by = y0 + 3
+        days = stats_days(app.store)
+        week_n = sum(n for _, n in days)
+        if week_n and by + 7 <= y1 - 1:
+            put(scr, by, x0 + 2, "LAST 7 DAYS", pal["dim"], curses.A_BOLD)
+            put(scr, by, x0 + 15, f"{week_n} plays", pal["faint"])
+            bh, top_n = 3, max(n for _, n in days)
+            for i, (lab, n) in enumerate(days):
+                x = x0 + 3 + i * 3
+                filled = round(n / top_n * bh) if top_n else 0
+                col = pal["green"] if i == 6 else pal["sdim"]
+                for r in range(bh - filled, bh):
+                    put(scr, by + 2 + r, x, "\u2588", col)
+                put(scr, by + 2 + bh, x, lab, pal["faint"])
+            by += 7
         def block(y, x, w, title, rows):
             put(scr, y, x, title, pal["dim"], curses.A_BOLD)
             if not rows:
@@ -2504,7 +2547,7 @@ class UI:
             bar_w = max(4, w - label_w - 6)
             for i, r in enumerate(rows):
                 yy = y + 2 + i * 2
-                if yy >= y1 - 1:
+                if yy >= y1 - 3:   # keep the hint line and a blank row clear
                     break
                 n = r[-1]
                 put(scr, yy, x, f"{i + 1}", pal["faint"])
@@ -2514,11 +2557,11 @@ class UI:
                 put(scr, yy, x + label_w + filled + 1, str(n), pal["faint"])
                 if len(r) == 3:
                     put(scr, yy + 1, x + 3, wcut(r[1], label_w - 3), pal["faint"])
-        block(y0 + 3, x0 + 2, colw, "TOP ARTISTS", [(a, n) for a, n in ta])
+        block(by, x0 + 2, colw, "TOP ARTISTS", [(a, n) for a, n in ta])
         if half:
-            block(y0 + 3, x0 + 2 + colw + 4, colw, "TOP SONGS", ts)
+            block(by, x0 + 2 + colw + 4, colw, "TOP SONGS", ts)
         else:
-            gap = y0 + 3 + 2 + min(len(ta), 6) * 2 + 1
+            gap = by + 2 + min(len(ta), 6) * 2 + 1
             if gap + 4 < y1:
                 block(gap, x0 + 2, colw, "TOP SONGS", ts[:max(1, (y1 - gap - 3) // 2)])
         self.hint(y1 - 2, x0, "stats")
