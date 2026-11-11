@@ -445,6 +445,13 @@ class AppTests(unittest.TestCase):
         self.app.drop_autoplayed()
         self.assertEqual(self.app.toast[0], 'No autoplayed songs to drop')
 
+    def test_plays_for(self):
+        plays = {'1': dict(title='A', artist='X', n=3),
+                 '2': dict(title='B', artist='X', n=2)}
+        self.assertEqual(s.plays_for([track(1), track(2)], plays), 5)
+        self.assertEqual(s.plays_for([track(9)], plays), 0)
+        self.assertEqual(s.plays_for([], plays), 0)
+
     def test_artist_plays(self):
         self.app.store.plays = {
             '1': dict(title='A', artist='Luna Waves', n=3),
