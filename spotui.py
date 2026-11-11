@@ -3390,6 +3390,9 @@ def handle_mouse(app):
         _, mx, my, _, bstate = curses.getmouse()
     except curses.error:
         return
+    if os.environ.get("SPOTUI_DEBUG"):
+        open("/tmp/spotui-debug.log", "a").write(
+            f"mouse x={mx} y={my} bstate={bstate:#x}\n")
     modal = app.show_help or app.mode in ("name", "pick", "confirm_delete")
     if modal:
         app.drag_rect = None
@@ -3518,6 +3521,22 @@ def handle_mouse(app):
             handle_key(app, "\n")
         return
 
+def mouse_tracking(on):
+    """Ask the terminal for button-motion events (1002) in SGR format (1006).
+
+    ncurses on xterm-256color only enables click tracking (1000), so
+    seek/volume drags get no motion events at all without this. 1003
+    (any-motion) is avoided on purpose: some ncurses builds wedge on
+    SGR motion-no-button events.
+    """
+    try:
+        sys.stdout.write("\x1b[?1002h\x1b[?1006h" if on
+                         else "\x1b[?1002l\x1b[?1006l")
+        sys.stdout.flush()
+    except Exception:
+        pass
+
+
 # ------------------------------------------------------------------ main ---
 def run(scr):
     scr.keypad(True)
@@ -3536,6 +3555,7 @@ def run(scr):
             | curses.REPORT_MOUSE_POSITION)
     except curses.error:
         pass
+    mouse_tracking(True)
 
     def _resume(signum, frame):
         # Ctrl+Z → Ctrl+V resume: re-enter program mode and force repaint
@@ -3547,6 +3567,7 @@ def run(scr):
             scr.timeout(90)
             scr.clearok(True)
             scr.refresh()
+            mouse_tracking(True)
         except Exception:
             pass
 
@@ -3616,6 +3637,7 @@ def run(scr):
     finally:
         app.quit = True
         app.load_token += 1
+        mouse_tracking(False)
         try:
             app.pal.restore()
         except Exception:

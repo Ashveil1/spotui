@@ -665,8 +665,13 @@ class LiveSearchTests(unittest.TestCase):
             p = patch.object(s, name, value)
             p.start()
             self.addCleanup(p.stop)
-        with patch.object(s.threading.Thread, 'start'):
-            self.app = s.App()
+        # keep Thread.start patched for the whole test: do_search spawns a
+        # real worker otherwise, and it flips searching=False before the
+        # assertions read it (raced in CI)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
         self.app.refresh_similar = Mock()
         self.app.push("search")
         self.app.mode = "search"
@@ -747,8 +752,10 @@ class ArtistViewTests(unittest.TestCase):
             p = patch.object(s, name, value)
             p.start()
             self.addCleanup(p.stop)
-        with patch.object(s.threading.Thread, 'start'):
-            self.app = s.App()
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
         self.app.refresh_similar = Mock()
 
     def _lib(self):
@@ -847,6 +854,47 @@ class ViewHintTests(unittest.TestCase):
         joined = " ".join(s.VIEW_HINTS.values())
         for key in ("Enter", "a", "F", "o", "J/K", "C", "W", "Space", "s", "r"):
             self.assertIn(key, joined)
+
+
+class MouseDragTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.refresh_similar = Mock()
+
+    def test_drag_motion_updates_volume(self):
+        self.app.drag_rect = {"act": "vol", "arg": (0, 10)}
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, 4, 5, 0, s.curses.REPORT_MOUSE_POSITION)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mpv.state["vol"], 44)  # 4/9 of the slider
+
+    def test_release_ends_drag(self):
+        self.app.drag_rect = {"act": "vol", "arg": (0, 10)}
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, 9, 5, 0, s.curses.BUTTON1_RELEASED
+                                        | s.curses.REPORT_MOUSE_POSITION)):
+            s.handle_mouse(self.app)
+        self.assertIsNone(self.app.drag_rect)
+        self.assertEqual(self.app.mpv.state["vol"], 100)
+
+    def test_mouse_tracking_sequence(self):
+        import io
+        with patch.object(s.sys, "stdout", io.StringIO()) as buf:
+            s.mouse_tracking(True)
+            s.mouse_tracking(False)
+        out = buf.getvalue()
+        self.assertIn("\x1b[?1002h", out)
+        self.assertIn("\x1b[?1006h", out)
+        self.assertNotIn("1003", out)          # 1003 wedges some ncurses builds
+        self.assertIn("\x1b[?1002l", out)
 
 
 if __name__ == '__main__':
