@@ -436,6 +436,40 @@ class AppTests(unittest.TestCase):
             self.app._autoplay_worker(track(1), rev, tok)
         self.app.next.assert_called_once_with(auto=True)
 
+    def test_playlist_header_draws_cover_mosaic(self):
+        from collections import defaultdict
+        self.app.store.playlists = [dict(name='Mix', tracks=[track(i) for i in range(5)])]
+        self.app.push('playlist', 0)
+        self.app.pal = defaultdict(int)
+        self.app.cover_for = Mock(return_value=None)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        ui.list_header = Mock()
+        ui.track_list = Mock()
+        ui.hint = Mock()
+        with patch.object(s, 'draw_art') as da:
+            ui.v_collection(0, 30, 24, 120, 'playlist', 0)
+        seeds = [c.args[5] for c in da.call_args_list]
+        self.assertEqual(seeds, ['0', '1', '2', '3'])
+
+    def test_short_playlist_keeps_single_header_art(self):
+        from collections import defaultdict
+        self.app.store.playlists = [dict(name='Mix', tracks=[track(1), track(2)])]
+        self.app.push('playlist', 0)
+        self.app.pal = defaultdict(int)
+        self.app.cover_for = Mock(return_value=None)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        ui.list_header = Mock()
+        ui.track_list = Mock()
+        ui.hint = Mock()
+        with patch.object(s, 'draw_art') as da:
+            ui.v_collection(0, 30, 24, 120, 'playlist', 0)
+        self.assertEqual(len(da.call_args_list), 1)
+        self.assertEqual(da.call_args_list[0].args[5], 'Mix')
+
     def test_seek_toast_shows_target_position(self):
         self.app.mpv.state.update(pos=74.0, dur=200.0)
         self.app.mpv.seek_rel = Mock()
