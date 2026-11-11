@@ -138,6 +138,17 @@ def fmt_added(v):
     return str(v) if v else "—"
 
 
+def fmt_remaining(tracks):
+    """'N min left' / 'N hr M min left' for the queue's unplayed tail."""
+    tot = sum(t.get("dur") or 0 for t in tracks)
+    if tot <= 0:
+        return ""
+    m = tot // 60
+    if m >= 60:
+        return f"{m // 60} hr {m % 60} min left"
+    return f"{m} min left"
+
+
 def fmt_total(tracks):
     n = len(tracks)
     tot = sum(t.get("dur") or 0 for t in tracks)
@@ -2677,8 +2688,11 @@ class UI:
         scr = self.scr
         put(scr, y0 + 1, x0 + 2, "Queue", pal["text"], curses.A_BOLD)
         if app.queue:
-            put(scr, y0 + 1, x0 + 9,
-                f"{len(app.queue)} songs", pal["faint"])
+            label = f"{len(app.queue)} songs"
+            left = fmt_remaining(app.queue[max(0, app.qpos):])
+            if left:
+                label += f", {left}"
+            put(scr, y0 + 1, x0 + 9, label, pal["faint"])
         y = y0 + 3
         if app.current:
             put(scr, y, x0 + 2, "Now playing", pal["dim"], curses.A_BOLD)
