@@ -445,6 +445,15 @@ class AppTests(unittest.TestCase):
         self.app.drop_autoplayed()
         self.assertEqual(self.app.toast[0], 'No autoplayed songs to drop')
 
+    def test_remove_recent(self):
+        self.app.store.recent = ['alpha', 'beta', 'gamma']
+        self.app.remove_recent('beta')
+        self.assertEqual(self.app.store.recent, ['alpha', 'gamma'])
+        self.assertEqual(self.app.toast[0], 'Removed search: beta')
+        self.app.remove_recent('not-there')   # no toast, no crash
+        self.assertEqual(self.app.store.recent, ['alpha', 'gamma'])
+        self.assertEqual(self.app.toast[0], 'Removed search: beta')
+
     def test_autoplay_marks_added_songs(self):
         self.app.current = track(1)
         self.app.queue = [track(1)]
