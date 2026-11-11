@@ -141,7 +141,7 @@ def fmt_added(v):
 VIEW_HINTS = {
     "search": "Enter plays \u00b7 a queues \u00b7 o opens artist",
     "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
-    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 e renames \u00b7 X exports \u00b7 F finds",
+    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames",
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 W saves as playlist",
@@ -1682,6 +1682,19 @@ class App:
         self.sel["queue:"] = j
         return True
 
+    def move_in_playlist(self, pi, idx, d):
+        try:
+            tracks = self.store.playlists[pi]["tracks"]
+        except (IndexError, KeyError, TypeError):
+            return False
+        j = idx + d
+        if not (0 <= idx < len(tracks) and 0 <= j < len(tracks)):
+            return False
+        tracks[idx], tracks[j] = tracks[j], tracks[idx]
+        self.store.save()
+        self.sel[self.key()] = j
+        return True
+
     def export_playlist(self, pi):
         if not 0 <= pi < len(self.store.playlists):
             return None
@@ -3058,7 +3071,7 @@ class UI:
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("X", "export playlist JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -3363,6 +3376,11 @@ def handle_key(app, k):
             app.save_queue_as_playlist()
         elif k in ("J", "K") and kind == "queue":
             app.move_queue(app.sel_row(), 1 if k == "J" else -1)
+        elif k in ("J", "K") and kind == "playlist":
+            if app.store.sort_mode != "default":
+                app.toast_now("Turn sorting off (m) to reorder songs")
+            else:
+                app.move_in_playlist(arg, app.sel_row(), 1 if k == "J" else -1)
         elif k == "a":
             app.add_queue(app.track_under() or app.current)
         elif k == "l":
