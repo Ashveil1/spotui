@@ -1125,6 +1125,7 @@ class App:
         self.current = None
         self.pending_seek = None       # (load_token, seconds) to seek to
         self._resume_t = 0.0           # saved position from the session
+        self.play_source = None        # where the current queue was started
         self.restore_session()
         self.loading = False
         self.load_token = 0
@@ -1355,11 +1356,12 @@ class App:
                 self.cover_fail.add(uid)
 
     # ------------------------------------------------------------- play ---
-    def play(self, tracks, pos):
+    def play(self, tracks, pos, source=None):
         if not tracks or not 0 <= pos < len(tracks):
             return
         self.queue_revision += 1
         self.orig_queue = None
+        self.play_source = source
         self.queue = [dict(t) for t in tracks]
         self.qpos = pos
         if self.shuffle:
@@ -1682,6 +1684,27 @@ class App:
                 self.loading = False
                 self.toast_now(f"Couldn't play — {e}")
 
+    def _source_for_vk(self, vk):
+        """Human label for where a played list came from (now-playing line)."""
+        kind, _, arg = vk.partition(":")
+        if kind == "search":
+            q = self.query.strip()
+            return f'Search "{q}"' if q else "Search"
+        if kind == "similar":
+            return "Made for you"
+        if kind == "history":
+            return "Recently Played"
+        if kind == "liked":
+            return "Liked Songs"
+        if kind == "artist":
+            return arg or "Artist"
+        if kind == "playlist":
+            try:
+                return self.store.playlists[int(arg)]["name"]
+            except (ValueError, IndexError, TypeError):
+                return "Playlist"
+        return None
+
     def play_row(self, vk, idx):
         if vk.split(":", 1)[0] == "queue":
             if 0 <= idx < len(self.queue):
@@ -1690,7 +1713,7 @@ class App:
             return
         tracks = self.view_tracks(vk)
         if 0 <= idx < len(tracks):
-            self.play(tracks, idx)
+            self.play(tracks, idx, source=self._source_for_vk(vk))
             # a search pick keeps the music going with the same artist /
             # channel instead of walking down the result list
             if vk.split(":")[0] in ("search", "similar", "history", "artist"):
@@ -1765,7 +1788,7 @@ class App:
         m = mixes[i]
         recent = [t.get("id") for t in self.store.history[:10]]
         tracks = smart_shuffle(m["tracks"], "", recent)
-        self.play(tracks, 0)
+        self.play(tracks, 0, source=m["name"])
         self.toast_now(f"{m['name']}: {m['artist']} and more")
 
     def cycle_shuffle_mode(self):
@@ -2602,6 +2625,9 @@ class UI:
         tw = max(8, W - tx - 3)
         put(scr, ty, tx, wcut(track["title"], tw - 4), pal["text"], curses.A_BOLD)
         put(scr, ty + 1, tx, wcut(track["artist"], tw), pal["dim"])
+        src = "Autoplay" if track.get("auto") else app.play_source
+        if src:
+            put(scr, ty + 2, tx, wcut("From " + src, tw), pal["faint"])
         liked_now = track["id"] in app.liked_ids
         put(scr, ty, tx + tw - 2, IC_HEART if liked_now else IC_HEARTO,
             pal["green"] if liked_now else pal["sdim"], curses.A_BOLD)
@@ -3990,9 +4016,9 @@ def handle_mouse(app):
         elif act == "playall":
             vk2, tracks = arg
             if tracks:
-                app.play(tracks, 0)
+                app.play(tracks, 0, source=app._source_for_vk(vk2))
         elif act == "playtrack":
-            app.play([arg], 0)
+            app.play([arg], 0, source="Listening stats")
         elif act == "shuffle":
             app.toggle_shuffle()
         elif act == "repeat":
