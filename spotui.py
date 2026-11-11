@@ -146,7 +146,7 @@ VIEW_HINTS = {
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 W saves as playlist",
     "playing": "Space pause \u00b7 l like \u00b7 v queue \u00b7 S shuffle \u00b7 click Up Next to jump",
-    "stats": "Backspace back \u00b7 ? for all shortcuts",
+    "stats": "Click a top artist to open it \u00b7 a top song plays \u00b7 Backspace back",
 }
 
 
@@ -1082,7 +1082,8 @@ def stats_summary(plays, top=6):
     for p in plays.values():
         artists[p["artist"]] = artists.get(p["artist"], 0) + p["n"]
     ta = sorted(artists.items(), key=lambda kv: (-kv[1], kv[0]))[:top]
-    ts = sorted(((p["title"], p["artist"], p["n"]) for p in plays.values()),
+    ts = sorted(((p["title"], p["artist"], p["n"], vid)
+                 for vid, p in plays.items()),
                 key=lambda r: (-r[2], r[0]))[:top]
     return total, len(plays), ta, ts
 
@@ -2538,32 +2539,41 @@ class UI:
                     put(scr, by + 2 + r, x, "\u2588", col)
                 put(scr, by + 2 + bh, x, lab, pal["faint"])
             by += 7
+        # rows are (label, subtitle-or-None, count, click action-or-None)
         def block(y, x, w, title, rows):
             put(scr, y, x, title, pal["dim"], curses.A_BOLD)
             if not rows:
                 return
-            top = max(r[-1] for r in rows)
+            top = max(r[2] for r in rows)
             label_w = max(10, min(24, w // 2))
             bar_w = max(4, w - label_w - 6)
-            for i, r in enumerate(rows):
+            for i, (label, sub, n, act) in enumerate(rows):
                 yy = y + 2 + i * 2
                 if yy >= y1 - 3:   # keep the hint line and a blank row clear
                     break
-                n = r[-1]
                 put(scr, yy, x, f"{i + 1}", pal["faint"])
-                put(scr, yy, x + 3, wcut(r[0], label_w - 3), pal["text"])
+                put(scr, yy, x + 3, wcut(label, label_w - 3), pal["text"])
                 filled = max(1, round(n / top * bar_w))
                 put(scr, yy, x + label_w, "█" * filled, pal["green"])
                 put(scr, yy, x + label_w + filled + 1, str(n), pal["faint"])
-                if len(r) == 3:
-                    put(scr, yy + 1, x + 3, wcut(r[1], label_w - 3), pal["faint"])
-        block(by, x0 + 2, colw, "TOP ARTISTS", [(a, n) for a, n in ta])
+                if sub:
+                    put(scr, yy + 1, x + 3, wcut(sub, label_w - 3), pal["faint"])
+                if act:
+                    self.hit(x, yy, w, 2 if sub else 1, act[0], act[1])
+        song_rows = [(t, a, n, ("playtrack",
+                                {"id": vid, "title": t, "artist": a,
+                                 "url": f"https://www.youtube.com/watch?v={vid}",
+                                 "dur": None}))
+                     for t, a, n, vid in ts]
+        block(by, x0 + 2, colw, "TOP ARTISTS",
+              [(a, None, n, ("artist", a)) for a, n in ta])
         if half:
-            block(by, x0 + 2 + colw + 4, colw, "TOP SONGS", ts)
+            block(by, x0 + 2 + colw + 4, colw, "TOP SONGS", song_rows)
         else:
             gap = by + 2 + min(len(ta), 6) * 2 + 1
             if gap + 4 < y1:
-                block(gap, x0 + 2, colw, "TOP SONGS", ts[:max(1, (y1 - gap - 3) // 2)])
+                block(gap, x0 + 2, colw, "TOP SONGS",
+                      song_rows[:max(1, (y1 - gap - 3) // 2)])
         self.hint(y1 - 2, x0, "stats")
 
     def v_playing(self, y0, y1, x0, W):
@@ -3965,6 +3975,8 @@ def handle_mouse(app):
             vk2, tracks = arg
             if tracks:
                 app.play(tracks, 0)
+        elif act == "playtrack":
+            app.play([arg], 0)
         elif act == "shuffle":
             app.toggle_shuffle()
         elif act == "repeat":
