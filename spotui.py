@@ -119,15 +119,22 @@ def fmt_t(sec):
         return "–:––"
     try:
         sec = int(sec)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return "–:––"
     return f"{sec // 60}:{sec % 60:02d}"
 
 
 def fmt_added(v):
     """Date cell for a track: liked stores 'YYYY-MM-DD', history an epoch."""
-    if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
-        return time.strftime("%Y-%m-%d", time.localtime(v))
+    if v is None or isinstance(v, bool):
+        return "—"
+    if isinstance(v, (int, float)):
+        if not math.isfinite(v) or v <= 0:
+            return "—"
+        try:
+            return time.strftime("%Y-%m-%d", time.localtime(v))
+        except (OverflowError, OSError, ValueError):
+            return "—"
     return str(v) if v else "—"
 
 

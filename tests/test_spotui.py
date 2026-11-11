@@ -719,5 +719,24 @@ class LiveSearchTests(unittest.TestCase):
         self.assertEqual(self.app.query, "hello!")
 
 
+class FuzzRegressionTests(unittest.TestCase):
+    """Crashes found by adversarial fuzzing of the format helpers."""
+
+    def test_fmt_t_survives_non_finite_and_huge(self):
+        dash = s.fmt_t(None)
+        self.assertEqual(s.fmt_t(float("inf")), dash)
+        self.assertEqual(s.fmt_t(float("nan")), dash)
+        self.assertTrue(s.fmt_t(-3))                     # no exception
+        self.assertTrue(s.fmt_t(10**18))                 # no exception
+
+    def test_fmt_added_survives_non_finite_and_huge(self):
+        self.assertEqual(s.fmt_added(float("inf")), "\u2014")
+        self.assertEqual(s.fmt_added(float("nan")), "\u2014")
+        self.assertEqual(s.fmt_added(10**18), "\u2014")
+        self.assertEqual(s.fmt_added(-5), "\u2014")
+        self.assertEqual(s.fmt_added(True), "\u2014")
+        self.assertEqual(s.fmt_added(""), "\u2014")
+
+
 if __name__ == '__main__':
     unittest.main()
