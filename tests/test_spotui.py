@@ -665,8 +665,13 @@ class LiveSearchTests(unittest.TestCase):
             p = patch.object(s, name, value)
             p.start()
             self.addCleanup(p.stop)
-        with patch.object(s.threading.Thread, 'start'):
-            self.app = s.App()
+        # keep Thread.start patched for the whole test: do_search spawns a
+        # real worker otherwise, and it flips searching=False before the
+        # assertions read it (raced in CI)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
         self.app.refresh_similar = Mock()
         self.app.push("search")
         self.app.mode = "search"
@@ -747,8 +752,10 @@ class ArtistViewTests(unittest.TestCase):
             p = patch.object(s, name, value)
             p.start()
             self.addCleanup(p.stop)
-        with patch.object(s.threading.Thread, 'start'):
-            self.app = s.App()
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
         self.app.refresh_similar = Mock()
 
     def _lib(self):
