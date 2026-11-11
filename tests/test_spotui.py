@@ -981,3 +981,66 @@ class SortTests(unittest.TestCase):
         self.app.queue = list(reversed(self.app.store.liked))
         self.assertEqual([t["id"] for t in self.app.view_tracks("queue:")],
                          ["c", "a", "b"])
+
+
+class QueueDragTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.refresh_similar = Mock()
+        self.app.queue = [{"id": str(i), "title": f"T{i}", "artist": "A",
+                           "dur": 60} for i in range(5)]
+        self.app.qpos = 0
+
+    @staticmethod
+    def _row(y, idx):
+        return {"x0": 0, "x1": 20, "y0": y, "y1": y + 1,
+                "act": "row", "arg": ("queue:", idx, False)}
+
+    def _mouse(self, x, y, bstate):
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, x, y, 0, bstate)):
+            s.handle_mouse(self.app)
+
+    def test_press_on_upcoming_row_starts_drag(self):
+        self.app.rects = [self._row(2, 2)]
+        self._mouse(5, 2, s.curses.BUTTON1_PRESSED)
+        self.assertEqual(self.app.drag_q, 2)
+
+    def test_press_on_now_playing_row_does_not_drag(self):
+        self.app.rects = [self._row(1, 0)]       # idx == qpos
+        self._mouse(5, 1, s.curses.BUTTON1_PRESSED)
+        self.assertIsNone(self.app.drag_q)
+
+    def test_motion_reorders_live(self):
+        self.app.drag_q = 2
+        self.app.rects = [self._row(4, 4)]
+        self._mouse(5, 4, s.curses.REPORT_MOUSE_POSITION)
+        self.assertEqual([t["id"] for t in self.app.queue],
+                         ["0", "1", "3", "4", "2"])
+        self.assertEqual(self.app.drag_q, 4)
+        # selection follows the dragged song
+        self.assertEqual(self.app.sel.get("queue:"), 4)
+
+    def test_motion_cannot_cross_now_playing(self):
+        self.app.drag_q = 2
+        self.app.rects = [self._row(1, 0)]
+        self._mouse(5, 1, s.curses.REPORT_MOUSE_POSITION)
+        self.assertEqual([t["id"] for t in self.app.queue][0], "0")
+        self.assertEqual(self.app.drag_q, 1)     # stopped right after qpos
+
+    def test_release_ends_queue_drag(self):
+        self.app.drag_q = 3
+        self.app.rects = []
+        self._mouse(5, 9, s.curses.BUTTON1_RELEASED
+                    | s.curses.REPORT_MOUSE_POSITION)
+        self.assertIsNone(self.app.drag_q)
