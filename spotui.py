@@ -2533,6 +2533,19 @@ class UI:
                    "Play something — we'll bring songs in the same style")
             put(scr, y0 + 1, x0 + 2, msg, pal["dim"])
             return y0 + 3
+        full = y0 + 5 < y1 - 2         # covers + title + artist all fit
+        if not full and not y0 + 4 < y1 - 2:
+            # tight space: compact rows instead of cover cards
+            w = W - x0 - 4
+            title_w = max(12, int(w * 0.62))
+            n = 0
+            for i, t in enumerate(items):
+                y = y0 + 1 + i
+                if y >= y1 - 2 or i >= 3:
+                    break
+                self.homerow(y, x0 + 2, w, t, i, title_w, vk="similar:")
+                n += 1
+            return y0 + 2 + n
         cw = 20
         per = max(1, (W - x0 - 4) // cw)
         for i, t in enumerate(items[:per]):
@@ -2540,9 +2553,11 @@ class UI:
             draw_art(scr, y0 + 1, x, 8, 3, t["id"], pal,
                      art=app.cover_for(t["id"], 8, 3))
             put(scr, y0 + 4, x, wcut(t["title"], cw - 2), pal["text"])
-            put(scr, y0 + 5, x, wcut(t["artist"], cw - 2), pal["dim"])
-            self.hit(x, y0 + 1, cw - 1, 5, "row", ("similar:", i, True))
-        return y0 + 7
+            if full:
+                put(scr, y0 + 5, x, wcut(t["artist"], cw - 2), pal["dim"])
+            self.hit(x, y0 + 1, cw - 1, 5 if full else 4,
+                     "row", ("similar:", i, True))
+        return y0 + (7 if full else 6)
 
     def _home_history(self, app, pal, scr, y0, y1, x0, W):
         """'Recently played' — the real play history (mouse = play)."""
@@ -3006,7 +3021,10 @@ class UI:
                 put(scr, y0 + 1, 2, eq_bars(app)[:3], pal[f"g{fi}1"],
                     curses.A_BOLD)
             put(scr, y0, 7, wcut(cur["title"], tw), pal["bside"], curses.A_BOLD)
-            put(scr, y0 + 1, 7, wcut(cur["artist"], tw), pal["bsdim"])
+            # the elapsed time starts at bx-5 == 7+tw; keep a 1-col gap so
+            # a long artist name never touches it on narrow terminals
+            put(scr, y0 + 1, 7, wcut(cur["artist"], max(4, tw - 1)),
+                pal["bsdim"])
             liked = cur["id"] in app.liked_ids
             put(scr, y0, hx, IC_HEART if liked else IC_HEARTO,
                 pal["bsgreen"] if liked else pal["bsdim"], curses.A_BOLD)
