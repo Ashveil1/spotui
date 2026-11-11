@@ -346,6 +346,12 @@ class Store:
         sess = d.get("session") if isinstance(d.get("session"), dict) else {}
         self.session = {"queue": self._tracks(sess.get("queue"))[:500]}
         try:
+            t = float(sess.get("t") or 0)
+            if math.isfinite(t) and t > 0:
+                self.session["t"] = t
+        except (ValueError, TypeError):
+            pass
+        try:
             self.session["pos"] = int(sess.get("pos", 0))
         except (ValueError, TypeError):
             self.session["pos"] = 0
@@ -1054,6 +1060,8 @@ class App:
         self.qpos = -1
         self.orig_queue = None
         self.current = None
+        self.pending_seek = None       # (load_token, seconds) to seek to
+        self._resume_t = 0.0           # saved position from the session
         self.restore_session()
         self.loading = False
         self.load_token = 0
@@ -1502,6 +1510,10 @@ class App:
                 if not self.mpv.load(url):
                     raise RuntimeError("mpv failed to start")
                 self.loading = False
+                ps = self.pending_seek
+                if ps and ps[0] == token:
+                    self.pending_seek = None
+                    self.mpv.seek_abs(ps[1])
                 self._note_history(track)
         except Exception as e:
             with self.lock:
@@ -1526,9 +1538,23 @@ class App:
 
     def snapshot_session(self):
         keep = ("id", "title", "artist", "dur", "url")
+        if self.current and not self.mpv.state["idle"]:
+            try:
+                pos_s = max(0.0, float(self.mpv.state["pos"]))
+            except (TypeError, ValueError):
+                pos_s = 0.0
+        else:
+            # nothing playing: keep the previous resume point
+            try:
+                pos_s = float((self.store.session or {}).get("t") or 0)
+                if not math.isfinite(pos_s) or pos_s < 0:
+                    pos_s = 0.0
+            except (TypeError, ValueError):
+                pos_s = 0.0
         self.store.session = {
             "queue": [{k: t.get(k) for k in keep} for t in self.queue[:500]],
-            "pos": self.qpos}
+            "pos": self.qpos,
+            "t": round(pos_s, 1)}
 
     def restore_session(self):
         q = self.store.session.get("queue") or []
@@ -1536,6 +1562,11 @@ class App:
         if q and 0 <= pos < len(q) and not self.queue:
             self.queue = [dict(t) for t in q]
             self.qpos = pos
+        try:
+            t = float(self.store.session.get("t") or 0)
+            self._resume_t = t if math.isfinite(t) and t >= 0 else 0.0
+        except (TypeError, ValueError, AttributeError):
+            self._resume_t = 0.0
             self.queue_revision += 1
 
     def toggle(self):
@@ -1940,6 +1971,27 @@ class App:
             self.searching = False
             self.sel["search:"] = 0
             self.off["search:"] = 0
+
+    def resume_session_or_play(self):
+        """Continue listening: resume the saved session where it stopped.
+
+        Only when nothing is playing and the saved session's current song
+        is the most recent history entry - otherwise play that entry fresh.
+        """
+        hist = self.store.history
+        if self.current or not hist:
+            if hist:
+                self.play_row("history:", 0)
+            return
+        q = self.queue
+        if q and 0 <= self.qpos < len(q) \
+                and q[self.qpos].get("id") == hist[0].get("id"):
+            t = self._resume_t
+            self._play_current()
+            if t > 5:
+                self.pending_seek = (self.load_token, t)
+            return
+        self.play_row("history:", 0)
 
     def track_under(self):
         tracks = self.view_tracks()
@@ -2439,10 +2491,16 @@ class UI:
         tw = max(8, bw - aw - 14)
         put(scr, y0 + 1, tx, "CONTINUE LISTENING", pal["pgreen"], curses.A_BOLD)
         put(scr, y0 + 2, tx, wcut(t["title"], tw), pal["pill"], curses.A_BOLD)
-        put(scr, y0 + 3, tx, wcut(t["artist"], tw), pal["pilldim"])
+        sub = t["artist"]
+        q = app.queue
+        if (not app.current and q and 0 <= app.qpos < len(q)
+                and q[app.qpos].get("id") == t.get("id")
+                and app._resume_t > 5):
+            sub += f"  \u00b7  left off at {fmt_t(app._resume_t)}"
+        put(scr, y0 + 3, tx, wcut(sub, tw), pal["pilldim"])
         bx = x0 + 2 + bw - 9
         put(scr, y0 + 2, bx, f"  {IC_PLAY}  ", pal["btn"], curses.A_BOLD)
-        self.hit(x0 + 2, y0, bw, ah, "row", ("history:", 0, True))
+        self.hit(x0 + 2, y0, bw, ah, "resume", None)
         return y0 + ah + 1
 
     def _home_tiles(self, app, pal, scr, y0, y1, x0, W):
@@ -3684,6 +3742,9 @@ def handle_mouse(app):
             app.push("playing")
         elif act == "queue":
             app.push("queue")
+        elif act == "resume":
+            if not blocked:
+                app.resume_session_or_play()
         elif act == "qjump":
             # click an UP NEXT row in Now Playing to jump straight to it
             if not blocked and 0 <= arg < len(app.queue) and arg != app.qpos:
