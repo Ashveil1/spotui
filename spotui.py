@@ -162,6 +162,12 @@ def fmt_remaining(tracks):
     return f"{m} min left"
 
 
+def plays_for(tracks, plays):
+    """Total local play count of a list of tracks (0 when never played)."""
+    return sum(plays.get(str(t.get("id")), {}).get("n", 0)
+               for t in tracks if isinstance(t, dict))
+
+
 def fmt_total(tracks):
     n = len(tracks)
     tot = sum(t.get("dur") or 0 for t in tracks)
@@ -3150,7 +3156,11 @@ class UI:
         put(scr, cy, hx, eyebrow, pal[f"g{fi}1"], curses.A_BOLD)
         put(scr, cy + 1, hx, wcut(pl["name"].upper(), W - hx - 4),
             pal[f"g{fi}1"], curses.A_BOLD)
-        put(scr, cy + 2, hx, fmt_total(tracks), pal[f"g{fi}d"])
+        sub = fmt_total(tracks)
+        nplays = plays_for(tracks, app.store.plays)
+        if nplays:
+            sub += f" \u00b7 {nplays} plays"
+        put(scr, cy + 2, hx, sub, pal[f"g{fi}d"])
 
         by = cy + 4
         put(scr, by, x0 + 3, f" {IC_PLAY} ", pal["btn"], curses.A_BOLD)
