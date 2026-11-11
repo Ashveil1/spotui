@@ -825,5 +825,14 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertEqual(len(self.app.search_artists("art")), 5)
 
 
+class QueueRemainingTests(unittest.TestCase):
+    def test_fmt_remaining(self):
+        self.assertEqual(s.fmt_remaining([]), "")
+        self.assertEqual(s.fmt_remaining([dict(dur=None)]), "")
+        self.assertEqual(s.fmt_remaining([dict(dur=90), dict(dur=90)]),
+                         "3 min left")
+        self.assertEqual(s.fmt_remaining([dict(dur=4000)]), "1 hr 6 min left")
+
+
 if __name__ == '__main__':
     unittest.main()
