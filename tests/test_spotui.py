@@ -541,6 +541,30 @@ class AppTests(unittest.TestCase):
             app2 = s.App()
         self.assertTrue(app2.store.time_left)
 
+    def test_eq_cycles_and_applies_filter(self):
+        self.app.mpv.cmd = Mock(return_value=True)
+        self.assertEqual(self.app.store.eq_preset, 'off')
+        self.app.cycle_eq()
+        self.assertEqual(self.app.store.eq_preset, 'bass')
+        self.app.mpv.cmd.assert_called_with(['set_property', 'af', s.EQ_FILTER['bass']])
+        self.assertIn('Bass', self.app.toast[0])
+        self.app.cycle_eq()
+        self.app.cycle_eq()
+        self.app.cycle_eq()
+        self.assertEqual(self.app.store.eq_preset, 'off')
+        self.app.mpv.cmd.assert_called_with(['set_property', 'af', ''])
+
+    def test_eq_preset_persists(self):
+        self.app.store.eq_preset = 'vocal'
+        self.app.store.save()
+        with patch.object(s.threading.Thread, 'start'):
+            app2 = s.App()
+        self.assertEqual(app2.store.eq_preset, 'vocal')
+
+    def test_E_key_cycles_equalizer(self):
+        s.handle_key(self.app, 'E')
+        self.assertEqual(self.app.store.eq_preset, 'bass')
+
     def test_seek_toast_shows_target_position(self):
         self.app.mpv.state.update(pos=74.0, dur=200.0)
         self.app.mpv.seek_rel = Mock()
