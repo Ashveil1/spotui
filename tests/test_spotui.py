@@ -425,6 +425,26 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.app._source_for_vk('playlist:0'), 'Gym')
         self.assertEqual(self.app._source_for_vk('playlist:9'), 'Playlist')
 
+    def test_drop_autoplayed(self):
+        self.app.queue = [track(1), dict(track(2), auto=True), track(3),
+                          dict(track(4), auto=True)]
+        self.app.qpos = 2
+        self.app.current = self.app.queue[2]
+        self.app.drop_autoplayed()
+        self.assertEqual([t['id'] for t in self.app.queue], ['1', '3'])
+        self.assertEqual(self.app.qpos, 1)
+        self.assertEqual(self.app.toast[0], 'Dropped 2 autoplayed songs')
+
+    def test_drop_autoplayed_keeps_the_playing_song(self):
+        self.app.queue = [dict(track(1), auto=True), dict(track(2), auto=True)]
+        self.app.qpos = 0
+        self.app.current = self.app.queue[0]
+        self.app.drop_autoplayed()
+        self.assertEqual([t['id'] for t in self.app.queue], ['1'])
+        self.assertEqual(self.app.qpos, 0)
+        self.app.drop_autoplayed()
+        self.assertEqual(self.app.toast[0], 'No autoplayed songs to drop')
+
     def test_autoplay_marks_added_songs(self):
         self.app.current = track(1)
         self.app.queue = [track(1)]
