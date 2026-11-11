@@ -565,6 +565,34 @@ class AppTests(unittest.TestCase):
         s.handle_key(self.app, 'E')
         self.assertEqual(self.app.store.eq_preset, 'bass')
 
+    def test_artist_fallback_fetches_for_unknown_artist(self):
+        with patch.object(s, 'HAVE_YTDL', True), \
+                patch.object(s.threading.Thread, 'start') as th:
+            self.app.push('artist', 'Newcomer')
+        th.assert_called_once()
+        self.assertIn('Newcomer', self.app._artist_busy)
+
+    def test_artist_fallback_skips_library_artists(self):
+        self.app.store.liked = [track(1)]
+        with patch.object(s, 'HAVE_YTDL', True), \
+                patch.object(s.threading.Thread, 'start') as th:
+            self.app.push('artist', 'Artist')
+        th.assert_not_called()
+
+    def test_artist_remote_results_fill_the_view(self):
+        self.app.push('artist', 'Newcomer')
+        with patch.object(s, 'ytdl_search', return_value=[track(7), track(8)]):
+            self.app._artist_remote_worker('Newcomer')
+        self.assertEqual([t['id'] for t in self.app.view_tracks()], ['7', '8'])
+        self.assertNotIn('Newcomer', self.app._artist_busy)
+
+    def test_artist_remote_failure_leaves_empty_view(self):
+        self.app.push('artist', 'Newcomer')
+        with patch.object(s, 'ytdl_search', side_effect=RuntimeError('x')):
+            self.app._artist_remote_worker('Newcomer')
+        self.assertEqual(self.app.view_tracks(), [])
+        self.assertNotIn('Newcomer', self.app._artist_busy)
+
     def test_seek_toast_shows_target_position(self):
         self.app.mpv.state.update(pos=74.0, dur=200.0)
         self.app.mpv.seek_rel = Mock()

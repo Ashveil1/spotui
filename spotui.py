@@ -1065,6 +1065,8 @@ class App:
         self.results = []
         self.searching = False
         self.search_token = 0
+        self._artist_remote = {}
+        self._artist_busy = set()
         self.find_buf = ""
         self.mode = "normal"          # normal | search | name | pick | find
         self.name_buf = ""
@@ -1133,6 +1135,34 @@ class App:
         if top != (kind, arg):
             self.stack.append((kind, arg))
             self.sel.setdefault(f"{kind}:{'' if arg is None else arg}", 0)
+            if kind == "artist":
+                self._maybe_artist_remote(arg)
+
+    def _maybe_artist_remote(self, name):
+        """Artist not in the library: fetch their YouTube songs in the
+        background so the artist page is never a dead end."""
+        if not name or not HAVE_YTDL or self.artist_tracks(name):
+            return
+        if name in self._artist_remote or name in self._artist_busy:
+            return
+        self._artist_busy.add(name)
+        threading.Thread(target=self._artist_remote_worker, args=(name,),
+                         daemon=True).start()
+
+    def _artist_remote_worker(self, name):
+        try:
+            res = [t for t in (ytdl_search(name) or []) if _real_song(t)]
+            mine = [t for t in res
+                    if self._norm_artist(t.get("artist"))
+                    == self._norm_artist(name)]
+            if mine:
+                res = mine
+            res = res[:25]
+        except Exception:
+            res = []
+        with self.lock:
+            self._artist_remote[name] = res
+            self._artist_busy.discard(name)
 
     def back(self):
         if os.environ.get("SPOTUI_DEBUG"):
@@ -1159,7 +1189,8 @@ class App:
         if kind == "history":
             return sort_tracks(self.store.history, self.store.sort_mode)
         if kind == "artist":
-            return self.artist_tracks(arg or "")
+            lib = self.artist_tracks(arg or "")
+            return lib or self._artist_remote.get(arg or "", [])
         if kind == "similar":
             return (self.store.similar or {}).get("items") or []
         return []
@@ -2980,8 +3011,14 @@ class UI:
         put(scr, cy, hx, "ARTIST", pal[f"g{fi}1"], curses.A_BOLD)
         put(scr, cy + 1, hx, wcut(name.upper() or "UNKNOWN", W - hx - 4),
             pal[f"g{fi}1"], curses.A_BOLD)
-        sub = (fmt_total(tracks) + " in your library") if tracks \
-            else "Nothing in your library yet"
+        if tracks:
+            sub = (fmt_total(tracks) + " in your library"
+                   if app.artist_tracks(name) else
+                   fmt_total(tracks) + " - from YouTube")
+        elif name in app._artist_busy:
+            sub = "Searching YouTube..."
+        else:
+            sub = "Nothing in your library yet"
         put(scr, cy + 2, hx, sub, pal[f"g{fi}d"])
         by = cy + 4
         put(scr, by, x0 + 3, f" {IC_PLAY} ", pal["btn"], curses.A_BOLD)
@@ -2994,9 +3031,14 @@ class UI:
         self.track_list(ly + 1, y1, x0 + 2, W - x0 - 4, tracks, vk,
                         show_date=True)
         if not tracks:
-            put(scr, ly + 2, x0 + 5,
-                f"Press Enter to search YouTube for {wcut(name, 30)}",
-                pal["faint"])
+            if name in app._artist_busy:
+                put(scr, ly + 2, x0 + 5,
+                    SPIN[(app.frame // 3) % len(SPIN)] + " Searching YouTube...",
+                    pal["dim"])
+            else:
+                put(scr, ly + 2, x0 + 5,
+                    f"No YouTube results for {wcut(name, 30)} either",
+                    pal["faint"])
 
     def v_queue(self, y0, y1, x0, W):
         app, pal = self.app, self.pal
