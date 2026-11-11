@@ -959,6 +959,8 @@ class App:
         self.sel = {}
         self.off = {}
         self.query = ""
+        self.live_q = ""             # query the live results already show
+        self._edit_t = 0.0           # last search-bar keystroke
         self.results = []
         self.searching = False
         self.search_token = 0
@@ -1543,6 +1545,7 @@ class App:
                        else "Sleep timer off")
 
     def tick(self):
+        self._tick_live_search()
         if self.store.error and self.store.error != self.last_store_error:
             self.toast_now(self.store.error)
         self.last_store_error = self.store.error
@@ -1750,18 +1753,11 @@ class App:
         self.pick_idx = 0
         self.mode = "pick"
 
-    def do_search(self, q):
+    def _record_search(self, q):
+        """Remember a submitted search and reseed the made-for-you shelf."""
         q = q.strip()
-        if not q or not HAVE_YTDL:
-            if not HAVE_YTDL:
-                self.toast_now("yt-dlp missing — run ./install.sh")
+        if not q:
             return
-        self.push("search")
-        self.search_token += 1
-        token = self.search_token
-        self.searching = True
-        threading.Thread(target=self._search_worker,
-                         args=(q, token), daemon=True).start()
         if q in self.store.recent:
             self.store.recent.remove(q)
         self.store.recent.insert(0, q)
@@ -1769,6 +1765,53 @@ class App:
         self.store.last_search = time.time()
         self.store.save()
         self.refresh_similar()
+
+    def do_search(self, q, record=True):
+        q = q.strip()
+        if not q or not HAVE_YTDL:
+            if not HAVE_YTDL:
+                self.toast_now("yt-dlp missing — run ./install.sh")
+            return
+        self.push("search")
+        self.live_q = q
+        self.search_token += 1
+        token = self.search_token
+        self.searching = True
+        threading.Thread(target=self._search_worker,
+                         args=(q, token), daemon=True).start()
+        if record:
+            self._record_search(q)
+
+    def submit_search(self):
+        """Enter in the search bar: keep the live results, record the query."""
+        self.mode = "normal"
+        q = self.query.strip()
+        if not q:
+            return
+        if q != self.live_q:
+            self.do_search(q)
+        else:
+            self._record_search(q)
+
+    LIVE_DEBOUNCE = 0.6
+
+    def _tick_live_search(self):
+        """Search-as-you-type: fire once the query is idle for a moment.
+
+        Live searches never touch recent searches or the similar shelf —
+        only a submitted (Enter) search does.
+        """
+        if self.mode != "search" or self.stack[-1][0] != "search":
+            return
+        q = self.query.strip()
+        if not q:
+            self.live_q = ""
+            return
+        if q == self.live_q:
+            return
+        if time.time() - getattr(self, "_edit_t", 0.0) < self.LIVE_DEBOUNCE:
+            return
+        self.do_search(q, record=False)
 
     def _search_worker(self, q, token):
         try:
@@ -2949,24 +2992,25 @@ def handle_key(app, k):
     if app.mode == "search":
         if isinstance(k, str):
             if k in ("\n", "\r"):
-                app.mode = "normal"
-                app.do_search(app.query)
+                app.submit_search()
                 return
             if k == "\x1b":
                 app.mode = "normal"
                 return
             if k in ("\x7f", "\b"):
                 app.query = app.query[:-1]
+                app._edit_t = time.time()
                 return
             if k >= " " and unicodedata.category(k)[0] != "C":
                 app.query += k
+                app._edit_t = time.time()
                 return
         else:
             if k in (curses.KEY_BACKSPACE, 127, 8, 263):
                 app.query = app.query[:-1]
+                app._edit_t = time.time()
             elif k == curses.KEY_ENTER or k == 10 or k == 13:
-                app.mode = "normal"
-                app.do_search(app.query)
+                app.submit_search()
             elif k == 27:
                 app.mode = "normal"
         return

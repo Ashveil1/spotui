@@ -83,6 +83,10 @@ SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in 
 | `?` | help | | |
 | `Backspace` | back | `q` | quit |
 
+Search is live: results appear as you type (after a short pause) —
+`Enter` keeps them and saves the query to recent searches, `Esc` just
+closes the bar.
+
 Mouse works too: click anything (rows, tiles, sidebar items, playlists,
 playlists rows, controls, toast — everything), drag the progress / volume
 bars, and the wheel scrolls the list — or the sidebar when the cursor is
