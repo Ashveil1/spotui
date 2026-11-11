@@ -593,6 +593,21 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.app.view_tracks(), [])
         self.assertNotIn('Newcomer', self.app._artist_busy)
 
+    def test_stats_week_counts_last_seven_days(self):
+        import time as _t
+        self.app.store.history = [
+            dict(track(1), added=_t.time() - 3600),
+            dict(track(2), added=_t.time() - 6 * 86400),
+            dict(track(3), added=_t.time() - 9 * 86400),
+            dict(track(4), added=None),
+        ]
+        self.assertEqual(s.stats_week(self.app.store), 2)
+
+    def test_stats_week_tolerates_bad_timestamps(self):
+        self.app.store.history = [dict(track(1), added='not-a-number'),
+                                  dict(track(2), added=float('inf'))]
+        self.assertEqual(s.stats_week(self.app.store), 0)
+
     def test_seek_toast_shows_target_position(self):
         self.app.mpv.state.update(pos=74.0, dur=200.0)
         self.app.mpv.seek_rel = Mock()
