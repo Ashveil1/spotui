@@ -3478,6 +3478,29 @@ class UI:
                 put(scr, py, x0 + 2 + pw - dlen(pn), pn, pal["faint"])
                 self.hit(x0 + 2, py, pw, 1, "playat", (vk, pop, i))
             ly += len(pop) + 2
+        # other artists from your own play counts, as clickable chips
+        # (local data only - no recommendation graph behind it)
+        if y1 - ly >= 16:
+            norm = app._norm_artist(name)
+            others = {}
+            for p in app.store.plays.values():
+                a = (p.get("artist") or "").strip()
+                if a and app._norm_artist(a) != norm:
+                    others[a] = others.get(a, 0) + p["n"]
+            others = sorted(others.items(), key=lambda kv: (-kv[1], kv[0]))
+            if others:
+                put(scr, ly, x0 + 2, "MORE ARTISTS YOU PLAY", pal["dim"],
+                    curses.A_BOLD)
+                cx = x0 + 2
+                for a, _ in others:
+                    w = dlen(a) + 4
+                    if cx + w > W - 4:
+                        break
+                    fill(scr, ly + 1, cx, w, pal["pill"])
+                    put(scr, ly + 1, cx + 2, a, pal["pilldim"])
+                    self.hit(cx, ly + 1, w, 1, "artist", a)
+                    cx += w + 1
+                ly += 3
         self.list_header(ly, x0 + 2, W - x0 - 4, show_date=True)
         self.track_list(ly + 1, y1, x0 + 2, W - x0 - 4, tracks, vk,
                         show_date=True)
