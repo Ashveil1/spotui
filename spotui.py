@@ -2936,6 +2936,31 @@ class UI:
                 ch = "▁" if state != "Playing" or app.reduced_motion else "▁▂▃▄▅▆▇█"[v]
                 put(scr, ey, tx + i, ch, pal["green"])
             put(scr, ey + 1, tx, "visual animation, not audio levels", pal["faint"])
+        # wide: fill the right column with the artist's other top songs
+        if wide:
+            my = ey + 3
+            more = [t for t in app.artist_tracks(track["artist"])
+                    if t["id"] != track["id"]]
+            more.sort(key=lambda t: (
+                -(app.store.plays.get(t["id"]) or {}).get("n", 0),
+                t["title"]))
+            if more and my + 2 < y1 - 2:
+                put(scr, my, tx, f"MORE FROM {track['artist'].upper()}",
+                    pal["dim"], curses.A_BOLD)
+                for i, t in enumerate(more):
+                    ry = my + 2 + i
+                    if ry >= y1 - 2:
+                        break
+                    put(scr, ry, tx, f"{i + 1}", pal["faint"])
+                    put(scr, ry, tx + 3, wcut(t["title"], tw - 14),
+                        pal["text"])
+                    np_ = (app.store.plays.get(t["id"]) or {}).get("n", 0)
+                    if np_:
+                        ptxt = f"{np_} plays"
+                        put(scr, ry, tx + tw - dlen(ptxt), ptxt,
+                            pal["faint"])
+                    self.hit(tx, ry, tw, 1, "playtrack",
+                             (t, track["artist"]))
         # up next
         uy = ay + ah + 1 if wide else ((ey + 3) if bars else (by + 2))
         if wide and uy + 2 < y1 - 2:
