@@ -1557,6 +1557,37 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class HistoryDedupeTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+
+    def test_dedupe_keeps_newest_first(self):
+        self.app.store.history = [dict(track(1)), dict(track(2)),
+                                  dict(track(1)), dict(track(3))]
+        self.app.stack = [("home", None), ("history", None)]
+        self.assertEqual([t["id"] for t in self.app.view_tracks()],
+                         ["1", "2", "1", "3"])
+        self.app.store.hist_dedupe = True
+        self.assertEqual([t["id"] for t in self.app.view_tracks()],
+                         ["1", "2", "3"])
+
+    def test_dedupe_persists(self):
+        self.app.store.hist_dedupe = True
+        self.app.store.save()
+        st = s.Store()
+        self.assertTrue(st.hist_dedupe)
+
+
 class StatsDayMinutesTests(unittest.TestCase):
     def test_minutes_per_day(self):
         import time as _t
