@@ -1850,6 +1850,40 @@ class StatsStreakTests(unittest.TestCase):
         self.assertEqual(s.stats_streak(self._store([])), 0)
 
 
+class StatsWeekdayTests(unittest.TestCase):
+    def _store(self, stamps):
+        st = s.Store.__new__(s.Store)     # bare store, no disk
+        st.history = [{"id": str(i), "added": t}
+                      for i, t in enumerate(stamps)]
+        return st
+
+    def _on(self, y, m, d, n):
+        # n plays at local noon on the given date
+        t = s.time.mktime((y, m, d, 12, 0, 0, 0, 0, -1))
+        return [t] * n
+
+    def test_busiest_weekday(self):
+        # 2026-11-07 is a Saturday, 2026-11-11 a Wednesday
+        st = self._store(self._on(2026, 11, 7, 12)
+                         + self._on(2026, 11, 11, 5))
+        self.assertEqual(s.stats_weekday(st), ("Saturdays", 12))
+
+    def test_thin_history_says_nothing(self):
+        st = self._store(self._on(2026, 11, 7, 9))
+        self.assertIsNone(s.stats_weekday(st))
+
+    def test_tie_says_nothing(self):
+        st = self._store(self._on(2026, 11, 7, 6)
+                         + self._on(2026, 11, 11, 6))
+        self.assertIsNone(s.stats_weekday(st))
+
+    def test_ignores_bad_timestamps(self):
+        st = self._store(self._on(2026, 11, 7, 12))
+        st.history += [{"id": "x"}, {"id": "y", "added": "soon"},
+                       {"id": "z", "added": float("nan")}]
+        self.assertEqual(s.stats_weekday(st), ("Saturdays", 12))
+
+
 class GTopBottomTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

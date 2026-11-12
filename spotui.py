@@ -1099,6 +1099,36 @@ def stats_streak(store):
     return n
 
 
+def stats_weekday(store):
+    """(name, plays) of the busiest local weekday over the history list.
+
+    All-time, counted from the (capped) history list, not the 7-day window.
+    Entries with missing or non-finite timestamps are ignored. Returns None
+    when history is thin (< 10 plays) or two weekdays tie for the top, so
+    the caption never overclaims.
+    """
+    counts = [0] * 7
+    total = 0
+    for h in store.history:
+        if not isinstance(h, dict):
+            continue
+        try:
+            ts = float(h.get("added") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(ts):
+            continue
+        counts[time.localtime(ts).tm_wday] += 1
+        total += 1
+    if total < 10:
+        return None
+    order = sorted(range(7), key=lambda d: counts[d], reverse=True)
+    if counts[order[0]] == 0 or counts[order[0]] == counts[order[1]]:
+        return None
+    names = ("Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays",
+             "Saturdays", "Sundays")
+    return names[order[0]], counts[order[0]]
+
 def stats_days(store):
     """Plays per local day for the last 7 days, oldest first, today last.
 
@@ -2708,6 +2738,11 @@ class UI:
                         put(scr, hy, hx + 10, "\u2588" * filled,
                             pal["green"] if n == htop else pal["sdim"])
                     put(scr, hy, hx + 10 + hbw + 1, str(n), pal["faint"])
+            big = stats_weekday(app.store)
+            if big:
+                put(scr, by + 6, x0 + 2,
+                    f"{big[0]} are your biggest listening day",
+                    pal["faint"])
             by += 7
         # rows are (label, subtitle-or-None, count, click action-or-None)
         def block(y, x, w, title, rows):
