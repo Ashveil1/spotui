@@ -3435,3 +3435,44 @@ class JumpToCurrentTests(unittest.TestCase):
         s.handle_key(self.app, '.')
         self.assertEqual(self.app.sel['liked:'], 4)
 
+class OpenSourceTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_liked(self):
+        self.assertTrue(self.app.open_source('Liked Songs'))
+        self.assertEqual(self.app.stack[-1], ('liked', None))
+
+    def test_history(self):
+        self.assertTrue(self.app.open_source('Recently Played'))
+        self.assertEqual(self.app.stack[-1], ('history', None))
+
+    def test_similar(self):
+        self.assertTrue(self.app.open_source('Made for you'))
+        self.assertEqual(self.app.stack[-1], ('similar', None))
+
+    def test_playlist_by_name(self):
+        self.app.create_playlist('Rock')
+        self.app.back()
+        self.assertTrue(self.app.open_source('Rock'))
+        self.assertEqual(self.app.stack[-1], ('playlist', 0))
+
+    def test_artist_fallback(self):
+        self.app.store.liked = [dict(track(1), artist='Solo Act')]
+        self.assertTrue(self.app.open_source('Solo Act'))
+        self.assertEqual(self.app.stack[-1], ('artist', 'Solo Act'))
+
+    def test_unknown_source_toasts(self):
+        depth = len(self.app.stack)
+        self.assertFalse(self.app.open_source('Autoplay'))
+        self.assertEqual(len(self.app.stack), depth)
+        self.assertIn('No page', self.app.toast[0])
+

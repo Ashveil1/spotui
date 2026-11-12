@@ -2745,6 +2745,27 @@ class App:
                 return
         self.toast_now("The playing song is not in this list")
 
+    def open_source(self, src):
+        """Open the library page a play source came from, when it has one."""
+        if src == "Liked Songs":
+            self.push("liked")
+            return True
+        if src == "Recently Played":
+            self.push("history")
+            return True
+        if src == "Made for you":
+            self.push("similar")
+            return True
+        for i, pl in enumerate(self.store.playlists):
+            if pl.get("name") == src:
+                self.push("playlist", i)
+                return True
+        if src and self.artist_tracks(src):
+            self.push("artist", src)
+            return True
+        self.toast_now("No page for this source")
+        return False
+
     @staticmethod
     def _norm_artist(name):
         return unicodedata.normalize("NFKC", name or "").casefold().strip()
@@ -3300,6 +3321,15 @@ class UI:
             line += ("  \u00b7  " if line else "") + f"{n_plays} plays"
         if line:
             put(scr, ty + 2, tx, wcut(line, tw), pal["faint"])
+            # the source name opens its library page, like the artist link
+            known = src in ("Liked Songs", "Recently Played", "Made for you") \
+                or any(pl["name"] == src for pl in app.store.playlists)
+            if src and dlen(src) + 5 <= tw:
+                if known:
+                    put(scr, ty + 2, tx + 5, wcut(src, tw - 5), pal["faint"],
+                        curses.A_UNDERLINE)
+                self.hit(tx + 5, ty + 2, min(dlen(src), tw - 5), 1,
+                         "opensrc", src)
         liked_now = track["id"] in app.liked_ids
         put(scr, ty, tx + tw - 2, IC_HEART if liked_now else IC_HEARTO,
             pal["green"] if liked_now else pal["sdim"], curses.A_BOLD)
@@ -5207,6 +5237,8 @@ def handle_mouse(app):
             app.add_queue(arg)
         elif act == "queueall":
             app.queue_all(list(app.results))
+        elif act == "opensrc":
+            app.open_source(arg)
         elif act == "playing":
             app.push("playing")
         elif act == "queue":
