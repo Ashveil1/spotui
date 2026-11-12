@@ -1423,6 +1423,36 @@ class ArtistViewTests(unittest.TestCase):
                 if y == py and x == 26]
         self.assertEqual(nums, [s.eq_bars(self.app)[:3]])
 
+    def test_artist_page_lists_other_played_artists(self):
+        from collections import defaultdict
+        self.app.store.liked = [dict(track(1), artist="Luna Waves"),
+                                dict(track(2), artist="Luna Waves")]
+        self.app.store.plays = {
+            "1": dict(title="S1", artist="Luna Waves", n=9),
+            "2": dict(title="S2", artist="Luna Waves", n=5),
+            "3": dict(title="S3", artist="Neon Coast", n=7),
+            "4": dict(title="S4", artist="Glass Rivers", n=3)}
+        self.app.push("artist", "Luna Waves")
+        self.app.pal = defaultdict(int)
+        self.app.cover_for = Mock(return_value=None)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        ui.hint = Mock()
+        self.app.rects = []
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(str(t))), \
+                patch.object(s, 'draw_art'):
+            ui.v_artist(0, 34, 24, 120)
+        self.assertIn("MORE ARTISTS YOU PLAY", texts)
+        self.assertIn("Neon Coast", texts)   # most played first
+        self.assertIn("Glass Rivers", texts)
+        chips = [r["arg"] for r in self.app.rects
+                 if r["act"] == "artist" and r["y0"] == 12]
+        self.assertEqual(chips, ["Neon Coast", "Glass Rivers"])
+
     def test_o_opens_artist_of_selection(self):
         self._lib()
         self.app.push("liked")
