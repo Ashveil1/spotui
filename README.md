@@ -92,7 +92,7 @@ SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in 
 Search is live: results appear as you type (after a short pause), and the result list header counts them —
 `Enter` keeps them and saves the query to recent searches, `Esc` just
 closes the bar. Filter chips under the bar narrow results to songs or
-artists. Matching artists from your library show as chips above the
+artists (click them, or press `Tab` while typing). Matching artists from your library show as chips above the
 results; click one to open its artist page. Playlists whose name
 matches show as chips too, with their song counts. Recent searches show when the
 bar is empty; click the × on one to remove it, and your six most

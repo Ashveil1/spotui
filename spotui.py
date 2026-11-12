@@ -179,7 +179,7 @@ def fmt_added(v):
 
 
 VIEW_HINTS = {
-    "search": "Enter plays \u00b7 a queues \u00b7 o opens artist",
+    "search": "Enter plays \u00b7 a queues \u00b7 o opens artist \u00b7 Tab switches All/Songs/Artists",
     "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
     "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K or drag reorders \u00b7 e renames",
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 X clears",
@@ -4512,6 +4512,12 @@ def handle_key(app, k):
         return
     if app.mode == "search":
         if isinstance(k, str):
+            if k == "\t":
+                order = ("all", "songs", "artists")
+                app.search_filter = order[
+                    (order.index(app.search_filter) + 1) % len(order)]
+                app.toast_now("Search filter: " + app.search_filter)
+                return
             if k in ("\n", "\r"):
                 app.submit_search()
                 return

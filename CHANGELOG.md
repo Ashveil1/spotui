@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- `Tab` in the search bar cycles the All / Songs / Artists filter chips,
+  which were mouse-only before (#128)
+
 - `M` mutes and unmutes from the keyboard (the speaker icon was the only
   way before); the level is remembered and restored (#127)
 
