@@ -3032,21 +3032,9 @@ class UI:
         if not app.query:
             put(scr, y0 + 1, x0 + 2, "Recent searches", pal["text"],
                 curses.A_BOLD)
-            y = y0 + 3
-            x = x0 + 2
-            for q in app.store.recent:
-                w = dlen(q) + 5
-                if x + w > W - 4:
-                    x = x0 + 2
-                    y += 2
-                fill(scr, y, x, w, pal["pill"])
-                put(scr, y, x + 2, q, pal["pilldim"])
-                put(scr, y, x + w - 2, "\u00d7", pal["faint"])
-                self.hit(x, y, w - 2, 1, "recent", q)
-                self.hit(x + w - 2, y, 2, 1, "delrecent", q)
-                x += w + 1
+            self._recent_chips(scr, y0 + 3, x0 + 2, W)
             if not app.store.recent:
-                put(scr, y, x0 + 2, f"Type in the search bar above — press / "
+                put(scr, y0 + 3, x0 + 2, f"Type in the search bar above — press / "
                                     "to start", pal["faint"])
             return
 
@@ -3110,6 +3098,10 @@ class UI:
             put(scr, y0 + 2, x0 + 2,
                 "Check spelling, or try fewer / different words",
                 pal["faint"])
+            if app.store.recent:
+                put(scr, y0 + 4, x0 + 2, "Recent searches", pal["text"],
+                    curses.A_BOLD)
+                self._recent_chips(scr, y0 + 6, x0 + 2, W)
             return
 
         top = tracks[0]
@@ -3192,6 +3184,22 @@ class UI:
         self.track_list(fy0 + 2, y1 - 2, x0 + 2, mw - 4, tracks, "search:",
                         show_date=False)
         self.hint(y1 - 2, x0, "search")
+
+    def _recent_chips(self, scr, y, x0, W):
+        """Recent-search pills with click-to-search and ×-to-remove."""
+        app, pal = self.app, self.pal
+        x = x0
+        for q in app.store.recent:
+            w = dlen(q) + 5
+            if x + w > W - 4:
+                x = x0
+                y += 2
+            fill(scr, y, x, w, pal["pill"])
+            put(scr, y, x + 2, q, pal["pilldim"])
+            put(scr, y, x + w - 2, "\u00d7", pal["faint"])
+            self.hit(x, y, w - 2, 1, "recent", q)
+            self.hit(x + w - 2, y, 2, 1, "delrecent", q)
+            x += w + 1
 
     def v_collection(self, y0, y1, x0, W, kind, arg):
         app, pal = self.app, self.pal
