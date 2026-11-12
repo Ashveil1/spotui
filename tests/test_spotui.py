@@ -646,6 +646,36 @@ class AppTests(unittest.TestCase):
         glyphs = [c.args[3] for c in pt.call_args_list]
         self.assertIn(s.IC_HEART, glyphs)
 
+    def test_sidebar_marks_playing_source(self):
+        from collections import defaultdict
+        self.app.store.playlists = [{"name": "Late Night Drive",
+                                     "tracks": [track(1)]},
+                                    {"name": "Gym", "tracks": [track(2)]}]
+        self.app.current = track(1)
+        self.app.play_source = "Late Night Drive"
+        self.app.mpv.state.update(idle=False)
+        self.app.pal = defaultdict(int)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        calls = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          calls.append((y, x, str(t), k))), \
+                patch.object(s.curses, 'color_pair', return_value=0):
+            ui.sidebar(3, 33, 30)
+        rows = {}
+        for y, x, t, k in calls:
+            rows.setdefault(y, []).append((x, t, k))
+        marks = [y for y, cells in rows.items()
+                 if any(t == "Late Night Drive" for _, t, _ in cells)
+                 and any(t == s.eq_bars(self.app)[:3] for _, t, _ in cells)]
+        self.assertEqual(len(marks), 1)
+        gym = [y for y, cells in rows.items()
+               if any(t == "Gym" for _, t, _ in cells)
+               and any(t == s.eq_bars(self.app)[:3] for _, t, _ in cells)]
+        self.assertEqual(gym, [])
+
     def test_home_hero_shows_play_count(self):
         from collections import defaultdict
         self.app.store.history = [dict(track(7), added=s.time.time())]
