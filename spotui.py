@@ -2703,7 +2703,10 @@ class UI:
         ty = ay if wide else ay + ah + 1
         tw = max(8, W - tx - 3)
         put(scr, ty, tx, wcut(track["title"], tw - 4), pal["text"], curses.A_BOLD)
-        put(scr, ty + 1, tx, wcut(track["artist"], tw), pal["dim"])
+        put(scr, ty + 1, tx, wcut(track["artist"], tw), pal["dim"],
+            curses.A_UNDERLINE)
+        self.hit(tx, ty + 1, min(dlen(track["artist"]), tw), 1,
+                 "artist", track["artist"])
         src = "Autoplay" if track.get("auto") else app.play_source
         if src:
             put(scr, ty + 2, tx, wcut("From " + src, tw), pal["faint"])
@@ -2725,6 +2728,9 @@ class UI:
             chips.append(("EQ " + EQ_LABEL[app.store.eq_preset], True))
         if app.store.autoplay:
             chips.append(("Autoplay", True))
+        if app.sleep_deadline is not None:
+            left = max(0, int(app.sleep_deadline - time.monotonic()))
+            chips.append((f"Sleep {fmt_t(left)}", True))
         cx, cy = tx, ty + 3
         for label, _on in chips:
             w = dlen(label) + 2

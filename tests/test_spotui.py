@@ -938,6 +938,29 @@ class AppTests(unittest.TestCase):
             ui.v_playing(3, 29, 30, 120)
             self.assertTrue(any('Song 1' in str(c) for c in output.call_args_list))
 
+    def test_now_playing_artist_link_and_sleep_chip(self):
+        from collections import defaultdict
+        self.app.pal = defaultdict(int)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        self.app.cover_for = Mock(return_value=None)
+        self.app.current = track(1)
+        self.app.sleep_deadline = s.time.monotonic() + 600
+        self.app.rects = []
+        with patch.object(s, 'put') as output, patch.object(s, 'draw_art'):
+            ui.v_playing(3, 29, 24, 120)
+        texts = [str(c.args[3]) for c in output.call_args_list]
+        self.assertTrue(any(t.startswith('Sleep ') for t in texts))
+        hits = [r for r in self.app.rects
+                if r['act'] == 'artist' and r['arg'] == 'Artist']
+        self.assertTrue(hits)
+        # the artist name is underlined so it reads as a link
+        underlined = [c for c in output.call_args_list
+                      if len(c.args) > 5 and c.args[3] == 'Artist'
+                      and c.args[5] & s.curses.A_UNDERLINE]
+        self.assertTrue(underlined)
+
     def test_help_pages_on_short_screen(self):
         from collections import defaultdict
         self.app.pal = defaultdict(int)
