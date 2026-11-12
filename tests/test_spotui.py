@@ -365,7 +365,7 @@ class AppTests(unittest.TestCase):
     def test_playlist_picker_scrolls_selected_item_into_view(self):
         self.app.pick_rows = [dict(name=str(i)) for i in range(25)]
         self.app.pick_idx = 24
-        self.app.pal = {key: 0 for key in ['dim', 'side', 'hover', 'sdim']}
+        self.app.pal = {key: 0 for key in ['dim', 'side', 'hover', 'sdim', 'sfaint', 'green']}
         scr = Mock()
         scr.getmaxyx.return_value = (40, 120)
         with patch.object(s.curses, 'color_pair', return_value=0):
@@ -1579,6 +1579,58 @@ class ZenModeTests(unittest.TestCase):
         self.assertTrue(st.zen)
         self.app.toggle_zen()
         self.assertFalse(self.app.store.zen)
+
+
+class PickFilterTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.store.playlists = [
+            {"name": "Late Night Drive", "tracks": []},
+            {"name": "Gym", "tracks": []},
+            {"name": "Focus", "tracks": []}]
+        self.track = {"id": "t1", "title": "Song", "artist": "A",
+                      "dur": 100}
+
+    def test_filter_narrows_view_and_keeps_new_row(self):
+        self.app.open_pick(self.track)
+        self.app.pick_filter = "g"
+        names = [r["name"] for r in self.app.pick_view()]
+        self.assertEqual(names, ["+ New playlist", "Late Night Drive", "Gym"])
+        self.app.pick_filter = "foc"
+        names = [r["name"] for r in self.app.pick_view()]
+        self.assertEqual(names, ["+ New playlist", "Focus"])
+
+    def test_typing_filters_and_enter_adds_to_right_playlist(self):
+        self.app.open_pick(self.track)
+        for ch in "gym":
+            s.handle_key(self.app, ch)
+        self.assertEqual(self.app.pick_filter, "gym")
+        self.assertEqual([r["name"] for r in self.app.pick_view()],
+                         ["+ New playlist", "Gym"])
+        s.handle_key(self.app, "j" if not self.app.pick_filter else
+                     s.curses.KEY_DOWN)
+        s.handle_key(self.app, "\n")
+        self.assertEqual(self.app.mode, "normal")
+        self.assertEqual(self.app.store.playlists[1]["tracks"][0]["id"], "t1")
+
+    def test_esc_clears_filter_before_closing(self):
+        self.app.open_pick(self.track)
+        self.app.pick_filter = "g"
+        s.handle_key(self.app, "\x1b")
+        self.assertEqual(self.app.mode, "pick")
+        self.assertEqual(self.app.pick_filter, "")
+        s.handle_key(self.app, "\x1b")
+        self.assertEqual(self.app.mode, "normal")
 
 
 class FmtAgoTests(unittest.TestCase):

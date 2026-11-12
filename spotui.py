@@ -1357,6 +1357,7 @@ class App:
         self.pick_rows = []
         self.pick_idx = 0
         self.pick_pending = None      # track waiting to be added
+        self.pick_filter = ""         # type-to-filter inside the picker
         self.toast = ("", 0.0)
         self.queue = []
         self.queue_revision = 0
@@ -2476,7 +2477,16 @@ class App:
              "has": any(x["id"] == t["id"] for x in p["tracks"])}
             for p in self.store.playlists]
         self.pick_idx = 0
+        self.pick_filter = ""
         self.mode = "pick"
+
+    def pick_view(self):
+        """Picker rows as filtered by pick_filter ("+ New" always stays)."""
+        if not self.pick_filter:
+            return self.pick_rows
+        f = self.pick_filter.casefold()
+        return self.pick_rows[:1] + [
+            r for r in self.pick_rows[1:] if f in r["name"].casefold()]
 
     def remove_recent(self, q):
         """Forget one recent search (the \u00d7 on its pill)."""
@@ -4293,19 +4303,26 @@ class UI:
 
     def pick_modal(self, y0, W):
         app, pal = self.app, self.pal
+        view = app.pick_view()
         w = 44
-        h = min(len(app.pick_rows) + 4, 14)
+        h = min(len(view) + 5, 15)
         y = max(1, (self.scr.getmaxyx()[0] - h) // 2)
         x = (W - w) // 2
         box(self.scr, y, x, w, h, pal["dim"], pal["side"])
         put(self.scr, y + 1, x + 2, "Add to playlist", pal["side"],
             curses.A_BOLD)
-        count = max(1, h - 4)
+        if app.pick_filter:
+            put(self.scr, y + 2, x + 2,
+                wcut("filter: " + app.pick_filter + "\u258c", w - 4),
+                pal["green"])
+        else:
+            put(self.scr, y + 2, x + 2, "type to filter", pal["sfaint"])
+        count = max(1, h - 5)
         start = max(0, min(app.pick_idx - count + 1,
-                           len(app.pick_rows) - count))
-        for i in range(start, min(start + count, len(app.pick_rows))):
-            r = app.pick_rows[i]
-            yy = y + 3 + i - start
+                           len(view) - count))
+        for i in range(start, min(start + count, len(view))):
+            r = view[i]
+            yy = y + 4 + i - start
             sel = i == app.pick_idx
             if sel:
                 fill(self.scr, yy, x + 2, w - 4, pal["hover"])
@@ -4323,6 +4340,8 @@ class UI:
                     pal["hover"] if sel
                     else (pal["green"] if r.get("has") else pal["sfaint"]))
             self.hit(x, yy, w, 1, "pickrow", i)
+        if app.pick_filter and len(view) == 1:
+            put(self.scr, y + 4, x + 4, "no playlists match", pal["sfaint"])
 
     def delete_modal(self, W):
         app, pal = self.app, self.pal
@@ -4470,23 +4489,42 @@ def handle_key(app, k):
         return
 
     if app.mode == "pick":
-        n = len(app.pick_rows)
-        if k == curses.KEY_UP or k == "k":
+        view = app.pick_view()
+        n = len(view)
+        filtering = bool(app.pick_filter)
+        if k == curses.KEY_UP or (k == "k" and not filtering):
             app.pick_idx = max(0, app.pick_idx - 1)
-        elif k == curses.KEY_DOWN or k == "j":
+        elif k == curses.KEY_DOWN or (k == "j" and not filtering):
             app.pick_idx = min(n - 1, app.pick_idx + 1)
         elif k in ("\n", "\r", curses.KEY_ENTER, 10, 13):
-            r = app.pick_rows[app.pick_idx]
+            if not view:
+                return
+            r = view[app.pick_idx]
             app.mode = "normal"
             if r["new"]:
                 app.mode = "name"
                 app.name_buf = ""
             else:
-                app.add_to_playlist(app.pick_idx - 1, app.pick_pending)
+                app.add_to_playlist(app.pick_rows.index(r) - 1,
+                                    app.pick_pending)
                 app.pick_pending = None
-        elif k == "\x1b" or k == 27 or k == "q":
+        elif k == "\x1b" or k == 27:
+            if filtering:
+                app.pick_filter = ""
+                app.pick_idx = 0
+            else:
+                app.mode = "normal"
+                app.pick_pending = None
+        elif k == "q" and not filtering:
             app.mode = "normal"
             app.pick_pending = None
+        elif k in ("\x7f", "\b", curses.KEY_BACKSPACE, 127, 8, 263):
+            app.pick_filter = app.pick_filter[:-1]
+            app.pick_idx = 0
+        elif (isinstance(k, str) and k >= " "
+              and unicodedata.category(k)[0] != "C"):
+            app.pick_filter += k
+            app.pick_idx = 0
         return
 
     # normal mode

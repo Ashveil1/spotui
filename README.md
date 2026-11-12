@@ -71,7 +71,7 @@ SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in 
 | `Enter` | play | `s` | shuffle |
 | `Space` | play / pause | `r` | repeat off/all/one |
 | `n` / `p` | next / prev | `v` | queue view |
-| `←` / `→` | seek ±10s | `P` | add to playlist (the picker shows song counts and a check on playlists that already have it) |
+| `←` / `→` | seek ±10s | `P` | add to playlist (the picker filters as you type, shows song counts and a check on playlists that already have it) |
 | `+` / `-` | volume | `c` | create playlist |
 | `[` / `]` | speed down / up | `e` / `D` | rename / delete playlist |
 | `F` | find in a list | `d` | delete from list |

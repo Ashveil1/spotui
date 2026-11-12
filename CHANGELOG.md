@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The add-to-playlist picker (`P`) now filters as you type; Esc clears the
+  filter, Enter adds, "+ New playlist" always stays (#120)
+
 - Zen mode: `z` hides the sidebar so the main view takes the full terminal
   width; press `z` again to bring it back. Remembered across restarts (#119)
 
