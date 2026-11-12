@@ -1222,6 +1222,7 @@ class App:
         self.help_page = 0
         self.help_pages = 1
         self.sleep_deadline = None
+        self._muted_from = None      # volume before muting, None = not muted
         self.speed = 1.0
         self.sleep_minutes = 0
         self.search_filter = "all"   # search filter chips: all/songs/artists
@@ -1920,9 +1921,24 @@ class App:
         else:
             v += (d or 0)
         self.mpv.set_vol(v)
+        self._muted_from = None      # any volume change unmutes
         self.store.volume = self.mpv.state["vol"]
         self.store.save()
         self.toast_now(f"Volume {self.mpv.state['vol']}")
+
+    def toggle_mute(self):
+        """Speaker click: drop to 0 remembering the level, click to restore."""
+        if self._muted_from is not None:
+            v, self._muted_from = self._muted_from, None
+            self.vol(absolute=v)
+        elif self.mpv.state["vol"] > 0:
+            self._muted_from = self.mpv.state["vol"]
+            self.mpv.set_vol(0)
+            self.store.volume = 0
+            self.store.save()
+            self.toast_now("Muted")
+        else:
+            self.toast_now("Volume 0")
 
     # ------------------------------------------------------------ library --
     def cycle_theme(self):
@@ -3670,7 +3686,10 @@ class UI:
         # --- right: queue + volume (squeezed on narrow terminals)
         put(scr, y0, qw, IC_QUEUE, pal["bsdim"], curses.A_BOLD)
         self.hit(qw - 1, y0, 3, 1, "queue")
-        put(scr, y0 + 1, vx - 4, IC_SPK + "))", pal["bsdim"])
+        put(scr, y0 + 1, vx - 4,
+            IC_SPK + ("\u00d7" if app._muted_from is not None else "))"),
+            pal["bsdim"])
+        self.hit(vx - 4, y0 + 1, 3, 1, "mute")
         for i in range(vw):
             if abs(i - app.mpv.state["vol"] / 100 * (vw - 1)) < 0.5:
                 ch, p = "●", pal["bsgreen"]
@@ -4299,6 +4318,8 @@ def handle_mouse(app):
             vx, vw = arg
             frac = min(1.0, max(0.0, (mx - vx) / max(1, vw - 1)))
             app.vol(absolute=round(frac * 100))
+        elif act == "mute":
+            app.toggle_mute()
         elif act == "pickrow":
             app.pick_idx = arg
             handle_key(app, "\n")

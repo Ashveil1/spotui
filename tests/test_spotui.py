@@ -759,6 +759,22 @@ class AppTests(unittest.TestCase):
         self.app.vol(-10)
         self.assertEqual(self.app.toast[0], "Volume 65")
 
+    def test_toggle_mute_remembers_level(self):
+        self.app.mpv.state["vol"] = 70
+        self.app.toggle_mute()
+        self.assertEqual(self.app.mpv.state["vol"], 0)
+        self.assertEqual(self.app.toast[0], "Muted")
+        self.app.toggle_mute()
+        self.assertEqual(self.app.mpv.state["vol"], 70)
+        self.assertEqual(self.app.toast[0], "Volume 70")
+
+    def test_volume_change_unmutes(self):
+        self.app.mpv.state["vol"] = 70
+        self.app.toggle_mute()
+        self.app.vol(5)
+        self.assertIsNone(self.app._muted_from)
+        self.assertEqual(self.app.mpv.state["vol"], 5)
+
     def test_u_key_toggles_autoplay(self):
         before = self.app.store.autoplay
         s.handle_key(self.app, 'u')
