@@ -208,7 +208,7 @@ def fmt_added(v):
 VIEW_HINTS = {
     "search": "Enter plays \u00b7 a queues \u00b7 Q queues all \u00b7 o opens artist \u00b7 Tab switches All/Songs/Artists",
     "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
-    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates \u00b7 B merges \u00b7 w pins",
+    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates \u00b7 B merges \u00b7 w pins \u00b7 h enhances",
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 X clears",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
@@ -442,6 +442,8 @@ class Store:
                              tracks=self._tracks(pl.get("tracks")))
                 if pl.get("pinned"):
                     entry["pinned"] = True
+                if pl.get("enhanced"):
+                    entry["enhanced"] = True
                 self.playlists.append(entry)
         sess = d.get("session") if isinstance(d.get("session"), dict) else {}
         self.session = {"queue": self._tracks(sess.get("queue"))[:500]}
@@ -2562,8 +2564,10 @@ class App:
         while name in names:
             name = f"{base} {n}"
             n += 1
-        self.store.playlists.append({"name": name,
-                                     "tracks": [dict(t) for t in pl["tracks"]]})
+        self.store.playlists.append(
+            {"name": name,
+             "tracks": [dict(t) for t in pl["tracks"]
+                        if not t.get("enhanced")]})
         self.store.save()
         self.push("playlist", len(self.store.playlists) - 1)
         self.toast_now(f"Duplicated as: {name}")
@@ -2723,6 +2727,77 @@ class App:
         self.store.save()
         self.toast_now(("Pinned " if pl["pinned"] else "Unpinned ")
                        + pl["name"])
+
+    def enhance_candidates(self, pl):
+        """Library songs not in pl, same-artist first, ranked by plays."""
+        seen = {t["id"] for t in pl["tracks"]}
+        artists = {self._norm_artist(t.get("artist"))
+                   for t in pl["tracks"]}
+        pool = []
+
+        def scan(tracks):
+            for t in tracks:
+                if t["id"] in seen:
+                    continue
+                seen.add(t["id"])
+                pool.append(t)
+
+        scan(self.store.liked)
+        scan(self.store.history)
+        for other in self.store.playlists:
+            if other is not pl:
+                scan(other["tracks"])
+
+        def rank(t):
+            same = self._norm_artist(t.get("artist")) in artists
+            n = (self.store.plays.get(t["id"]) or {}).get("n", 0)
+            title = unicodedata.normalize(
+                "NFKC", t.get("title") or "").casefold()
+            return (0 if same else 1, -n, title)
+
+        return sorted(pool, key=rank)
+
+    def toggle_enhance(self, pi):
+        """Spotify-style Enhance: weave library suggestions (every 2 songs,
+        capped at 30) into a playlist; toggle again to drop them."""
+        if not 0 <= pi < len(self.store.playlists):
+            return
+        pl = self.store.playlists[pi]
+        if pl.get("enhanced"):
+            n = sum(1 for t in pl["tracks"] if t.get("enhanced"))
+            pl["tracks"] = [t for t in pl["tracks"]
+                            if not t.get("enhanced")]
+            pl["enhanced"] = False
+            self.store.save()
+            self.toast_now(f"Enhance off · removed {n} suggestion"
+                           f"{'s' if n != 1 else ''}")
+            return
+        own = [t for t in pl["tracks"] if not t.get("enhanced")]
+        if not own:
+            self.toast_now("Add some songs first")
+            return
+        want = min(30, max(1, len(own) // 2))
+        picks = self.enhance_candidates(pl)[:want]
+        if not picks:
+            self.toast_now("No suggestions yet - like or play more songs")
+            return
+        today = time.strftime("%Y-%m-%d")
+        added = 0
+        merged = []
+        for i, t in enumerate(own):
+            merged.append(t)
+            if (i + 1) % 2 == 0 and added < len(picks):
+                p = dict(picks[added], enhanced=True, added=today)
+                merged.append(p)
+                added += 1
+        while added < len(picks):
+            merged.append(dict(picks[added], enhanced=True, added=today))
+            added += 1
+        pl["tracks"] = merged
+        pl["enhanced"] = True
+        self.store.save()
+        self.toast_now(f"Enhanced {pl['name']} · {added} suggestion"
+                       f"{'s' if added != 1 else ''}")
 
     def pick_view(self):
         """Picker rows as filtered by pick_filter ("+ New" always stays)."""
@@ -4171,6 +4246,8 @@ class UI:
             sub += f" \u00b7 {nplays} plays"
         if kind == "history" and app.store.hist_dedupe:
             sub += " \u00b7 repeats hidden"
+        if kind == "playlist" and pl.get("enhanced"):
+            sub += " \u00b7 Enhanced"
         if kind in ("liked", "playlist"):
             ym = time.strftime("%Y-%m")
             new = sum(1 for t in tracks
@@ -4476,7 +4553,7 @@ class UI:
         put(scr, y, tx, wcut(t["title"], title_w),
             pal["green"] if playing else cp(pal["text"]),
             curses.A_BOLD if (playing or selected) else 0)
-        if t.get("auto"):
+        if t.get("auto") or t.get("enhanced"):
             ax = tx + min(dlen(t["title"]), title_w) + 1
             if ax < cx_safe - 1:
                 put(scr, y, ax, IC_AUTO, cp(pal["accent"]))
@@ -4711,7 +4788,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -5202,6 +5279,8 @@ def handle_key(app, k):
             app.open_pick_merge(arg)
         elif k == "w" and kind == "playlist":
             app.toggle_pin(arg)
+        elif k == "h" and kind == "playlist":
+            app.toggle_enhance(arg)
         elif k == "e" and kind == "playlist":
             app.rename_index = arg
             app.name_buf = app.store.playlists[arg]["name"]

@@ -5,6 +5,11 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press `h` on a playlist to Enhance it: suggestions from your library
+  (same artists first, ranked by your plays) weave in every 2 songs with
+  a ✦ marker. Press `h` again to drop them. Duplicating a playlist keeps
+  only your own songs.
+
 - Press `w` on a playlist to pin it: pinned playlists rise to the top of
   the sidebar and the home tiles with a ★, and the pin survives restarts.
 

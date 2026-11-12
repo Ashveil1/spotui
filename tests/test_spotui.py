@@ -3776,3 +3776,87 @@ class PinPlaylistTests(unittest.TestCase):
         self.assertTrue(self.app.store.playlists[2]['pinned'])
         self.assertEqual(self.app.pinned_order(), [2, 0, 1])
 
+class EnhancePlaylistTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.create_playlist('Mix')
+        self.app.back()
+        self.app.store.playlists[0]['tracks'] = [
+            dict(track(1), title='A One', artist='Alpha'), dict(track(2), title='A Two', artist='Alpha'),
+            dict(track(3), title='B One', artist='Beta'), dict(track(4), title='B Two', artist='Beta')]
+        # library pool: liked + history songs, some by the same artists
+        self.app.store.liked = [dict(track(5), title='A Three', artist='Alpha'),
+                                dict(track(6), title='C One', artist='Gamma')]
+        self.app.store.history = [dict(track(7), title='A Four', artist='Alpha')]
+        self.app.store.plays = {'5': {'n': 9, 'artist': 'Alpha',
+                                      'title': 'A Three'},
+                                '7': {'n': 4, 'artist': 'Alpha',
+                                      'title': 'A Four'},
+                                '6': {'n': 7, 'artist': 'Gamma',
+                                      'title': 'C One'}}
+
+    def test_enhance_interleaves(self):
+        self.app.toggle_enhance(0)
+        pl = self.app.store.playlists[0]
+        self.assertTrue(pl['enhanced'])
+        ids = [t['id'] for t in pl['tracks']]
+        self.assertEqual(ids, ['1', '2', '5', '3', '4', '7'])
+        enh = [t['id'] for t in pl['tracks'] if t.get('enhanced')]
+        self.assertEqual(enh, ['5', '7'])   # 4 own songs -> 2 slots
+        self.assertIn('2 suggestions', self.app.toast[0])
+
+    def test_candidates_rank_same_artist_first(self):
+        pl = self.app.store.playlists[0]
+        cands = self.app.enhance_candidates(pl)
+        self.assertEqual([t['id'] for t in cands], ['5', '7', '6'])
+
+    def test_enhance_off_removes_suggestions(self):
+        self.app.toggle_enhance(0)
+        self.app.toggle_enhance(0)
+        pl = self.app.store.playlists[0]
+        self.assertFalse(pl['enhanced'])
+        self.assertEqual([t['id'] for t in pl['tracks']],
+                         ['1', '2', '3', '4'])
+        self.assertIn('Enhance off', self.app.toast[0])
+
+    def test_enhance_empty_playlist(self):
+        self.app.store.playlists[0]['tracks'] = []
+        self.app.toggle_enhance(0)
+        self.assertIn('Add some songs', self.app.toast[0])
+        self.assertFalse(self.app.store.playlists[0].get('enhanced'))
+
+    def test_enhance_no_candidates(self):
+        self.app.store.liked = []
+        self.app.store.history = []
+        self.app.toggle_enhance(0)
+        self.assertIn('No suggestions', self.app.toast[0])
+        self.assertFalse(self.app.store.playlists[0].get('enhanced'))
+
+    def test_enhance_survives_reload(self):
+        self.app.toggle_enhance(0)
+        store = s.Store()
+        self.assertTrue(store.playlists[0].get('enhanced'))
+        self.assertTrue(any(t.get('enhanced')
+                            for t in store.playlists[0]['tracks']))
+
+    def test_duplicate_strips_suggestions(self):
+        self.app.toggle_enhance(0)
+        self.app.duplicate_playlist(0)
+        copy = self.app.store.playlists[-1]
+        self.assertEqual([t['id'] for t in copy['tracks']],
+                         ['1', '2', '3', '4'])
+        self.assertFalse(copy.get('enhanced'))
+
+    def test_h_key(self):
+        self.app.push('playlist', 0)
+        s.handle_key(self.app, 'h')
+        self.assertTrue(self.app.store.playlists[0]['enhanced'])
+
