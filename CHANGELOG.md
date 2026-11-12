@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press `Y` in Stats to copy a shareable summary: plays, unique songs,
+  listening time, top artist, top song, streak and this week's plays.
+  Without a clipboard the toast previews the headline.
+
 - Press `V` on a playlist to copy its tracklist as numbered text
   ("1. Title - Artist (2:24)") for sharing anywhere. Same clipboard
   chain as `Y` (Termux, Wayland, X11, macOS, OSC 52); without a

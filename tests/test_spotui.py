@@ -4308,3 +4308,55 @@ class CopyTracklistTests(unittest.TestCase):
         s.handle_key(self.app, 'V')
         self.assertTrue(self.app.copy_text.called)
 
+class ShareStatsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.store.liked = [dict(track(1), dur=180)]
+        self.app.store.history = [dict(track(1), added=__import__('time').time())]
+        self.app.store.plays = {
+            '1': {'title': 'Song 1', 'artist': 'Artist', 'n': 7},
+            '2': {'title': 'Song 2', 'artist': 'Artist', 'n': 3},
+            '3': {'title': 'Song 3', 'artist': 'Other', 'n': 2}}
+
+    def test_share_text(self):
+        text = self.app.stats_share_text()
+        lines = text.split('\n')
+        self.assertEqual(lines[0], 'My SpotUI stats')
+        self.assertIn('12 plays · 3 different songs', lines[1])
+        self.assertIn('21 min', text)
+        self.assertIn('Top artist: Artist (10 plays)', text)
+        self.assertIn('Top song: Song 1 - Artist (7 plays)', text)
+        self.assertIn('1-day streak', text)
+        self.assertIn('1 plays this week', text)
+
+    def test_share_stats_copies(self):
+        self.app.copy_text = Mock(return_value=True)
+        text = self.app.share_stats()
+        self.assertEqual(self.app.copy_text.call_args[0][0], text)
+
+    def test_share_stats_fallback(self):
+        self.app.copy_text = Mock(return_value=False)
+        self.app.share_stats()
+        self.assertIn('Stats:', self.app.toast[0])
+
+    def test_Y_in_stats_view(self):
+        self.app.copy_text = Mock(return_value=True)
+        self.app.push('stats', None)
+        s.handle_key(self.app, 'Y')
+        self.assertTrue(self.app.copy_text.called)
+
+    def test_empty_stats(self):
+        self.app.store.plays = {}
+        self.app.store.history = []
+        self.app.store.liked = []
+        text = self.app.stats_share_text()
+        self.assertEqual(text, 'My SpotUI stats\n0 plays · 0 different songs')
+

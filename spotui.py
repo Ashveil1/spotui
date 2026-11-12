@@ -213,7 +213,7 @@ VIEW_HINTS = {
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
     "playing": "Space pause \u00b7 l like \u00b7 v queue \u00b7 chips and Up Next are clickable",
-    "stats": "Click a top artist to open it \u00b7 a top song plays \u00b7 Backspace back",
+    "stats": "Click a top artist to open it \u00b7 a top song plays \u00b7 Y copies summary \u00b7 Backspace back",
     "similar": "Enter plays \u00b7 a queues \u00b7 R finds new picks \u00b7 Backspace back",
 }
 
@@ -2578,6 +2578,36 @@ class App:
         preview = " \u00b7 ".join(
             f"{t.get('title') or '?'}" for t in pl["tracks"][:3])
         self.toast_now(f"Tracklist: {preview} \u2026")
+        return text
+
+    def stats_share_text(self):
+        """Wrapped-style stats summary as shareable text."""
+        total, uniq, ta, ts = stats_summary(self.store.plays)
+        lines = ["My SpotUI stats"]
+        lines.append(f"{total} plays \u00b7 {uniq} different songs")
+        mins = stats_minutes(self.store)
+        if mins:
+            lines.append(f"About {mins} listened")
+        if ta:
+            lines.append(f"Top artist: {ta[0][0]} ({ta[0][1]} plays)")
+        if ts:
+            lines.append(f"Top song: {ts[0][0]} - {ts[0][1]} "
+                         f"({ts[0][2]} plays)")
+        streak = stats_streak(self.store)
+        if streak:
+            lines.append(f"{streak}-day streak")
+        week = stats_week(self.store)
+        if week:
+            lines.append(f"{week} plays this week")
+        return "\n".join(lines)
+
+    def share_stats(self):
+        """Copy the stats summary; falls back to showing it in a toast."""
+        text = self.stats_share_text()
+        if self.copy_text(text, "Stats"):
+            return text
+        top = text.split("\n")[1] if "\n" in text else text
+        self.toast_now("Stats: " + top)
         return text
 
     def export_playlist(self, pi):
@@ -5007,7 +5037,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("V", "playlist: copy tracklist"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link / stats summary"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("V", "playlist: copy tracklist"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -5511,6 +5541,8 @@ def handle_key(app, k):
                 app.toast_now("Turn sorting off (m) to reorder songs")
             else:
                 app.move_in_playlist(arg, app.sel_row(), 1 if k == "J" else -1)
+        elif k == "Y" and kind == "stats":
+            app.share_stats()
         elif k == "Y":
             app.copy_link(app.track_under() or app.current)
         elif k == "I":
