@@ -207,7 +207,7 @@ def fmt_added(v):
 VIEW_HINTS = {
     "search": "Enter plays \u00b7 a queues \u00b7 Q queues all \u00b7 o opens artist \u00b7 Tab switches All/Songs/Artists",
     "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
-    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates",
+    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates \u00b7 B merges",
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 X clears",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
@@ -1412,6 +1412,8 @@ class App:
         self.pick_rows = []
         self.pick_idx = 0
         self.pick_pending = None      # track waiting to be added
+        self.pick_merge = None        # playlist index being merged, or None
+        self.pick_title = "Add to playlist"
         self.pick_filter = ""         # type-to-filter inside the picker
         self.toast = ("", 0.0)
         self.queue = []
@@ -2653,13 +2655,53 @@ class App:
 
     def open_pick(self, t):
         self.pick_pending = t
+        self.pick_merge = None
+        self.pick_title = "Add to playlist"
         self.pick_rows = [{"name": "+ New playlist", "new": True}] + [
             {"name": p["name"], "new": False, "n": len(p["tracks"]),
-             "has": any(x["id"] == t["id"] for x in p["tracks"])}
-            for p in self.store.playlists]
+             "has": any(x["id"] == t["id"] for x in p["tracks"]), "pi": j}
+            for j, p in enumerate(self.store.playlists)]
         self.pick_idx = 0
         self.pick_filter = ""
         self.mode = "pick"
+
+    def open_pick_merge(self, pi):
+        """Picker that merges the whole of playlist pi into another one."""
+        if not 0 <= pi < len(self.store.playlists):
+            return
+        if not self.store.playlists[pi]["tracks"]:
+            self.toast_now("This playlist is empty")
+            return
+        self.pick_pending = None
+        self.pick_merge = pi
+        self.pick_title = f"Merge \u201c{self.store.playlists[pi]['name']}\u201d into"
+        self.pick_rows = [{"name": "+ New playlist", "new": True}] + [
+            {"name": p["name"], "new": False, "n": len(p["tracks"]),
+             "has": False, "pi": j}
+            for j, p in enumerate(self.store.playlists) if j != pi]
+        self.pick_idx = 0
+        self.pick_filter = ""
+        self.mode = "pick"
+
+    def merge_playlist(self, src, dst):
+        """Append every song of playlist src into dst, skipping dupes."""
+        if not (0 <= src < len(self.store.playlists)
+                and 0 <= dst < len(self.store.playlists)):
+            return 0
+        a, b = self.store.playlists[src], self.store.playlists[dst]
+        have = {x["id"] for x in b["tracks"]}
+        fresh = [t for t in a["tracks"] if t["id"] not in have]
+        today = time.strftime("%Y-%m-%d")
+        b["tracks"].extend(dict(t, added=t.get("added") or today)
+                           for t in fresh)
+        self.store.save()
+        if not fresh:
+            self.toast_now(f"{b['name']} already has every song")
+        else:
+            self.toast_now(f"Merged {len(fresh)} song"
+                           f"{'s' if len(fresh) != 1 else ''} "
+                           f"into {b['name']}")
+        return len(fresh)
 
     def pick_view(self):
         """Picker rows as filtered by pick_filter ("+ New" always stays)."""
@@ -4643,7 +4685,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -4715,7 +4757,7 @@ class UI:
         y = max(1, (self.scr.getmaxyx()[0] - h) // 2)
         x = (W - w) // 2
         box(self.scr, y, x, w, h, pal["dim"], pal["side"])
-        put(self.scr, y + 1, x + 2, "Add to playlist", pal["side"],
+        put(self.scr, y + 1, x + 2, wcut(app.pick_title, w - 4), pal["side"],
             curses.A_BOLD)
         if app.pick_filter:
             put(self.scr, y + 2, x + 2,
@@ -4921,7 +4963,11 @@ def handle_key(app, k):
                 app.rename_playlist(app.rename_index, app.name_buf)
             else:
                 app.create_playlist(app.name_buf)
-                if app.pick_pending:
+                if app.pick_merge is not None:
+                    app.merge_playlist(app.pick_merge,
+                                       len(app.store.playlists) - 1)
+                    app.pick_merge = None
+                elif app.pick_pending:
                     app.add_to_playlist(len(app.store.playlists) - 1,
                                         app.pick_pending)
             app.pick_pending = None
@@ -4955,8 +5001,11 @@ def handle_key(app, k):
             if r["new"]:
                 app.mode = "name"
                 app.name_buf = ""
+            elif app.pick_merge is not None:
+                app.merge_playlist(app.pick_merge, r["pi"])
+                app.pick_merge = None
             else:
-                app.add_to_playlist(app.pick_rows.index(r) - 1,
+                app.add_to_playlist(r.get("pi", app.pick_rows.index(r) - 1),
                                     app.pick_pending)
                 app.pick_pending = None
         elif k == "\x1b" or k == 27:
@@ -4966,9 +5015,11 @@ def handle_key(app, k):
             else:
                 app.mode = "normal"
                 app.pick_pending = None
+                app.pick_merge = None
         elif k == "q" and not filtering:
             app.mode = "normal"
             app.pick_pending = None
+            app.pick_merge = None
         elif k in ("\x7f", "\b", curses.KEY_BACKSPACE, 127, 8, 263):
             app.pick_filter = app.pick_filter[:-1]
             app.pick_idx = 0
@@ -5121,6 +5172,8 @@ def handle_key(app, k):
             app.push("queue")
         elif k == "N" and kind == "playlist":
             app.duplicate_playlist(arg)
+        elif k == "B" and kind == "playlist":
+            app.open_pick_merge(arg)
         elif k == "e" and kind == "playlist":
             app.rename_index = arg
             app.name_buf = app.store.playlists[arg]["name"]

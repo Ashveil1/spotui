@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press `B` on a playlist to merge all its songs into another playlist
+  (or a new one) in one step. Songs already in the target are skipped,
+  so merging is never destructive and the toast says how many moved.
+
 - The home greeting shows today's listening time next to the streak
   ("Good evening Thu 12 Nov · 5-day streak · 26 min today") (#143)
 

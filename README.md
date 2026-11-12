@@ -89,6 +89,7 @@ Tips that make it nicer on a phone:
 | `f` | Now Playing | `t` | sleep timer (presets, end of track, custom minutes) |
 | `J` / `K` | reorder queue | `W` | save queue as playlist |
 | `N` (playlist) | duplicate the playlist, tracks included | |
+| `B` (playlist) | merge the playlist into another (skips songs already there) | |
 | `C` | clear upcoming queue | `X` | export playlist JSON |
 | `Y` | copy song link to the clipboard (Termux, Wayland, X11, macOS, or OSC 52; shows the link when none work) | |
 | `Q` (search) | queue all search results (skips songs already queued) | |
