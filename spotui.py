@@ -6,6 +6,7 @@ Layout mimics Spotify desktop: top bar with search pill, black sidebar,
 #121212 main area, and a full now-playing bar. Light on RAM: curses + mpv.
 """
 
+import base64
 import curses
 import json
 import locale
@@ -2316,6 +2317,44 @@ class App:
         self.sel[self.key()] = j
         return True
 
+    def copy_link(self, t):
+        """Copy a song's YouTube link to the system clipboard.
+
+        Tries the usual clipboard tools first (Termux, Wayland, X11,
+        macOS), then an OSC 52 escape written straight to the terminal.
+        Always returns the URL; when no clipboard worked the toast shows
+        the link itself so it can still be copied by hand.
+        """
+        url = (t or {}).get("url")
+        if not url and t and t.get("id"):
+            url = f"https://www.youtube.com/watch?v={t['id']}"
+        if not url:
+            self.toast_now("No link for this song")
+            return None
+        for cmd in (["termux-clipboard-set"], ["wl-copy"],
+                    ["xclip", "-selection", "clipboard"],
+                    ["xsel", "--clipboard", "--input"], ["pbcopy"]):
+            if shutil.which(cmd[0]):
+                try:
+                    subprocess.run(cmd, input=url.encode(), timeout=3,
+                                   stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL, check=True)
+                    self.toast_now("Link copied to clipboard")
+                    return url
+                except (OSError, subprocess.SubprocessError):
+                    continue
+        try:
+            with open("/dev/tty", "wb") as tty:
+                tty.write(b"\x1b]52;c;" + base64.b64encode(url.encode())
+                          + b"\a")
+                tty.flush()
+            self.toast_now("Link copied to clipboard")
+            return url
+        except OSError:
+            pass
+        self.toast_now(f"Link: {url}")
+        return url
+
     def export_playlist(self, pi):
         if not 0 <= pi < len(self.store.playlists):
             return None
@@ -4373,7 +4412,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -4765,6 +4804,8 @@ def handle_key(app, k):
                 app.toast_now("Turn sorting off (m) to reorder songs")
             else:
                 app.move_in_playlist(arg, app.sel_row(), 1 if k == "J" else -1)
+        elif k == "Y":
+            app.copy_link(app.track_under() or app.current)
         elif k == "a":
             app.add_queue(app.track_under() or app.current)
         elif k == "l":

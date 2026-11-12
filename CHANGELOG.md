@@ -5,6 +5,11 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press Y to copy the selected (or playing) song's YouTube link - via
+  termux-clipboard-set / wl-copy / xclip / xsel / pbcopy when present,
+  an OSC 52 escape otherwise, and the toast shows the link as a
+  fallback (#132)
+
 - The On repeat shelf on home links to the stats view ("Open Stats →"),
   like Recently played links to its full view (#131)
 
