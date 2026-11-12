@@ -2810,8 +2810,12 @@ class UI:
         self.hit(tx, ty + 1, min(dlen(track["artist"]), tw), 1,
                  "artist", track["artist"])
         src = "Autoplay" if track.get("auto") else app.play_source
-        if src:
-            put(scr, ty + 2, tx, wcut("From " + src, tw), pal["faint"])
+        line = ("From " + src) if src else ""
+        n_plays = (app.store.plays.get(track["id"]) or {}).get("n", 0)
+        if n_plays:
+            line += ("  \u00b7  " if line else "") + f"{n_plays} plays"
+        if line:
+            put(scr, ty + 2, tx, wcut(line, tw), pal["faint"])
         liked_now = track["id"] in app.liked_ids
         put(scr, ty, tx + tw - 2, IC_HEART if liked_now else IC_HEARTO,
             pal["green"] if liked_now else pal["sdim"], curses.A_BOLD)
