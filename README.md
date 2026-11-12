@@ -79,7 +79,7 @@ SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in 
 | `f` | Now Playing | `t` | sleep timer |
 | `J` / `K` | reorder queue | `W` | save queue as playlist |
 | `C` | clear upcoming queue | `X` | export playlist JSON |
-| `D` | drop autoplayed songs (queue) / hide repeats (Recently Played) | | |
+| `D` | drop autoplayed songs (queue) / hide repeats (Recently Played) | `X` (Recently Played) | clear play history (asks first; playlists and likes stay) |
 | `R` | new "Made for you" picks | `T` | cycle color theme |
 | `i` or the sidebar | listening stats | `S` | shuffle mode |
 | `y` | recently played | `1`-`3` | play a daily mix (home) |

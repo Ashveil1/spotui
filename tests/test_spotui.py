@@ -1799,6 +1799,49 @@ class HomeStreakTests(unittest.TestCase):
                              for x in self._greeting_texts()))
 
 
+class ClearHistoryTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.store.history = [
+            {"id": "a", "title": "A", "artist": "X", "dur": 1,
+             "added": s.time.time()}]
+        self.app.store.plays = {"a": {"n": 3, "title": "A", "artist": "X"}}
+        self.app.store.liked = [
+            {"id": "a", "title": "A", "artist": "X", "dur": 1}]
+        self.app.store.playlists = [{"name": "Keep", "tracks": [
+            {"id": "a", "title": "A", "artist": "X", "dur": 1}]}]
+
+    def test_clear_history_keeps_library(self):
+        self.app.clear_history()
+        self.assertEqual(self.app.store.history, [])
+        self.assertEqual(self.app.store.plays, {})
+        self.assertEqual(len(self.app.store.liked), 1)
+        self.assertEqual(self.app.store.playlists[0]["name"], "Keep")
+        st = s.Store()
+        self.assertEqual(st.history, [])
+        self.assertEqual(st.plays, {})
+
+    def test_confirm_keys(self):
+        self.app.mode = "confirm_clearhist"
+        s.handle_key(self.app, "n")
+        self.assertEqual(self.app.mode, "normal")
+        self.assertEqual(len(self.app.store.history), 1)
+        self.app.mode = "confirm_clearhist"
+        s.handle_key(self.app, "y")
+        self.assertEqual(self.app.mode, "normal")
+        self.assertEqual(self.app.store.history, [])
+
+
 class FmtAgoTests(unittest.TestCase):
     def test_buckets(self):
         import time as _t

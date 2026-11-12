@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Clear your play history: `X` in Recently Played asks for confirmation,
+  then resets Recently Played, play counts and stats. Playlists and Liked
+  Songs are kept (#125)
+
 - The home greeting shows your listening streak ("· 5-day streak") when
   you have played something on consecutive days (#124)
 

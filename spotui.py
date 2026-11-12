@@ -182,7 +182,7 @@ VIEW_HINTS = {
     "search": "Enter plays \u00b7 a queues \u00b7 o opens artist",
     "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
     "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K or drag reorders \u00b7 e renames",
-    "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats",
+    "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 X clears",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
     "playing": "Space pause \u00b7 l like \u00b7 v queue \u00b7 S shuffle \u00b7 click Up Next to jump",
@@ -2398,6 +2398,12 @@ class App:
         self.store.save()
         self.toast_now(f"Renamed playlist: {name}")
 
+    def clear_history(self):
+        self.store.history = []
+        self.store.plays = {}
+        self.store.save()
+        self.toast_now("Play history cleared - playlists and liked songs kept")
+
     def delete_playlist(self, pi):
         if not 0 <= pi < len(self.store.playlists):
             return
@@ -4401,6 +4407,21 @@ class UI:
         if app.pick_filter and len(view) == 1:
             put(self.scr, y + 4, x + 4, "no playlists match", pal["sfaint"])
 
+    def clearhist_modal(self, W):
+        app, pal = self.app, self.pal
+        w, h = min(62, W - 4), 9
+        y = max(1, (self.scr.getmaxyx()[0] - h) // 2)
+        x = (W - w) // 2
+        box(self.scr, y, x, w, h, pal["dim"], pal["side"])
+        put(self.scr, y + 1, x + 2, "Clear play history?", pal["side"],
+            curses.A_BOLD)
+        put(self.scr, y + 3, x + 2,
+            "Recently Played, play counts and stats reset.", pal["sdim"])
+        put(self.scr, y + 4, x + 2,
+            "Playlists and Liked Songs stay.", pal["sdim"])
+        put(self.scr, y + 6, x + 2, "y: clear history   n / Esc: cancel",
+            pal["sfaint"])
+
     def delete_modal(self, W):
         app, pal = self.app, self.pal
         w, h = min(56, W - 4), 7
@@ -4446,7 +4467,9 @@ class UI:
             self.pick_modal(y1, W)
         if app.mode == "confirm_delete":
             self.delete_modal(W)
-        if not app.show_help and app.mode not in ("name", "pick", "confirm_delete"):
+        if app.mode == "confirm_clearhist":
+            self.clearhist_modal(W)
+        if not app.show_help and app.mode not in ("name", "pick", "confirm_delete", "confirm_clearhist"):
             self.toast(y1 - 1, W)
         # cursor for text input
         if app.mode == "search" and hasattr(app, "search_xy"):
@@ -4507,6 +4530,14 @@ def handle_key(app, k):
             app.mode = "normal"
         elif k in ("n", "N", "q", "\x1b", 27):
             app.delete_index = None
+            app.mode = "normal"
+        return
+
+    if app.mode == "confirm_clearhist":
+        if k in ("y", "Y"):
+            app.clear_history()
+            app.mode = "normal"
+        elif k in ("n", "N", "q", "\x1b", 27):
             app.mode = "normal"
         return
 
@@ -4723,6 +4754,8 @@ def handle_key(app, k):
             app.mode = "name"
         elif k == "X" and kind == "playlist":
             app.export_playlist(arg)
+        elif k == "X" and kind == "history":
+            app.mode = "confirm_clearhist"
         elif k == "D" and kind == "playlist":
             app.delete_index = arg
             app.mode = "confirm_delete"
@@ -4782,7 +4815,7 @@ def handle_mouse(app):
     if os.environ.get("SPOTUI_DEBUG"):
         open("/tmp/spotui-debug.log", "a").write(
             f"mouse x={mx} y={my} bstate={bstate:#x}\n")
-    modal = app.show_help or app.mode in ("name", "pick", "confirm_delete")
+    modal = app.show_help or app.mode in ("name", "pick", "confirm_delete", "confirm_clearhist")
     if modal:
         app.drag_rect = None
         app.drag_row = None
@@ -4843,7 +4876,7 @@ def handle_mouse(app):
     dbl = bool(bstate & (curses.BUTTON1_DOUBLE_CLICKED
                          | curses.BUTTON1_TRIPLE_CLICKED))
     # while a modal is open, only the modal's own controls respond
-    blocked = app.show_help or app.mode in ("name", "pick", "confirm_delete")
+    blocked = app.show_help or app.mode in ("name", "pick", "confirm_delete", "confirm_clearhist")
     allowed = {"helpclose"} if app.show_help else ({"pickrow"} if app.mode == "pick" else set())
     for r in reversed(app.rects):
         if not (r["x0"] <= mx < r["x1"] and r["y0"] <= my < r["y1"]):
