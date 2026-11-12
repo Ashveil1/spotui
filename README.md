@@ -59,7 +59,16 @@ git clone https://github.com/Ashveil1/spotui ~/spotui
 cd ~/spotui && ./install.sh && ./spotui
 ```
 
-SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in the installer. I could not test audio on a real Android device. If mpv is silent, pass an output driver, for example `SPOTUI_MPV_ARGS="--ao=opensles" ./spotui`. Terminal palette themes need terminal support, so `T` may say it is unavailable and the app falls back to 256 colors.
+SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in the installer. I could not test audio on a real Android device.
+
+Tips that make it nicer on a phone:
+
+- **Silent audio?** Pass an output driver: `SPOTUI_MPV_ARGS="--ao=opensles" ./spotui`.
+- **Keep playing with the screen off:** run `termux-wake-lock` first (and `termux-wake-unlock` when done), or Android may suspend the session.
+- **Copy song links:** `pkg install termux-api` gives you `termux-clipboard-set`, which is the first clipboard tool `Y` tries, so copy-link works like on the desktop.
+- **Small screens:** the layout squeezes by itself; `z` hides the sidebar for the full width, and `SPOTUI_REDUCED_MOTION=1 ./spotui` stops the animation if scrolling feels heavy.
+- **Themes:** terminal palette themes need terminal support, so `T` may say it is unavailable and the app falls back to 256 colors.
+- **Your files:** the library lives in `~/.config/spotui/` and playlist exports land in `~/spotui-exports/` - nothing leaves the phone.
 
 ## Keys
 

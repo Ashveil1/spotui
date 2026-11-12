@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The Termux section grew into a real guide: OpenSL ES audio flag,
+  termux-wake-lock for screen-off playback, termux-api for the copy-link
+  key, small-screen tips, and where the data lives (#137)
+
 - Search results can be queued in one go: the "Queue all →" link in the
   All header (or pressing Q) appends every result, skipping songs that
   are already in the queue (#136)
