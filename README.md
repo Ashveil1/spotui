@@ -229,4 +229,4 @@ Play milestones pop a toast: every 25 plays of one song, and every 500 plays ove
 
 Views reveal top-down when you switch (about half a second). Set `SPOTUI_REDUCED_MOTION=1` to turn this and the other animations off.
 
-**Your mixes** on the home screen are built from songs already in your library (liked, history, playlists, Made for you), grouped around the artists you play most. Press `1`, `2` or `3` on the home screen, or click one, to play it shuffled. Nothing is fetched for them.
+**Your mixes** on the home screen are built from songs already in your library (liked, history, playlists, Made for you), grouped around the artists you play most. Press `1`, `2` or `3` on the home screen, or click one, to play it shuffled (the toast names its size). Nothing is fetched for them.

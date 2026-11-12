@@ -2052,7 +2052,8 @@ class App:
         recent = [t.get("id") for t in self.store.history[:10]]
         tracks = smart_shuffle(m["tracks"], "", recent)
         self.play(tracks, 0, source=m["name"])
-        self.toast_now(f"{m['name']}: {m['artist']} and more")
+        self.toast_now(f"{m['name']}: {len(tracks)} songs - "
+                       f"{m['artist']} and more")
 
     def cycle_shuffle_mode(self):
         i = SHUFFLE_MODES.index(self.store.shuffle_mode)
@@ -4229,6 +4230,7 @@ class UI:
         rows = [
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
             ("g / G", "top / bottom of a list"),
+            ("1-3", "home: play a daily mix"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
             ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
