@@ -3485,6 +3485,8 @@ class UI:
             return y0
         put(scr, y0, x0 + 2, "On repeat", pal["text"], curses.A_BOLD)
         put(scr, y0, x0 + 13, "\u00b7 most played this week", pal["faint"])
+        put(scr, y0, W - 13, "Open Stats \u2192", pal["green"])
+        self.hit(W - 14, y0, 15, 1, "nav", "stats")
         cw = 20
         per = max(1, (W - x0 - 4) // cw)
         full = y0 + 5 < y1 - 2

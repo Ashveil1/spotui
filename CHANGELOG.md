@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The On repeat shelf on home links to the stats view ("Open Stats →"),
+  like Recently played links to its full view (#131)
+
 - The state chips in Now Playing (Playing/Paused, Shuffle, Repeat, speed,
   EQ, Autoplay, Sleep) are clickable: same effect as their keys, and the
   speed chip resets to 1x (#130)
