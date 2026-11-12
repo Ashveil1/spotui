@@ -1044,6 +1044,12 @@ class Pal:
             return 0
 
 
+def lib_fresh(store):
+    """True for a brand-new library: nothing liked, played, or saved yet."""
+    return (not store.liked and not store.history and not store.plays
+            and not any(p.get("tracks") for p in store.playlists))
+
+
 def daily_mixes(store, n=3):
     """Mixes built only from songs already in the library, grouped by artist.
 
@@ -3353,11 +3359,14 @@ class UI:
         if y1 - y0 >= 27 and app.store.history:
             y = self._home_hero(app, pal, scr, y, y1, x0, W)
         y = self._home_tiles(app, pal, scr, y, y1, x0, W)
-        y = self._home_mixes(app, pal, scr, y, y1, x0, W)
-        y = self._home_similar(app, pal, scr, y, y1, x0, W)
-        y = self._home_heavy(app, pal, scr, y, y1, x0, W)
-        y = self._home_history(app, pal, scr, y, y1, x0, W)
-        y = self._home_liked(app, pal, scr, y, y1, x0, W)
+        if lib_fresh(app.store):
+            y = self._home_welcome(app, pal, scr, y, y1, x0, W)
+        else:
+            y = self._home_mixes(app, pal, scr, y, y1, x0, W)
+            y = self._home_similar(app, pal, scr, y, y1, x0, W)
+            y = self._home_heavy(app, pal, scr, y, y1, x0, W)
+            y = self._home_history(app, pal, scr, y, y1, x0, W)
+            y = self._home_liked(app, pal, scr, y, y1, x0, W)
         y = self._home_recent(app, pal, scr, y, y1, x0, W)
         put(scr, y1 - 2, x0 + 2,
             "Type / to search \u00b7 Enter opens \u00b7 R: Made for you \u00b7 ? for shortcuts",
@@ -3453,6 +3462,28 @@ class UI:
             self.homerow(y, x0 + 2, w, t, i, title_w)
             n += 1
         return y0 + 2 + n
+
+    def _home_welcome(self, app, pal, scr, y0, y1, x0, W):
+        """First-run panel: three steps to a full home screen."""
+        if y0 + 7 >= y1 - 1:
+            return y0
+        bw = W - x0 - 4
+        for j in range(7):
+            fill(scr, y0 + j, x0 + 2, bw, pal["pill"])
+        put(scr, y0 + 1, x0 + 4, "Welcome to SpotUI", pal["pgreen"],
+            curses.A_BOLD)
+        put(scr, y0 + 1, x0 + 24, "your library is empty - for now",
+            pal["pilldim"])
+        steps = [
+            "Press  /  and search for a song or artist",
+            "Enter plays · a queues · l likes · P saves to a playlist",
+            "This screen fills up with your mixes and picks as you listen",
+        ]
+        for i, txt in enumerate(steps):
+            put(scr, y0 + 3 + i, x0 + 4, f"{i + 1}.", pal["pgreen"],
+                curses.A_BOLD)
+            put(scr, y0 + 3 + i, x0 + 8, wcut(txt, bw - 10), pal["pill"])
+        return y0 + 8
 
     def _home_mixes(self, app, pal, scr, y0, y1, x0, W):
         mixes = daily_mixes(app.store)

@@ -3237,3 +3237,39 @@ class CopyLinkTests(unittest.TestCase):
         s.handle_key(self.app, 'Y')
         self.app.copy_link.assert_called_once_with(self.app.current)
 
+class LibFreshTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_empty_library_is_fresh(self):
+        self.assertTrue(s.lib_fresh(self.app.store))
+
+    def test_empty_playlist_still_fresh(self):
+        self.app.create_playlist('Rock')
+        self.assertTrue(s.lib_fresh(self.app.store))
+
+    def test_liked_makes_not_fresh(self):
+        self.app.store.liked = [track(1)]
+        self.assertFalse(s.lib_fresh(self.app.store))
+
+    def test_history_makes_not_fresh(self):
+        self.app.store.history = [track(1)]
+        self.assertFalse(s.lib_fresh(self.app.store))
+
+    def test_plays_make_not_fresh(self):
+        self.app.store.plays = {'1': {'title': 't', 'artist': 'a', 'n': 1}}
+        self.assertFalse(s.lib_fresh(self.app.store))
+
+    def test_playlist_tracks_make_not_fresh(self):
+        self.app.create_playlist('Rock')
+        self.app.store.playlists[0]['tracks'] = [track(1)]
+        self.assertFalse(s.lib_fresh(self.app.store))
+
