@@ -4196,3 +4196,73 @@ class LikeAllTests(unittest.TestCase):
         self.app.like_all(0)
         self.assertEqual(len(s.Store().liked), 3)
 
+class HideSongTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_toggle_block_and_toast(self):
+        self.app.toggle_block(track(1))
+        self.assertIn('1', self.app.blocked_ids)
+        self.assertIn("Won't suggest Song 1 again", self.app.toast[0])
+        self.app.toggle_block(track(1))
+        self.assertNotIn('1', self.app.blocked_ids)
+        self.assertIn('back in suggestions', self.app.toast[0])
+
+    def test_block_persists(self):
+        self.app.toggle_block(track(1))
+        self.assertEqual(s.Store().blocked, ['1'])
+
+    def test_block_none(self):
+        self.app.toggle_block(None)
+        self.assertEqual(self.app.blocked_ids, set())
+
+    def test_enhance_skips_blocked(self):
+        self.app.create_playlist('Mix')
+        self.app.back()
+        self.app.store.playlists[0]['tracks'] = [track(1)]
+        self.app.store.liked = [track(2), track(3)]
+        self.app.toggle_block(track(3))
+        cands = self.app.enhance_candidates(self.app.store.playlists[0])
+        self.assertEqual([t['id'] for t in cands], ['2'])
+
+    def test_daily_mixes_skip_blocked(self):
+        self.app.store.liked = [dict(track(1), artist='A One'),
+                                dict(track(2), artist='A One'),
+                                dict(track(3), artist='A One')]
+        self.app.store.plays = {'1': {'n': 5, 'artist': 'A One',
+                                      'title': 'Song 1'}}
+        with_blocked = dict(track(3), artist='A One')
+        self.app.store.blocked = ['3']
+        mixes = s.daily_mixes(self.app.store)
+        all_ids = {t['id'] for m in mixes for t in m['tracks']}
+        self.assertNotIn('3', all_ids)
+        self.assertIn('1', all_ids)
+
+    def test_similar_view_skips_blocked(self):
+        self.app.store.similar = {'items': [track(1), track(2)], 'pool': []}
+        self.app.toggle_block(track(2))
+        self.app.push('similar', None)
+        self.assertEqual([t['id'] for t in self.app.view_tracks()], ['1'])
+
+    def test_info_rows_show_hidden(self):
+        self.app.toggle_block(track(1))
+        self.app.open_info(track(1))
+        rows = dict(self.app.info_rows())
+        self.assertEqual(rows['Suggested'], 'no (hidden)')
+
+    def test_x_key(self):
+        self.app.create_playlist('Mix')
+        self.app.back()
+        self.app.store.playlists[0]['tracks'] = [track(1)]
+        self.app.push('playlist', 0)
+        s.handle_key(self.app, 'x')
+        self.assertIn('1', self.app.blocked_ids)
+
