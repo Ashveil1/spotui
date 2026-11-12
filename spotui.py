@@ -3068,6 +3068,14 @@ class UI:
             return
 
         top = tracks[0]
+        # Strong artist match (exact or prefix): the top-result card becomes
+        # the artist, like Spotify's Top result, and the side list keeps
+        # every song.
+        top_artist = None
+        if artists:
+            na, nq = app._norm_artist(artists[0]), app._norm_artist(app.query)
+            if nq and na.startswith(nq):
+                top_artist = artists[0]
         cw = min(34, mw - 4)
         ch = 9
         # card only when width fits a side list AND rows remain below it
@@ -3075,38 +3083,59 @@ class UI:
                 and (y1 - y0) - (ch + 3) >= 5)
         if card:
             box(scr, y0 + 1, x0 + 2, cw, ch, pal["faint"], pal["text"])
-            draw_art(scr, y0 + 2, x0 + 4, cw - 4, 3, top["id"], pal,
-                     icon=IC_NOTE,
-                     art=app.cover_for(top["id"], cw - 4, 3))
-            put(scr, y0 + 5, x0 + 4, wcut(top["title"], cw - 6), pal["text"],
-                curses.A_BOLD)
-            put(scr, y0 + 6, x0 + 4, wcut(f"Song • {top['artist']}", cw - 6),
-                pal["dim"])
-            self.hit(x0 + 2, y0 + 1, cw, ch, "row", ("search:", 0, True))
-            # footer: like · duration · add to queue · play, all clickable
-            fy = y0 + 7
-            l0 = top["id"] in app.liked_ids
-            put(scr, fy, x0 + 4, IC_HEART if l0 else IC_HEARTO,
-                pal["green"] if l0 else pal["sdim"], curses.A_BOLD)
-            self.hit(x0 + 3, fy, 2, 1, "likesong", top)
-            put(scr, fy, x0 + 8, fmt_t(top.get("dur")), pal["faint"])
-            put(scr, fy, x0 + cw - 13, IC_PLUS, pal["sdim"], curses.A_BOLD)
-            self.hit(x0 + cw - 14, fy, 2, 1, "addq", top)
-            put(scr, fy, x0 + cw - 6, f" {IC_PLAY} ", pal["btn"],
-                curses.A_BOLD)
-            self.hit(x0 + cw - 7, fy, 3, 1, "row", ("search:", 0, True))
+            if top_artist:
+                draw_art(scr, y0 + 2, x0 + 4, cw - 4, 3, top_artist, pal,
+                         icon=IC_NOTE)
+                put(scr, y0 + 5, x0 + 4, wcut(top_artist, cw - 6),
+                    pal["text"], curses.A_BOLD)
+                n_songs = len(app.artist_tracks(top_artist))
+                n_plays = app.artist_plays(top_artist)
+                detail = (f"{n_songs} songs · {n_plays} plays"
+                          if n_songs and n_plays else
+                          f"{n_songs} songs" if n_songs else "")
+                sub = "Artist" + (f" • {detail}" if detail else "")
+                put(scr, y0 + 6, x0 + 4, wcut(sub, cw - 6), pal["dim"])
+                self.hit(x0 + 2, y0 + 1, cw, ch, "artist", top_artist)
+                fy = y0 + 7
+                atracks = app.artist_tracks(top_artist) or tracks
+                put(scr, fy, x0 + cw - 6, f" {IC_PLAY} ", pal["btn"],
+                    curses.A_BOLD)
+                self.hit(x0 + cw - 7, fy, 3, 1, "playall",
+                         ("search:", atracks))
+            else:
+                draw_art(scr, y0 + 2, x0 + 4, cw - 4, 3, top["id"], pal,
+                         icon=IC_NOTE,
+                         art=app.cover_for(top["id"], cw - 4, 3))
+                put(scr, y0 + 5, x0 + 4, wcut(top["title"], cw - 6), pal["text"],
+                    curses.A_BOLD)
+                put(scr, y0 + 6, x0 + 4, wcut(f"Song • {top['artist']}", cw - 6),
+                    pal["dim"])
+                self.hit(x0 + 2, y0 + 1, cw, ch, "row", ("search:", 0, True))
+                # footer: like · duration · add to queue · play, all clickable
+                fy = y0 + 7
+                l0 = top["id"] in app.liked_ids
+                put(scr, fy, x0 + 4, IC_HEART if l0 else IC_HEARTO,
+                    pal["green"] if l0 else pal["sdim"], curses.A_BOLD)
+                self.hit(x0 + 3, fy, 2, 1, "likesong", top)
+                put(scr, fy, x0 + 8, fmt_t(top.get("dur")), pal["faint"])
+                put(scr, fy, x0 + cw - 13, IC_PLUS, pal["sdim"], curses.A_BOLD)
+                self.hit(x0 + cw - 14, fy, 2, 1, "addq", top)
+                put(scr, fy, x0 + cw - 6, f" {IC_PLAY} ", pal["btn"],
+                    curses.A_BOLD)
+                self.hit(x0 + cw - 7, fy, 3, 1, "row", ("search:", 0, True))
 
             ly0 = y0 + 1
             lx0 = x0 + cw + 4
             lw = W - lx0 - 2
             put(scr, ly0, lx0 + 2, "Songs", pal["text"], curses.A_BOLD)
             ly0 += 1
-            for i in range(1, min(6, len(tracks))):
+            start = 0 if top_artist else 1
+            for i in range(start, min(start + 5, len(tracks))):
                 t = tracks[i]
-                y = ly0 + (i - 1) * 2
+                y = ly0 + (i - start) * 2
                 if y + 2 > y0 + ch:
                     break
-                self.row(ly0 + (i - 1) * 2, lx0, lw, t, i,
+                self.row(ly0 + (i - start) * 2, lx0, lw, t, i,
                          "search:", i, compact=True)
             fy0 = y0 + ch + 1
         else:
