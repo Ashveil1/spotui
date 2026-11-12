@@ -3647,3 +3647,12 @@ class PlayTileTests(unittest.TestCase):
     def test_bad_index(self):
         self.assertFalse(self.app.play_tile('playlist', 9))
 
+class FmtListenTests(unittest.TestCase):
+    def test_under_an_hour(self):
+        self.assertEqual(s.fmt_listen(45), '45 min')
+        self.assertEqual(s.fmt_listen(0), '0 min')
+
+    def test_hours(self):
+        self.assertEqual(s.fmt_listen(130), '2 hr 10 min')
+        self.assertEqual(s.fmt_listen(60), '1 hr 0 min')
+
