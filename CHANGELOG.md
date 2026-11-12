@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The home greeting shows your listening streak ("· 5-day streak") when
+  you have played something on consecutive days (#124)
+
 - Home gains an "On repeat" shelf: cover cards for the songs you played
   most over the last 7 days, each captioned with its weekly play count;
   click a card to play it (#123)

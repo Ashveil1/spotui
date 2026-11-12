@@ -113,6 +113,8 @@ repaints on resume.
 Liked songs, playlists, recent searches, your play history and the cached
 "Made for you" shelf live in `~/.config/spotui/library.json`.
 
+The home greeting shows your listening streak when you have played something on consecutive days.
+
 Home's shortcut tiles name each playlist with its size underneath ("8 songs · 25 min").
 
 The home page shows four shelves: **On repeat** (cover cards for the songs

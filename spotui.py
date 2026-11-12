@@ -3267,8 +3267,12 @@ class UI:
         greet = "Good morning" if h < 12 else \
             "Good afternoon" if h < 18 else "Good evening"
         put(scr, y0 + 1, x0 + 2, greet, pal["text"], curses.A_BOLD)
-        put(scr, y0 + 1, x0 + 4 + dlen(greet),
-            time.strftime("%a %d %b", time.localtime()), pal["faint"])
+        dtxt = time.strftime("%a %d %b", time.localtime())
+        put(scr, y0 + 1, x0 + 4 + dlen(greet), dtxt, pal["faint"])
+        streak = stats_streak(app.store)
+        if streak >= 2:
+            put(scr, y0 + 1, x0 + 4 + dlen(greet) + dlen(dtxt) + 2,
+                f"\u00b7 {streak}-day streak", pal["green"])
         fill(scr, y0 + 2, x0 + 2, 6, pal["accent"])   # accent underline
 
         y = y0 + 4
