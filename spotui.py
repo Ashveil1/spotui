@@ -2638,6 +2638,19 @@ class App:
                     out.append(t)
         return out
 
+    def search_playlists(self, q, limit=4):
+        """Library playlists whose name contains the query, in order."""
+        nq = q.casefold().strip()
+        if not nq:
+            return []
+        out = []
+        for i, p in enumerate(self.store.playlists):
+            if nq in p["name"].casefold():
+                out.append((i, p))
+                if len(out) >= limit:
+                    break
+        return out
+
     def search_artists(self, q, limit=5):
         """Artists matching a query: library first, then the result list."""
         norm = self._norm_artist(q)
@@ -3579,6 +3592,22 @@ class UI:
                 fill(scr, y0 + 1, x, w, pal["pill"])
                 put(scr, y0 + 1, x + 2, a, pal["pilldim"])
                 self.hit(x, y0 + 1, w, 1, "artist", a)
+                x += w + 1
+            y0 += 2
+
+        pls = app.search_playlists(app.query) if app.search_filter == "all" \
+            else []
+        if pls:
+            put(scr, y0 + 1, x0 + 2, "Playlists", pal["text"], curses.A_BOLD)
+            x = x0 + 12
+            for pidx, p in pls:
+                label = f"{p['name']} \u00b7 {len(p['tracks'])}"
+                w = dlen(label) + 4
+                if x + w > W - 4:
+                    break
+                fill(scr, y0 + 1, x, w, pal["pill"])
+                put(scr, y0 + 1, x + 2, label, pal["pilldim"])
+                self.hit(x, y0 + 1, w, 1, "libitem", ("playlist", pidx))
                 x += w + 1
             y0 += 2
 

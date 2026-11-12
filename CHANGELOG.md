@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Search now surfaces your own playlists too: matching playlists appear as
+  clickable chips (with song counts) next to the artist chips (#121)
+
 - The add-to-playlist picker (`P`) now filters as you type; Esc clears the
   filter, Enter adds, "+ New playlist" always stays (#120)
 

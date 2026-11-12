@@ -93,7 +93,8 @@ Search is live: results appear as you type (after a short pause), and the result
 `Enter` keeps them and saves the query to recent searches, `Esc` just
 closes the bar. Filter chips under the bar narrow results to songs or
 artists. Matching artists from your library show as chips above the
-results; click one to open its artist page. Recent searches show when the
+results; click one to open its artist page. Playlists whose name
+matches show as chips too, with their song counts. Recent searches show when the
 bar is empty; click the × on one to remove it, and your six most
 recently played songs sit below as a Jump back in list (click to play). When the query is an
 artist's name, the top-result card shows the artist (click to open their
