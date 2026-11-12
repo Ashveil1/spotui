@@ -228,6 +228,13 @@ def fmt_remaining(tracks):
     return f"{m} min left"
 
 
+def fmt_listen(mins):
+    """'45 min' / '2 hr 10 min' for a listening-time count."""
+    if mins >= 60:
+        return f"{mins // 60} hr {mins % 60} min"
+    return f"{mins} min"
+
+
 def fmt_ends(tracks, elapsed=0, now=None):
     """'ends 16:42' - the wall-clock time the given tracks run out."""
     tot = sum(t.get("dur") or 0 for t in tracks) - int(elapsed or 0)
@@ -3526,9 +3533,15 @@ class UI:
         dtxt = time.strftime("%a %d %b", time.localtime())
         put(scr, y0 + 1, x0 + 4 + dlen(greet), dtxt, pal["faint"])
         streak = stats_streak(app.store)
+        gx = x0 + 4 + dlen(greet) + dlen(dtxt) + 2
         if streak >= 2:
-            put(scr, y0 + 1, x0 + 4 + dlen(greet) + dlen(dtxt) + 2,
-                f"\u00b7 {streak}-day streak", pal["green"])
+            stxt = f"\u00b7 {streak}-day streak"
+            put(scr, y0 + 1, gx, stxt, pal["green"])
+            gx += dlen(stxt) + 2
+        today_min = stats_day_minutes(app.store)[-1]
+        if today_min and gx + 14 <= W - 2:
+            put(scr, y0 + 1, gx, f"\u00b7 {fmt_listen(today_min)} today",
+                pal["faint"])
         fill(scr, y0 + 2, x0 + 2, 6, pal["accent"])   # accent underline
 
         y = y0 + 4

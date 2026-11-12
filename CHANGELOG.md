@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The home greeting shows today's listening time next to the streak
+  ("Good evening Thu 12 Nov · 5-day streak · 26 min today") (#143)
+
 - The green play glyph on the selected home tile is a real button now:
   it plays Liked Songs or the playlist (clicking the rest of the tile
   still opens it) (#142)
