@@ -1665,6 +1665,41 @@ class SearchPlaylistsTests(unittest.TestCase):
         self.assertEqual(len(self.app.search_playlists("gym", limit=1)), 1)
 
 
+class SidebarStatsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.pal = {key: 0 for key in
+                        ['side', 'sgreen', 'pill', 'sdim', 'sfaint',
+                         'pilldim', 'pgreen']}
+
+    def test_sidebar_shows_stats_nav(self):
+        scr = Mock()
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t_, *a, **k:
+                          texts.append(str(t_))), \
+                patch.object(s, 'fill'), \
+                patch.object(s.curses, 'color_pair', return_value=0):
+            s.UI(self.app, scr).sidebar(3, 34, 30)
+        self.assertIn("Stats", texts)
+        navs = [r['arg'] for r in self.app.rects if r['act'] == 'nav']
+        self.assertIn("stats", navs)
+
+    def test_stats_nav_pushes_stats_view(self):
+        self.app.push("stats")
+        self.assertEqual(self.app.stack[-1][0], "stats")
+
+
 class FmtAgoTests(unittest.TestCase):
     def test_buckets(self):
         import time as _t
