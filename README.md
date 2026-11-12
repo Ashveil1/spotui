@@ -91,6 +91,7 @@ Tips that make it nicer on a phone:
 | `N` (playlist) | duplicate the playlist, tracks included | |
 | `B` (playlist) | merge the playlist into another (skips songs already there) | |
 | `w` (playlist) | pin / unpin the playlist to the top of the sidebar and home tiles | |
+| `h` (playlist) | Enhance: weave suggested songs (✦) from your library into the playlist; toggle again to remove them | |
 | `C` | clear upcoming queue | `X` | export playlist JSON |
 | `Y` | copy song link to the clipboard (Termux, Wayland, X11, macOS, or OSC 52; shows the link when none work) | |
 | `Q` (search) | queue all search results (skips songs already queued) | |
