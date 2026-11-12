@@ -1557,6 +1557,27 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class StatsOnRepeatTests(unittest.TestCase):
+    def test_counts_repeats_in_week(self):
+        import time as _t
+        store = s.Store()
+        now = _t.time()
+        store.history = (
+            [dict(track(1), added=now - 3600 * i) for i in range(3)]
+            + [dict(track(2), added=now - 7200 * i) for i in range(2)]
+            + [dict(track(3), added=now)]
+            + [dict(track(1), added=now - 9 * 86400)]   # outside window
+        )
+        rows = s.stats_on_repeat(store)
+        self.assertEqual([(t["id"], n) for t, n in rows],
+                         [("1", 3), ("2", 2)])
+
+    def test_bad_entries_ignored(self):
+        store = s.Store()
+        store.history = [None, {"added": "x"}, {"id": None, "added": 1}]
+        self.assertEqual(s.stats_on_repeat(store), [])
+
+
 class QueueSourceTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
