@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- "Made for you" is now a full view, not just a home shelf: `R` on home
+  opens it as a playable list (Enter plays, `a` queues), and `R` inside it
+  rolls new picks like before (#129)
+
 - `Tab` in the search bar cycles the All / Songs / Artists filter chips,
   which were mouse-only before (#128)
 
