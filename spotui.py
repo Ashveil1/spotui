@@ -2610,6 +2610,31 @@ class App:
         self.toast_now("Stats: " + top)
         return text
 
+    def library_tracks(self):
+        """Every song in the library (liked, history, playlists), deduped."""
+        seen, out = set(), []
+        sources = [self.store.liked, self.store.history]
+        sources += [pl["tracks"] for pl in self.store.playlists]
+        for src in sources:
+            for t in src:
+                tid = t.get("id")
+                if tid and tid not in seen:
+                    seen.add(tid)
+                    out.append(t)
+        return out
+
+    def shuffle_library(self):
+        """Z: shuffle the whole library into the queue."""
+        pool = [t for t in self.library_tracks()
+                if t.get("id") not in self.blocked_ids]
+        if not pool:
+            self.toast_now("Your library is empty - like or add some songs first")
+            return
+        tracks = smart_shuffle(pool, mode=self.store.shuffle_mode,
+                               plays=self.store.plays)
+        self.play(tracks, 0, "Library shuffle")
+        self.toast_now(f"Shuffling your library - {len(tracks)} songs")
+
     def export_playlist(self, pi):
         if not 0 <= pi < len(self.store.playlists):
             return None
@@ -5037,7 +5062,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link / stats summary"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("V", "playlist: copy tracklist"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link / stats summary"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("V", "playlist: copy tracklist"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("Z", "shuffle whole library"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -5595,6 +5620,8 @@ def handle_key(app, k):
             app.toggle_private()
         elif k == "U":
             app.undo_delete()
+        elif k == "Z":
+            app.shuffle_library()
         elif k == "E":
             app.cycle_eq()
         elif k == "f":
