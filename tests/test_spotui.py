@@ -346,9 +346,9 @@ class AppTests(unittest.TestCase):
         self.app.open_pick(t)
         rows = self.app.pick_rows
         self.assertEqual(rows[1], {"name": "Has it", "new": False,
-                                   "n": 1, "has": True})
+                                   "n": 1, "has": True, "pi": 0})
         self.assertEqual(rows[2], {"name": "Empty", "new": False,
-                                   "n": 0, "has": False})
+                                   "n": 0, "has": False, "pi": 1})
         self.app.pal = {key: 0 for key in
                         ['dim', 'side', 'hover', 'sdim', 'sfaint', 'green']}
         scr = Mock()
@@ -3655,4 +3655,75 @@ class FmtListenTests(unittest.TestCase):
     def test_hours(self):
         self.assertEqual(s.fmt_listen(130), '2 hr 10 min')
         self.assertEqual(s.fmt_listen(60), '1 hr 0 min')
+
+class MergePlaylistTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.create_playlist('A')
+        self.app.back()
+        self.app.create_playlist('B')
+        self.app.back()
+        self.app.store.playlists[0]['tracks'] = [track(1), track(2)]
+        self.app.store.playlists[1]['tracks'] = [track(2), track(3)]
+
+    def test_merge_skips_dupes(self):
+        n = self.app.merge_playlist(0, 1)
+        self.assertEqual(n, 1)
+        self.assertEqual([t['id'] for t in self.app.store.playlists[1]['tracks']],
+                         ['2', '3', '1'])
+        self.assertIn('Merged 1 song', self.app.toast[0])
+
+    def test_merge_all_dupes(self):
+        self.app.store.playlists[1]['tracks'] = [track(1), track(2)]
+        n = self.app.merge_playlist(0, 1)
+        self.assertEqual(n, 0)
+        self.assertIn('already', self.app.toast[0])
+
+    def test_picker_excludes_source(self):
+        self.app.open_pick_merge(0)
+        names = [r['name'] for r in self.app.pick_rows]
+        self.assertNotIn('A', names)
+        self.assertIn('B', names)
+        self.assertIn('Merge', self.app.pick_title)
+
+    def test_picker_empty_playlist(self):
+        self.app.store.playlists[0]['tracks'] = []
+        self.app.open_pick_merge(0)
+        self.assertNotEqual(self.app.mode, 'pick')
+        self.assertIn('empty', self.app.toast[0])
+
+    def test_picker_enter_merges(self):
+        self.app.open_pick_merge(0)
+        s.handle_key(self.app, 'j')     # select B
+        s.handle_key(self.app, '\n')
+        ids = [t['id'] for t in self.app.store.playlists[1]['tracks']]
+        self.assertEqual(sorted(ids), ['1', '2', '3'])
+        self.assertIsNone(self.app.pick_merge)
+        self.assertEqual(self.app.mode, 'normal')
+
+    def test_merge_into_new_playlist(self):
+        self.app.open_pick_merge(0)
+        s.handle_key(self.app, '\n')    # "+ New playlist" is row 0
+        for ch in 'Mix':
+            s.handle_key(self.app, ch)
+        s.handle_key(self.app, '\n')
+        names = [p['name'] for p in self.app.store.playlists]
+        self.assertIn('Mix', names)
+        mix = self.app.store.playlists[-1]
+        self.assertEqual([t['id'] for t in mix['tracks']], ['1', '2'])
+        self.assertIsNone(self.app.pick_merge)
+
+    def test_b_key(self):
+        self.app.push('playlist', 0)
+        s.handle_key(self.app, 'B')
+        self.assertEqual(self.app.mode, 'pick')
+        self.assertEqual(self.app.pick_merge, 0)
 
