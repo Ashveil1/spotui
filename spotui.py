@@ -2585,8 +2585,17 @@ class UI:
             else:
                 n = len(app.store.playlists[item[3]]["tracks"])
             cnt = str(n) if n else ""
+            playing_here = (app.play_source == label and app.current
+                            and not app.mpv.state["idle"])
             name = wcut(label, SW - 10 - len(cnt))
-            put(scr, y, 6, name, txp)
+            put(scr, y, 6, name,
+                pal["sgreen"] if playing_here and not active else txp,
+                curses.A_BOLD if playing_here else 0)
+            if playing_here:
+                bx = 6 + dlen(name) + 1
+                if bx + 3 <= SW - 3 - len(cnt):
+                    put(scr, y, bx, eq_bars(app)[:3],
+                        pal["pgreen"] if active else pal["sgreen"])
             if cnt:
                 put(scr, y, SW - 3 - len(cnt), cnt, pal["sfaint"])
             arg = item[3] if len(item) > 3 else None
