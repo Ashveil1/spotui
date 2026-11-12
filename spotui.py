@@ -207,7 +207,7 @@ def fmt_added(v):
 VIEW_HINTS = {
     "search": "Enter plays \u00b7 a queues \u00b7 Q queues all \u00b7 o opens artist \u00b7 Tab switches All/Songs/Artists",
     "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
-    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K or drag reorders \u00b7 e renames",
+    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates",
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 X clears",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
@@ -2506,6 +2506,23 @@ class App:
         self.push("playlist", len(self.store.playlists) - 1)
         self.toast_now(f"Created playlist: {name}")
 
+    def duplicate_playlist(self, pi):
+        """Copy a playlist, tracks included, as '<name> (copy)'."""
+        if not 0 <= pi < len(self.store.playlists):
+            return
+        pl = self.store.playlists[pi]
+        base = pl["name"] + " (copy)"
+        name, n = base, 2
+        names = {p["name"] for p in self.store.playlists}
+        while name in names:
+            name = f"{base} {n}"
+            n += 1
+        self.store.playlists.append({"name": name,
+                                     "tracks": [dict(t) for t in pl["tracks"]]})
+        self.store.save()
+        self.push("playlist", len(self.store.playlists) - 1)
+        self.toast_now(f"Duplicated as: {name}")
+
     def rename_playlist(self, pi, name):
         if not 0 <= pi < len(self.store.playlists):
             return
@@ -4565,7 +4582,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -5010,6 +5027,8 @@ def handle_key(app, k):
                 app.push("playing")
         elif k == "v":
             app.push("queue")
+        elif k == "N" and kind == "playlist":
+            app.duplicate_playlist(arg)
         elif k == "e" and kind == "playlist":
             app.rename_index = arg
             app.name_buf = app.store.playlists[arg]["name"]

@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press N in a playlist to duplicate it, tracks included, as
+  "<name> (copy)" (numbered when that name is taken) (#140)
+
 - The "From Late Night Drive" line in Now Playing is clickable: it opens
   the playlist, Liked Songs, Recently Played, Made for you, or the
   artist page the song is playing from (#139)
