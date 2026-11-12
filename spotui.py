@@ -3419,8 +3419,16 @@ class UI:
             pw = W - x0 - 4
             for i, t in enumerate(pop):
                 py = ly + 1 + i
-                put(scr, py, x0 + 2, f"{i + 1}", pal["faint"])
-                put(scr, py, x0 + 5, wcut(t["title"], pw - 20), pal["text"])
+                playing = (app.current and app.current["id"] == t["id"]
+                           and not app.mpv.state["idle"])
+                if playing:
+                    put(scr, py, x0 + 2, eq_bars(app)[:3], pal["green"],
+                        curses.A_BOLD)
+                else:
+                    put(scr, py, x0 + 2, f"{i + 1}", pal["faint"])
+                put(scr, py, x0 + 5, wcut(t["title"], pw - 20),
+                    pal["green"] if playing else pal["text"],
+                    curses.A_BOLD if playing else 0)
                 pn = f"{app.store.plays[t['id']]['n']} plays"
                 put(scr, py, x0 + 2 + pw - dlen(pn), pn, pal["faint"])
                 self.hit(x0 + 2, py, pw, 1, "playat", (vk, pop, i))
