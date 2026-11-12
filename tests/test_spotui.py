@@ -1842,6 +1842,41 @@ class ClearHistoryTests(unittest.TestCase):
         self.assertEqual(self.app.store.history, [])
 
 
+class FirstPlayTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+
+    def test_first_play_set_once(self):
+        t1 = {"id": "a", "title": "A", "artist": "X", "dur": 1,
+              "url": "u"}
+        self.app._note_history(t1)
+        first = self.app.store.first_play
+        self.assertIsNotNone(first)
+        self.app._note_history({"id": "b", "title": "B", "artist": "X",
+                                "dur": 1, "url": "u"})
+        self.assertEqual(self.app.store.first_play, first)
+
+    def test_first_play_survives_reload(self):
+        self.app.store.first_play = 1700000000.0
+        self.app.store.save()
+        self.assertEqual(s.Store().first_play, 1700000000.0)
+
+    def test_bad_first_play_ignored(self):
+        self.app.store.first_play = "nope"
+        self.app.store.save()
+        self.assertIsNone(s.Store().first_play)
+
+
 class FmtAgoTests(unittest.TestCase):
     def test_buckets(self):
         import time as _t

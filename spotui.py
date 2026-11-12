@@ -341,6 +341,7 @@ class Store:
         self.last_search = 0.0       # when the last search happened
         self.volume = 70
         self.plays = {}
+        self.first_play = None
         self.shuffle_mode = "spread"
         self.autoplay = True
         self.time_left = False
@@ -427,6 +428,10 @@ class Store:
                     self.plays[k] = dict(title=v["title"],
                                          artist=str(v.get("artist") or "Unknown"),
                                          n=v["n"])
+        fp = d.get("first_play")
+        if (isinstance(fp, (int, float)) and not isinstance(fp, bool)
+                and math.isfinite(fp) and fp > 0):
+            self.first_play = float(fp)
         if d.get("shuffle_mode") in SHUFFLE_MODES:
             self.shuffle_mode = d["shuffle_mode"]
         if isinstance(d.get("autoplay"), bool):
@@ -466,7 +471,7 @@ class Store:
                         "similar": self.similar, "last_search": self.last_search,
                         "volume": self.volume,
                         "session": self.session, "theme": self.theme,
-                        "plays": self.plays, "shuffle_mode": self.shuffle_mode, "autoplay": self.autoplay, "time_left": self.time_left, "eq_preset": self.eq_preset,
+                        "plays": self.plays, "first_play": self.first_play, "shuffle_mode": self.shuffle_mode, "autoplay": self.autoplay, "time_left": self.time_left, "eq_preset": self.eq_preset,
                         "sort_mode": self.sort_mode,
                         "hist_dedupe": self.hist_dedupe,
                         "zen": self.zen,
@@ -1667,6 +1672,8 @@ class App:
         try:
             rec = {k: t.get(k) for k in ("id", "title", "artist", "dur", "url")}
             rec["added"] = time.time()
+            if self.store.first_play is None:
+                self.store.first_play = rec["added"]
             h = [x for x in self.store.history
                  if isinstance(x, dict) and x.get("id") != rec.get("id")]
             h.insert(0, rec)
@@ -2995,6 +3002,12 @@ class UI:
         week = stats_week(app.store)
         if week:
             head += f"  \u00b7  {week} this week"
+        if app.store.first_play:
+            since = time.strftime("%d %b %Y",
+                                  time.localtime(app.store.first_play))
+            extra = f"  \u00b7  since {since}"
+            if dlen(head) + dlen(extra) <= W - x0 - 21:
+                head += extra
         put(scr, y0 + 1, x0 + 19, head, pal["faint"])
         inner = W - x0 - 4
         half = inner >= 80
