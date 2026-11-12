@@ -1557,6 +1557,39 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class QueueSourceTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+
+    def test_play_stamps_source(self):
+        self.app.play([dict(track(1)), dict(track(2))], 0,
+                      source="Late Night Drive")
+        self.assertEqual([t.get("src") for t in self.app.queue],
+                         ["Late Night Drive", "Late Night Drive"])
+
+    def test_manual_adds_marked_added(self):
+        self.app.play([dict(track(1))], 0, source="Mix")
+        self.app.add_queue(dict(track(2)))
+        self.app.play_next(dict(track(3)))
+        self.assertEqual(self.app.queue[1].get("src"), "Added")
+        self.assertEqual(self.app.queue[2].get("src"), "Added")
+        self.assertEqual(self.app.queue[0].get("src"), "Mix")
+
+    def test_no_source_no_stamp(self):
+        self.app.play([dict(track(1))], 0)
+        self.assertNotIn("src", self.app.queue[0])
+
+
 class HistoryDedupeTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
