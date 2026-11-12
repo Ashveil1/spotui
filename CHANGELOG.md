@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The state chips in Now Playing (Playing/Paused, Shuffle, Repeat, speed,
+  EQ, Autoplay, Sleep) are clickable: same effect as their keys, and the
+  speed chip resets to 1x (#130)
+
 - "Made for you" is now a full view, not just a home shelf: `R` on home
   opens it as a playable list (Enter plays, `a` queues), and `R` inside it
   rolls new picks like before (#129)

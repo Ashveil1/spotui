@@ -185,7 +185,7 @@ VIEW_HINTS = {
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 X clears",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
-    "playing": "Space pause \u00b7 l like \u00b7 v queue \u00b7 S shuffle \u00b7 click Up Next to jump",
+    "playing": "Space pause \u00b7 l like \u00b7 v queue \u00b7 chips and Up Next are clickable",
     "stats": "Click a top artist to open it \u00b7 a top song plays \u00b7 Backspace back",
     "similar": "Enter plays \u00b7 a queues \u00b7 R finds new picks \u00b7 Backspace back",
 }
@@ -2144,6 +2144,18 @@ class App:
         self.store.save()
         self.toast_now(f"Volume {self.mpv.state['vol']}")
 
+    def chip_action(self, tag):
+        """Click on a Now Playing state chip: same effect as its key."""
+        if tag == "speed":
+            self.speed = 1.0
+            self.mpv.set_speed(1.0)
+            self.toast_now("Speed 1x")
+            return
+        {"playpause": self.toggle, "shuffle": self.toggle_shuffle,
+         "repeat": self.cycle_repeat, "eq": self.cycle_eq,
+         "autoplay": self.toggle_autoplay,
+         "sleep": self.cycle_sleep}[tag]()
+
     def toggle_mute(self):
         """Speaker click: drop to 0 remembering the level, click to restore."""
         if self._muted_from is not None:
@@ -3167,30 +3179,31 @@ class UI:
         state = "Connecting..." if app.loading else ("Paused" if app.mpv.state["pause"] else
                  "Stopped" if app.mpv.state["idle"] else "Playing")
         # chips: state, shuffle mode, repeat, speed
-        chips = [(state, True)]
+        chips = [(state, "playpause")]
         if app.shuffle:
-            chips.append(("Shuffle " + SHUFFLE_LABEL[app.store.shuffle_mode].split(" ")[0], True))
+            chips.append(("Shuffle " + SHUFFLE_LABEL[app.store.shuffle_mode].split(" ")[0], "shuffle"))
         if app.repeat:
-            chips.append(("Repeat one" if app.repeat == 2 else "Repeat all", True))
+            chips.append(("Repeat one" if app.repeat == 2 else "Repeat all", "repeat"))
         if app.speed != 1.0:
-            chips.append((f"{app.speed:g}x", True))
+            chips.append((f"{app.speed:g}x", "speed"))
         if app.store.eq_preset != "off":
-            chips.append(("EQ " + EQ_LABEL[app.store.eq_preset], True))
+            chips.append(("EQ " + EQ_LABEL[app.store.eq_preset], "eq"))
         if app.store.autoplay:
-            chips.append(("Autoplay", True))
+            chips.append(("Autoplay", "autoplay"))
         if app.sleep_deadline is not None:
             left = max(0, int(app.sleep_deadline - time.monotonic()))
-            chips.append((f"Sleep {fmt_t(left)}", True))
+            chips.append((f"Sleep {fmt_t(left)}", "sleep"))
         elif app.sleep_eot:
-            chips.append(("Sleep: end of track", True))
+            chips.append(("Sleep: end of track", "sleep"))
         cx, cy = tx, ty + 3
-        for label, _on in chips:
+        for label, tag in chips:
             w = dlen(label) + 2
             if cx + w > tx + tw:
                 break
             if cy < y1 - 1:
                 fill(scr, cy, cx, w, pal["pill"])
                 put(scr, cy, cx + 1, label, pal["pgreen"], curses.A_BOLD)
+                self.hit(cx, cy, w, 1, "chip", tag)
             cx += w + 1
         # large progress bar (click or drag to seek)
         st = app.mpv.state
@@ -5047,6 +5060,8 @@ def handle_mouse(app):
             app.vol(absolute=round(frac * 100))
         elif act == "mute":
             app.toggle_mute()
+        elif act == "chip":
+            app.chip_action(arg)
         elif act == "pickrow":
             app.pick_idx = arg
             handle_key(app, "\n")
