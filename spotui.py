@@ -3277,6 +3277,7 @@ class UI:
         y = self._home_tiles(app, pal, scr, y, y1, x0, W)
         y = self._home_mixes(app, pal, scr, y, y1, x0, W)
         y = self._home_similar(app, pal, scr, y, y1, x0, W)
+        y = self._home_heavy(app, pal, scr, y, y1, x0, W)
         y = self._home_history(app, pal, scr, y, y1, x0, W)
         y = self._home_liked(app, pal, scr, y, y1, x0, W)
         y = self._home_recent(app, pal, scr, y, y1, x0, W)
@@ -3436,6 +3437,28 @@ class UI:
                 put(scr, y0 + 5, x, wcut(t["artist"], cw - 2), pal["dim"])
             self.hit(x, y0 + 1, cw - 1, 5 if full else 4,
                      "row", ("similar:", i, True))
+        return y0 + (7 if full else 6)
+
+    def _home_heavy(self, app, pal, scr, y0, y1, x0, W):
+        """'On repeat' - the songs you played most this week."""
+        rep = stats_on_repeat(app.store, top=6)
+        if not rep or y0 + 2 >= y1 - 1:
+            return y0
+        put(scr, y0, x0 + 2, "On repeat", pal["text"], curses.A_BOLD)
+        put(scr, y0, x0 + 13, "\u00b7 most played this week", pal["faint"])
+        cw = 20
+        per = max(1, (W - x0 - 4) // cw)
+        full = y0 + 5 < y1 - 2
+        for i, (t, cnt) in enumerate(rep[:per]):
+            x = x0 + 2 + i * cw
+            draw_art(scr, y0 + 1, x, 8, 3, t["id"], pal,
+                     art=app.cover_for(t["id"], 8, 3))
+            put(scr, y0 + 4, x, wcut(t["title"], cw - 2), pal["text"])
+            if full:
+                cap = f"{t['artist']} \u00b7 {cnt} plays"
+                put(scr, y0 + 5, x, wcut(cap, cw - 2), pal["dim"])
+            self.hit(x, y0 + 1, cw - 1, 5 if full else 4,
+                     "playtrack", (t, "On repeat"))
         return y0 + (7 if full else 6)
 
     def _home_history(self, app, pal, scr, y0, y1, x0, W):
