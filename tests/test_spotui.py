@@ -1557,6 +1557,51 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class SleepFadeTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.mpv.cmd = Mock()
+        self.app.mpv.state["vol"] = 70
+
+    def test_timed_fade_ramps_volume(self):
+        import time as _t
+        self.app.sleep_deadline = _t.monotonic() + 10
+        self.app._sleep_fade()
+        self.app.mpv.cmd.assert_called_with(
+            ["set_property", "volume", 35])
+        self.assertTrue(self.app._fading)
+
+    def test_fade_restores_when_disarmed(self):
+        self.app._fading = True
+        self.app._fade_level = 35
+        self.app._sleep_fade()          # no timer armed
+        self.app.mpv.cmd.assert_called_with(
+            ["set_property", "volume", 70])
+        self.assertFalse(self.app._fading)
+
+    def test_eot_fade_uses_track_time_left(self):
+        self.app.sleep_eot = True
+        self.app.mpv.state.update(idle=False, pos=190.0, dur=200.0)
+        self.app._sleep_fade()
+        self.app.mpv.cmd.assert_called_with(
+            ["set_property", "volume", 35])
+
+    def test_no_timer_no_call(self):
+        self.app._sleep_fade()
+        self.app.mpv.cmd.assert_not_called()
+        self.assertFalse(self.app._fading)
+
+
 class HomeTileCountsTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

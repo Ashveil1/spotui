@@ -76,6 +76,9 @@ IC_PLUS = "+"
 IC_HIST = "↺"
 IC_AUTO = "✦"
 
+# seconds before a sleep timer fires when the volume starts to fade
+FADE_SECS = 20
+
 SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 EQ_FRAMES = ["▁▄▂▆", "▄▂▆▁", "▂▆▁▄", "▆▁▄▂"]
 PLACEHOLDER = "What do you want to play?"
@@ -1334,6 +1337,8 @@ class App:
         self.help_pages = 1
         self.sleep_deadline = None
         self.sleep_eot = False
+        self._fading = False           # sleep fade is ramping mpv's volume
+        self._fade_level = None        # last level sent (1/sec throttle)
         self._muted_from = None      # volume before muting, None = not muted
         self.speed = 1.0
         self.sleep_minutes = 0
@@ -2056,6 +2061,8 @@ class App:
             v += (d or 0)
         self.mpv.set_vol(v)
         self._muted_from = None      # any volume change unmutes
+        self._fading = False         # and takes over from a sleep fade
+        self._fade_level = None
         self.store.volume = self.mpv.state["vol"]
         self.store.save()
         self.toast_now(f"Volume {self.mpv.state['vol']}")
@@ -2109,11 +2116,42 @@ class App:
             self.loading = False
             self.mpv.cmd(["set_property", "pause", True])
             self.mpv.state["pause"] = True
+            self._fade_restore()
             self.toast_now("Sleep timer - playback paused")
         else:
             self.next(auto=True)
 
+    def _fade_restore(self):
+        if self._fading:
+            self._fading = False
+            self._fade_level = None
+            self.mpv.cmd(["set_property", "volume",
+                          self.mpv.state["vol"]])
+
+    def _sleep_fade(self):
+        """Fade mpv's volume toward zero over the last FADE_SECS of an
+        armed sleep timer. Only mpv's runtime volume changes - the
+        user's stored volume stays, so the next play starts at the
+        usual level."""
+        rem = None
+        if self.sleep_deadline is not None:
+            rem = self.sleep_deadline - time.monotonic()
+        elif self.sleep_eot:
+            st = self.mpv.state
+            if not st["idle"] and st["dur"] > 0:
+                rem = st["dur"] - st["pos"]
+        if rem is not None and 0 < rem <= FADE_SECS:
+            level = max(0, int(round(self.mpv.state["vol"]
+                                     * rem / FADE_SECS)))
+            if level != self._fade_level:
+                self._fade_level = level
+                self.mpv.cmd(["set_property", "volume", level])
+            self._fading = True
+        else:
+            self._fade_restore()
+
     def tick(self):
+        self._sleep_fade()
         self._tick_live_search()
         if self.store.error and self.store.error != self.last_store_error:
             self.toast_now(self.store.error)
@@ -2126,6 +2164,7 @@ class App:
             self.mpv.on_end.clear()
             self.mpv.cmd(["set_property", "pause", True])
             self.mpv.state["pause"] = True
+            self._fade_restore()
             self.toast_now("Sleep timer - playback paused")
 
     def like(self, t):

@@ -183,7 +183,9 @@ required. This note is not legal advice.
 
 `t` cycles a session sleep timer: 15 / 30 / 60 / 90 minutes / end of track /
 off. Timed countdowns appear at the bottom of the sidebar; end of track lets
-the current song finish and then pauses. At expiry SpotUI pauses playback and
+the current song finish and then pauses. Over the last 20 seconds the
+volume fades toward zero before the pause, and returns to your normal
+level afterwards - your stored volume never changes. At expiry SpotUI pauses playback and
 cancels a pending track load; it does not close the app or shut down the computer.
 The timer is not persisted across restarts. Seek and volume bars support dragging
 on terminals that report mouse-motion events, and clicking the speaker glyph mutes
