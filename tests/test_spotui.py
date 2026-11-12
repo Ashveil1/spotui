@@ -1557,6 +1557,40 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class ArtistMinutesTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+
+    def test_minutes_sum(self):
+        self.app.store.liked = [dict(track(1), dur=200),
+                                dict(track(2), dur=100)]
+        self.app.store.plays = {
+            "1": dict(title="S1", artist="Luna Waves", n=9),   # 30 min
+            "2": dict(title="S2", artist="Luna Waves", n=3),   # 5 min
+            "3": dict(title="S3", artist="Other", n=50),       # no dur
+        }
+        self.assertEqual(self.app.artist_minutes("Luna Waves"), "35 min")
+        self.assertEqual(self.app.artist_minutes("Other"), "")
+
+    def test_hours_format(self):
+        self.app.store.liked = [dict(track(1), dur=240)]
+        self.app.store.plays = {
+            "1": dict(title="S1", artist="Luna Waves", n=31),  # 124 min
+        }
+        self.assertEqual(self.app.artist_minutes("luna waves"),
+                         "2 hr 4 min")
+
+
 class SleepFadeTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

@@ -2528,6 +2528,25 @@ class App:
         return sum(p["n"] for p in self.store.plays.values()
                    if self._norm_artist(p.get("artist")) == norm)
 
+    def artist_minutes(self, name):
+        """Rough listening time for one artist: play counts x duration for
+        songs we know the length of (a floor, like stats_minutes())."""
+        dur = {}
+        pools = [self.store.liked, self.store.history] + \
+            [pl["tracks"] for pl in self.store.playlists]
+        for tracks in pools:
+            for t in tracks:
+                if t.get("id") and t.get("dur"):
+                    dur.setdefault(t["id"], t["dur"])
+        norm = self._norm_artist(name)
+        sec = sum(p["n"] * dur.get(k, 0)
+                  for k, p in self.store.plays.items()
+                  if self._norm_artist(p.get("artist")) == norm)
+        if sec < 60:
+            return ""
+        m = int(sec // 60)
+        return f"{m // 60} hr {m % 60} min" if m >= 60 else f"{m} min"
+
     def artist_tracks(self, name):
         """Every song by this artist across the library, deduped, liked first."""
         norm = self._norm_artist(name)
@@ -3679,6 +3698,9 @@ class UI:
             nplays = app.artist_plays(name)
             if nplays:
                 sub += f" \u00b7 {nplays} plays"
+            amins = app.artist_minutes(name)
+            if amins:
+                sub += f" \u00b7 ~{amins} listened"
         elif name in app._artist_busy:
             sub = "Searching YouTube..."
         else:
