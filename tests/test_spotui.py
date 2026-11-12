@@ -1700,6 +1700,55 @@ class SidebarStatsTests(unittest.TestCase):
         self.assertEqual(self.app.stack[-1][0], "stats")
 
 
+class HomeOnRepeatTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.pal = {key: 0 for key in ['text', 'faint', 'dim']}
+        now = s.time.time()
+        self.app.store.history = [
+            {"id": "a", "title": "Alpha", "artist": "A", "dur": 100,
+             "added": now - 3600},
+            {"id": "a", "title": "Alpha", "artist": "A", "dur": 100,
+             "added": now - 7200},
+            {"id": "b", "title": "Beta", "artist": "B", "dur": 100,
+             "added": now - 3600},
+            {"id": "b", "title": "Beta", "artist": "B", "dur": 100,
+             "added": now - 7200}]
+
+    def _draw(self):
+        self.app.cover_for = lambda *a, **k: None
+        scr = Mock()
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t_, *a, **k:
+                          texts.append(str(t_))), \
+                patch.object(s, 'fill'), patch.object(s, 'draw_art'), \
+                patch.object(s.curses, 'color_pair', return_value=0):
+            s.UI(self.app, scr)._home_heavy(self.app, self.app.pal, scr,
+                                            0, 30, 0, 120)
+        return texts
+
+    def test_shelf_shows_title_and_counts(self):
+        texts = self._draw()
+        self.assertIn("On repeat", texts)
+        self.assertIn("Alpha", texts)
+        self.assertTrue(any("A \u00b7 2 plays" in x for x in texts))
+
+    def test_empty_history_draws_nothing(self):
+        self.app.store.history = []
+        self.assertEqual(self._draw(), [])
+
+
 class FmtAgoTests(unittest.TestCase):
     def test_buckets(self):
         import time as _t

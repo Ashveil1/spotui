@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Home gains an "On repeat" shelf: cover cards for the songs you played
+  most over the last 7 days, each captioned with its weekly play count;
+  click a card to play it (#123)
+
 - The sidebar has a Stats entry (with its own icon) under Home and Search,
   so the listening-stats view is discoverable and clickable, not just `i` (#122)
 

@@ -115,7 +115,8 @@ Liked songs, playlists, recent searches, your play history and the cached
 
 Home's shortcut tiles name each playlist with its size underneath ("8 songs · 25 min").
 
-The home page shows three shelves: **Made for you** (tracks in the same style
+The home page shows four shelves: **On repeat** (cover cards for the songs
+you played most over the last 7 days, with weekly play counts), **Made for you** (tracks in the same style
 as whatever you played or searched last — pulled from YouTube's "Mix" radio,
 so it mixes the artist with similar ones; refreshed in the background and
 cached, so it opens instantly and works offline), **Recently played** (the
