@@ -1677,6 +1677,33 @@ class StatsMinutesTests(unittest.TestCase):
         self.assertEqual(s.stats_minutes(st), "")
 
 
+class StatsHoursTests(unittest.TestCase):
+    def _at(self, hour, minute=0):
+        lt = s.time.localtime()
+        return s.time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday,
+                              hour, minute, 0, 0, 0, -1))
+
+    def _store(self, hours):
+        st = s.Store.__new__(s.Store)     # bare store, no disk
+        st.history = [{"id": str(i), "added": self._at(h)}
+                      for i, h in enumerate(hours)]
+        return st
+
+    def test_buckets(self):
+        st = self._store([8, 11, 13, 19, 21, 23, 2])
+        self.assertEqual(s.stats_hours(st),
+                         [("Morning", 2), ("Afternoon", 1),
+                          ("Evening", 2), ("Night", 2)])
+
+    def test_ignores_bad_timestamps(self):
+        st = self._store([10])
+        st.history += [{"id": "x"}, {"id": "y", "added": "soon"},
+                       {"id": "z", "added": float("nan")}]
+        self.assertEqual(s.stats_hours(st),
+                         [("Morning", 1), ("Afternoon", 0),
+                          ("Evening", 0), ("Night", 0)])
+
+
 class GTopBottomTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

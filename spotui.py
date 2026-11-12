@@ -1082,6 +1082,29 @@ def stats_days(store):
              counts[i]) for i in range(7)]
 
 
+def stats_hours(store):
+    """Plays per time-of-day bucket, counted from the (capped) history list.
+
+    Buckets in local time: Morning 5-12, Afternoon 12-17, Evening 17-22,
+    Night 22-5. Entries with missing or non-finite timestamps are ignored.
+    Returns [("Morning", n), ("Afternoon", n), ("Evening", n), ("Night", n)].
+    """
+    buckets = [0, 0, 0, 0]
+    for h in store.history:
+        if not isinstance(h, dict):
+            continue
+        try:
+            ts = float(h.get("added") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(ts) or ts <= 0:
+            continue
+        hr = time.localtime(ts).tm_hour
+        buckets[0 if 5 <= hr < 12 else 1 if 12 <= hr < 17
+                else 2 if 17 <= hr < 22 else 3] += 1
+    return list(zip(("Morning", "Afternoon", "Evening", "Night"), buckets))
+
+
 def stats_summary(plays, top=6):
     """(total plays, unique songs, top artists, top songs) from play counts."""
     total = sum(p["n"] for p in plays.values())
@@ -2604,6 +2627,22 @@ class UI:
                 for r in range(bh - filled, bh):
                     put(scr, by + 2 + r, x, "\u2588", col)
                 put(scr, by + 2 + bh, x, lab, pal["faint"])
+            # time-of-day mini chart beside the daily one, when wide enough
+            hours = stats_hours(app.store)
+            htot = sum(n for _, n in hours)
+            hx = x0 + 32
+            if htot and inner >= 80:
+                put(scr, by, hx, "TIME OF DAY", pal["dim"], curses.A_BOLD)
+                htop = max(n for _, n in hours)
+                hbw = 12
+                for i, (lab, n) in enumerate(hours):
+                    hy = by + 2 + i
+                    put(scr, hy, hx, lab.ljust(9), pal["faint"])
+                    filled = round(n / htop * hbw) if htop else 0
+                    if filled:
+                        put(scr, hy, hx + 10, "\u2588" * filled,
+                            pal["green"] if n == htop else pal["sdim"])
+                    put(scr, hy, hx + 10 + hbw + 1, str(n), pal["faint"])
             by += 7
         # rows are (label, subtitle-or-None, count, click action-or-None)
         def block(y, x, w, title, rows):
