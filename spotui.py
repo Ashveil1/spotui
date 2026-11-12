@@ -1210,6 +1210,34 @@ def stats_day_minutes(store):
     return [int(s // 60) for s in sec]
 
 
+def stats_on_repeat(store, top=5):
+    """Songs played 2+ times in the last 7 days, most repeats first.
+
+    Counted from the (capped) history list, like stats_week(). Returns
+    [(track, n)] with the history entry as the track. Entries with
+    missing/invalid timestamps or no id are ignored.
+    """
+    cutoff = time.time() - 7 * 86400
+    counts, meta = {}, {}
+    for h in store.history:
+        if not isinstance(h, dict):
+            continue
+        try:
+            ts = float(h.get("added") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(ts) or ts < cutoff:
+            continue
+        tid = h.get("id")
+        if not tid:
+            continue
+        counts[tid] = counts.get(tid, 0) + 1
+        meta.setdefault(tid, h)
+    rows = [(tid, n) for tid, n in counts.items() if n >= 2]
+    rows.sort(key=lambda kv: (-kv[1], str(meta[kv[0]].get("title") or "")))
+    return [(meta[tid], n) for tid, n in rows[:top]]
+
+
 def stats_hours(store):
     """Plays per time-of-day bucket, counted from the (capped) history list.
 
@@ -2864,6 +2892,22 @@ class UI:
                     f"{big[0]} are your biggest listening day",
                     pal["faint"])
             by += 8
+            rep = stats_on_repeat(app.store)
+            if rep and by + 2 <= y1 - 3:
+                put(scr, by, x0 + 2, "ON REPEAT THIS WEEK", pal["dim"],
+                    curses.A_BOLD)
+                cx = x0 + 2
+                for t, n in rep:
+                    label = f"{t.get('title', '?')} \u00d7{n}"
+                    w = dlen(label) + 4
+                    if cx + w > W - 4:
+                        break
+                    fill(scr, by + 1, cx, w, pal["pill"])
+                    put(scr, by + 1, cx + 2, label, pal["pilldim"])
+                    self.hit(cx, by + 1, w, 1, "playtrack",
+                             (t, "On repeat"))
+                    cx += w + 1
+                by += 3
         # rows are (label, subtitle-or-None, count, click action-or-None)
         def block(y, x, w, title, rows):
             put(scr, y, x, title, pal["dim"], curses.A_BOLD)
