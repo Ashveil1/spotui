@@ -205,7 +205,7 @@ def fmt_added(v):
 
 
 VIEW_HINTS = {
-    "search": "Enter plays \u00b7 a queues \u00b7 o opens artist \u00b7 Tab switches All/Songs/Artists",
+    "search": "Enter plays \u00b7 a queues \u00b7 Q queues all \u00b7 o opens artist \u00b7 Tab switches All/Songs/Artists",
     "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
     "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K or drag reorders \u00b7 e renames",
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 X clears",
@@ -2323,6 +2323,26 @@ class App:
             self.orig_queue.append(dict(t, src="Added"))
         self.toast_now(f"Added to queue: {t['title'][:30]}")
 
+    def queue_all(self, tracks):
+        """Append a whole list to the queue, skipping songs already in it.
+
+        Starts playing instead when nothing is playing, like add_queue."""
+        have = {q.get("id") for q in self.queue}
+        fresh = [t for t in tracks if t.get("id") not in have]
+        if not fresh:
+            self.toast_now("Every result is already in the queue")
+            return 0
+        if not self.current:
+            self.play(fresh, 0)
+            return len(fresh)
+        self.queue_revision += 1
+        self.queue.extend(dict(t, src="Added") for t in fresh)
+        if self.shuffle and self.orig_queue is not None:
+            self.orig_queue.extend(dict(t, src="Added") for t in fresh)
+        self.toast_now(f"Added {len(fresh)} song"
+                       f"{'s' if len(fresh) != 1 else ''} to the queue")
+        return len(fresh)
+
     def play_next(self, t):
         if not t:
             return
@@ -3878,6 +3898,11 @@ class UI:
         put(scr, fy0, x0 + 2, "All", pal["text"], curses.A_BOLD)
         if tracks:
             put(scr, fy0, x0 + 6, f"{len(tracks)} songs", pal["faint"])
+            qall = "Queue all →"
+            qx = x0 + 8 + dlen(f"{len(tracks)} songs")
+            if qx + dlen(qall) <= W - 4:
+                put(scr, fy0, qx, qall, pal["green"])
+                self.hit(qx, fy0, dlen(qall), 1, "queueall", None)
         self.list_header(fy0 + 1, x0 + 2, mw - 4, show_date=False)
         self.track_list(fy0 + 2, y1 - 2, x0 + 2, mw - 4, tracks, "search:",
                         show_date=False)
@@ -4486,7 +4511,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -4880,6 +4905,8 @@ def handle_key(app, k):
                 app.move_in_playlist(arg, app.sel_row(), 1 if k == "J" else -1)
         elif k == "Y":
             app.copy_link(app.track_under() or app.current)
+        elif k == "Q" and kind == "search":
+            app.queue_all(list(app.results))
         elif k == "a":
             app.add_queue(app.track_under() or app.current)
         elif k == "l":
@@ -5152,6 +5179,8 @@ def handle_mouse(app):
             app.like(arg)
         elif act == "addq":
             app.add_queue(arg)
+        elif act == "queueall":
+            app.queue_all(list(app.results))
         elif act == "playing":
             app.push("playing")
         elif act == "queue":
