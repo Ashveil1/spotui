@@ -1455,6 +1455,7 @@ class App:
         self.sleep_deadline = None
         self.sleep_eot = False
         self._fading = False           # sleep fade is ramping mpv's volume
+        self.private = False           # private session: nothing is recorded
         self._fade_level = None        # last level sent (1/sec throttle)
         self._muted_from = None      # volume before muting, None = not muted
         self.speed = 1.0
@@ -1729,6 +1730,8 @@ class App:
 
     def _note_history(self, t):
         """Remember what was actually played (newest first, capped)."""
+        if self.private:
+            return
         try:
             rec = {k: t.get(k) for k in ("id", "title", "artist", "dur", "url")}
             rec["added"] = time.time()
@@ -2799,6 +2802,14 @@ class App:
         self.toast_now(f"Enhanced {pl['name']} · {added} suggestion"
                        f"{'s' if added != 1 else ''}")
 
+    def toggle_private(self):
+        """Private session (like Spotify's): plays and history stop being
+        recorded until toggled off. Session-only, never saved."""
+        self.private = not self.private
+        self.toast_now("Private session on \u00b7 plays won't count"
+                       if self.private else
+                       "Private session off \u00b7 listening counts again")
+
     def pick_view(self):
         """Picker rows as filtered by pick_filter ("+ New" always stays)."""
         if not self.pick_filter:
@@ -3183,11 +3194,15 @@ class UI:
         put(scr, y0 + 1, 2, IC_LOGO, pal["sgreen"], curses.A_BOLD)
         put(scr, y0 + 1, 4, "SpotUI", pal["side"], curses.A_BOLD)
 
+        sleeping = app.sleep_deadline is not None or app.sleep_eot
         if app.sleep_deadline is not None:
             remaining = max(0, int(app.sleep_deadline - time.monotonic()))
             put(scr, y1 - 2, 2, f"Sleep {fmt_t(remaining)}", pal["sgreen"])
         elif app.sleep_eot:
             put(scr, y1 - 2, 2, "Sleep: end of track", pal["sgreen"])
+        if app.private:
+            put(scr, y1 - (3 if sleeping else 2), 2, "\u25cb Private session",
+                pal["sgreen"])
         kind, _ = app.stack[-1]
         navs = [("home", IC_HOME, "Home"), ("search", IC_SEARCH, "Search"),
                 ("stats", IC_STATS, "Stats")]
@@ -3217,8 +3232,7 @@ class UI:
                           IC_PIN if pl.get("pinned") else IC_NOTE,
                           pl["name"], i))
         top, bot = y0 + 9, y1 - (
-            2 if (app.sleep_deadline is not None or app.sleep_eot)
-            else 1)
+            1 + sleeping + app.private)
         vis = max(1, bot - top)
         app.soff_max = max(0, len(items) - vis)
         app.soff = max(0, min(app.soff, app.soff_max))
@@ -4788,7 +4802,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -5264,6 +5278,8 @@ def handle_key(app, k):
             app.cycle_repeat()
         elif k == "u":
             app.toggle_autoplay()
+        elif k == "b":
+            app.toggle_private()
         elif k == "E":
             app.cycle_eq()
         elif k == "f":

@@ -100,6 +100,7 @@ Tips that make it nicer on a phone:
 | `i` or the sidebar | listening stats (plays, minutes, streaks, and how long you have listened) | `S` | shuffle mode |
 | `y` | recently played | `1`-`3` | play a daily mix (home) |
 | `o` | open artist | `u` | autoplay on/off |
+| `b` | private session (plays and history stop counting until toggled off) | |
 | `E` | equalizer preset | `z` | hide / show the sidebar (full-width view) |
 
 | `?` | help | | |
