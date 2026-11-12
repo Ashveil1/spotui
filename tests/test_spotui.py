@@ -111,18 +111,50 @@ class AppTests(unittest.TestCase):
         src.write_text('[1,2]', encoding='utf-8')
         self.assertFalse(s.import_playlist(src)[0])
 
-    def test_theme_cycle_persists(self):
+    def _mock_pal(self, can=True):
         self.app.pal = Mock()
+        self.app.pal.can_theme.return_value = can
         self.app.pal.apply_theme.return_value = True
+
+    def test_theme_picker_opens(self):
+        self._mock_pal()
         s.handle_key(self.app, 'T')
+        self.assertEqual(self.app.mode, 'theme')
+        self.assertEqual(self.app.theme_orig, s.THEME_NAMES[0])
+
+    def test_theme_picker_preview_and_keep(self):
+        self._mock_pal()
+        s.handle_key(self.app, 'T')
+        s.handle_key(self.app, 'j')      # live preview
+        self.app.pal.apply_theme.assert_called_with(s.THEME_NAMES[1])
         self.assertEqual(self.app.store.theme, s.THEME_NAMES[1])
+        self.assertEqual(s.Store().theme, s.THEME_NAMES[0])  # not saved yet
+        s.handle_key(self.app, '\n')    # keep
+        self.assertEqual(self.app.mode, 'normal')
         self.assertEqual(s.Store().theme, s.THEME_NAMES[1])
+        self.assertIn('Theme:', self.app.toast[0])
+
+    def test_theme_picker_esc_reverts(self):
+        self._mock_pal()
+        s.handle_key(self.app, 'T')
+        s.handle_key(self.app, 'j')
+        s.handle_key(self.app, '\x1b')
+        self.assertEqual(self.app.mode, 'normal')
+        self.assertEqual(self.app.store.theme, s.THEME_NAMES[0])
+        self.app.pal.apply_theme.assert_called_with(s.THEME_NAMES[0])
+
+    def test_theme_picker_wraps(self):
+        self._mock_pal()
+        s.handle_key(self.app, 'T')
+        s.handle_key(self.app, 'k')      # wraps to the last theme
+        self.assertEqual(self.app.theme_idx, len(s.THEME_NAMES) - 1)
 
     def test_theme_refused_without_palette(self):
-        self.app.pal = Mock()
-        self.app.pal.apply_theme.return_value = False
+        self._mock_pal(can=False)
         s.handle_key(self.app, 'T')
+        self.assertEqual(self.app.mode, 'normal')
         self.assertEqual(self.app.store.theme, s.THEME_NAMES[0])
+        self.assertIn('palette', self.app.toast[0])
 
     def test_stats_summary_and_play_counts(self):
         plays = {'a': dict(title='A', artist='X', n=3), 'b': dict(title='B', artist='X', n=2),

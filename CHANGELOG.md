@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- `T` now opens a theme picker with live preview: j/k repaints the whole
+  app in the highlighted theme, Enter keeps it, Esc reverts to the saved
+  one (marked "saved" in the list).
+
 - Press `I` on any song for its info card: length, your play count and
   last-played date, liked status, every playlist it sits in, and its
   link (Y copies it straight from the card).
