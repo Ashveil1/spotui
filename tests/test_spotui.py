@@ -1633,6 +1633,38 @@ class PickFilterTests(unittest.TestCase):
         self.assertEqual(self.app.mode, "normal")
 
 
+class SearchPlaylistsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.store.playlists = [
+            {"name": "Late Night Drive", "tracks": [1]},
+            {"name": "Gym", "tracks": [1, 2]},
+            {"name": "gym classics", "tracks": []},
+            {"name": "Focus", "tracks": []}]
+
+    def test_matches_casefold_and_keeps_indices(self):
+        got = self.app.search_playlists("GYM")
+        self.assertEqual([(i, p["name"]) for i, p in got],
+                         [(1, "Gym"), (2, "gym classics")])
+
+    def test_empty_and_blank_query_match_nothing(self):
+        self.assertEqual(self.app.search_playlists(""), [])
+        self.assertEqual(self.app.search_playlists("   "), [])
+
+    def test_limit_caps_results(self):
+        self.assertEqual(len(self.app.search_playlists("gym", limit=1)), 1)
+
+
 class FmtAgoTests(unittest.TestCase):
     def test_buckets(self):
         import time as _t
