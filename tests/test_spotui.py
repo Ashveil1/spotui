@@ -1749,6 +1749,56 @@ class HomeOnRepeatTests(unittest.TestCase):
         self.assertEqual(self._draw(), [])
 
 
+class HomeStreakTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.pal = {key: 0 for key in ['text', 'faint', 'accent', 'green']}
+
+    def _greeting_texts(self):
+        scr = Mock()
+        ui = s.UI(self.app, scr)
+        for m in ("_home_hero", "_home_tiles", "_home_mixes", "_home_similar",
+                  "_home_heavy", "_home_history", "_home_liked",
+                  "_home_recent"):
+            setattr(ui, m, lambda *a, **k: 5)
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t_, *a, **k:
+                          texts.append(str(t_))), \
+                patch.object(s, 'fill'), \
+                patch.object(s.curses, 'color_pair', return_value=0):
+            ui.v_home(0, 40, 0, 120)
+        return texts
+
+    def test_streak_shown_from_two_days(self):
+        now = s.time.time()
+        self.app.store.history = [
+            {"id": "a", "title": "A", "artist": "X", "dur": 1,
+             "added": now - 3600},
+            {"id": "b", "title": "B", "artist": "X", "dur": 1,
+             "added": now - 90000}]
+        self.assertTrue(any("2-day streak" in x
+                            for x in self._greeting_texts()))
+
+    def test_no_streak_when_only_today(self):
+        now = s.time.time()
+        self.app.store.history = [
+            {"id": "a", "title": "A", "artist": "X", "dur": 1,
+             "added": now - 3600}]
+        self.assertFalse(any("streak" in x
+                             for x in self._greeting_texts()))
+
+
 class FmtAgoTests(unittest.TestCase):
     def test_buckets(self):
         import time as _t
