@@ -2893,6 +2893,10 @@ class UI:
                     put(scr, uy + 1 + j,
                         x0 + 5 + dlen(nxt["title"]) + 1, IC_AUTO, pal["accent"])
                 put(scr, uy + 1 + j, x0 + 5 + width // 2 - 2, wcut(nxt["artist"], max(8, width // 2 - 6)), pal["dim"])
+                if nxt.get("dur"):
+                    dtxt = fmt_t(nxt["dur"])
+                    put(scr, uy + 1 + j, x0 + 2 + width - dlen(dtxt),
+                        dtxt, pal["faint"])
                 self.hit(x0 + 2, uy + 1 + j, width - 2, 1, "qjump", qi)
         elif not wide and uy < y1 - 2 and app.qpos + 1 < len(app.queue):
             nxt = app.queue[app.qpos + 1]
