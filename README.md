@@ -93,7 +93,7 @@ Tips that make it nicer on a phone:
 | `w` (playlist) | pin / unpin the playlist to the top of the sidebar and home tiles | |
 | `h` (playlist) | Enhance: weave suggested songs (✦) from your library into the playlist; toggle again to remove them | |
 | `C` | clear upcoming queue | `X` | export playlist JSON |
-| `Y` | copy song link to the clipboard (Termux, Wayland, X11, macOS, or OSC 52; shows the link when none work) | |
+| `Y` | copy song link (or, in Stats, a shareable listening summary) to the clipboard (Termux, Wayland, X11, macOS, or OSC 52; shows the text when none work) | |
 | `I` | song info card: plays, last played, liked, playlists it sits in, link | |
 | `O` | open the song's link in the browser (termux-open-url / xdg-open / open / wslview) | |
 | `U` | undo the last deleted playlist or song | |
