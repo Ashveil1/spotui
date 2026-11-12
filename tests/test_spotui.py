@@ -1557,6 +1557,53 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class NowPlayingMoreFromTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.refresh_similar = Mock()
+
+    def test_wide_now_playing_lists_more_from_artist(self):
+        from collections import defaultdict
+        self.app.queue = [dict(track(1), artist="Luna Waves")]
+        self.app.qpos = 0
+        self.app.current = self.app.queue[0]
+        self.app.mpv.state.update(pos=74.0, dur=200.0, idle=False)
+        self.app.store.liked = [dict(track(2), artist="Luna Waves"),
+                                dict(track(3), artist="Luna Waves"),
+                                dict(track(4), artist="Other")]
+        self.app.store.plays = {"2": dict(title="S2", artist="Luna Waves",
+                                          n=9),
+                                "3": dict(title="S3", artist="Luna Waves",
+                                          n=4)}
+        self.app.pal = defaultdict(int)
+        self.app.cover_for = Mock(return_value=None)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 140)
+        ui = s.UI(self.app, scr)
+        ui.hint = Mock()
+        self.app.rects = []
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(str(t))), \
+                patch.object(s, 'draw_art'):
+            ui.v_playing(0, 34, 24, 120)
+        self.assertIn("MORE FROM LUNA WAVES", texts)
+        hits = [r for r in self.app.rects if r["act"] == "playtrack"]
+        self.assertEqual([r["arg"][0]["id"] for r in hits], ["2", "3"])
+        self.assertEqual(hits[0]["arg"][1], "Luna Waves")
+
+
 class SleepEndOfTrackTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
