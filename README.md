@@ -86,7 +86,7 @@ Tips that make it nicer on a phone:
 | `[` / `]` | speed down / up | `e` / `D` | rename / delete playlist |
 | `F` | find in a list | `d` | delete from list |
 | `m` | sort list (title/artist/date/duration) | | |
-| `f` | Now Playing | `t` | sleep timer |
+| `f` | Now Playing | `t` | sleep timer (presets, end of track, custom minutes) |
 | `J` / `K` | reorder queue | `W` | save queue as playlist |
 | `N` (playlist) | duplicate the playlist, tracks included | |
 | `C` | clear upcoming queue | `X` | export playlist JSON |

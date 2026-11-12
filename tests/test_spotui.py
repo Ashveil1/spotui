@@ -2415,12 +2415,26 @@ class SleepEndOfTrackTests(unittest.TestCase):
 
     def test_cycle_reaches_end_of_track_then_off(self):
         seen = []
-        for _ in range(6):
+        for _ in range(7):
             self.app.cycle_sleep()
             seen.append("eot" if self.app.sleep_eot
                         else self.app.sleep_minutes)
-        self.assertEqual(seen, [15, 30, 60, 90, "eot", 0])
+        # the 6th press opens the custom prompt and leaves the timer at
+        # eot; the 7th moves on to off
+        self.assertEqual(seen, [15, 30, 60, 90, "eot", "eot", 0])
         self.assertIsNone(self.app.sleep_deadline)
+
+    def test_custom_cancel_then_cycle_goes_off(self):
+        for _ in range(5):
+            self.app.cycle_sleep()
+        self.assertTrue(self.app.sleep_eot)
+        self.app.cycle_sleep()                     # custom prompt opens
+        self.assertEqual(self.app.mode, "sleep")
+        s.handle_key(self.app, "\x1b")            # cancel
+        self.app.cycle_sleep()                     # moves on, not stuck
+        self.assertEqual(self.app.mode, "normal")
+        self.assertIsNone(self.app.sleep_deadline)
+        self.assertEqual(self.app.sleep_minutes, 0)
 
     def test_end_of_track_pauses_instead_of_advancing(self):
         self.app.queue = [track(1), track(2)]
@@ -3526,4 +3540,74 @@ class DuplicatePlaylistTests(unittest.TestCase):
         self.app.push('playlist', 0)
         s.handle_key(self.app, 'N')
         self.assertEqual(len(self.app.store.playlists), 2)
+
+class SleepCustomTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_cycle_reaches_custom_modal(self):
+        self.app.sleep_minutes = 90
+        self.app.cycle_sleep()      # 90 -> eot
+        self.assertTrue(self.app.sleep_eot)
+        self.app.cycle_sleep()      # eot -> custom: prompt opens
+        self.assertEqual(self.app.mode, 'sleep')
+        self.assertEqual(self.app.sleep_buf, '')
+        self.assertTrue(self.app.sleep_eot)   # timer state untouched yet
+
+    def test_custom_value_arms_timer(self):
+        self.app.mode = 'sleep'
+        self.app.sleep_buf = '45'
+        self.app.set_sleep_custom()
+        self.assertEqual(self.app.mode, 'normal')
+        self.assertEqual(self.app.sleep_minutes, 45)
+        self.assertFalse(self.app.sleep_eot)
+        self.assertIsNotNone(self.app.sleep_deadline)
+        self.assertIn('45', self.app.toast[0])
+
+    def test_invalid_input_keeps_timer(self):
+        self.app.mode = 'sleep'
+        self.app.sleep_buf = '9999'
+        self.app.set_sleep_custom()
+        self.assertIsNone(self.app.sleep_deadline)
+        self.assertIn('unchanged', self.app.toast[0])
+
+    def test_empty_input_keeps_timer(self):
+        self.app.mode = 'sleep'
+        self.app.sleep_buf = ''
+        self.app.set_sleep_custom()
+        self.assertIsNone(self.app.sleep_deadline)
+
+    def test_cycle_with_custom_armed_does_not_crash(self):
+        self.app.sleep_minutes = 45
+        self.app.cycle_sleep()
+        self.assertEqual(self.app.sleep_minutes, 15)
+
+    def test_modal_keys(self):
+        self.app.mode = 'sleep'
+        for ch in '12':
+            s.handle_key(self.app, ch)
+        self.assertEqual(self.app.sleep_buf, '12')
+        s.handle_key(self.app, 'x')          # ignored: digits only
+        self.assertEqual(self.app.sleep_buf, '12')
+        s.handle_key(self.app, '\x7f')
+        self.assertEqual(self.app.sleep_buf, '1')
+        s.handle_key(self.app, '\x1b')      # cancel
+        self.assertEqual(self.app.mode, 'normal')
+        self.assertEqual(self.app.sleep_buf, '')
+
+    def test_modal_enter_arms(self):
+        self.app.mode = 'sleep'
+        s.handle_key(self.app, '2')
+        s.handle_key(self.app, '0')
+        s.handle_key(self.app, '\n')
+        self.assertEqual(self.app.sleep_minutes, 20)
+        self.assertEqual(self.app.mode, 'normal')
 
