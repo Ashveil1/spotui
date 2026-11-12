@@ -3177,3 +3177,63 @@ class ResumeTests(unittest.TestCase):
         self.app.queue = []
         self.app.restore_session()
         self.assertEqual(self.app._resume_t, 33.5)
+
+class CopyLinkTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_copy_uses_clipboard_tool(self):
+        calls = []
+        def fake_run(cmd, **kw):
+            calls.append((cmd, kw.get('input')))
+            return Mock(returncode=0)
+        with patch.object(s.shutil, 'which', lambda c: '/bin/' + c if c == 'termux-clipboard-set' else None), \
+             patch.object(s.subprocess, 'run', fake_run):
+            url = self.app.copy_link(track(7))
+        self.assertEqual(url, 'https://www.youtube.com/watch?v=7')
+        self.assertEqual(calls, [(['termux-clipboard-set'], b'https://www.youtube.com/watch?v=7')])
+        self.assertIn('copied', self.app.toast[0])
+
+    def test_copy_builds_url_from_id(self):
+        with patch.object(s.shutil, 'which', lambda c: '/bin/' + c if c == 'pbcopy' else None), \
+             patch.object(s.subprocess, 'run', Mock(returncode=0)) as run:
+            t = dict(track(9))
+            del t['url']
+            url = self.app.copy_link(t)
+        self.assertEqual(url, 'https://www.youtube.com/watch?v=9')
+        self.assertEqual(run.call_args[0][0], ['pbcopy'])
+
+    def test_copy_falls_back_to_showing_link(self):
+        with patch.object(s.shutil, 'which', lambda c: None), \
+             patch('builtins.open', side_effect=OSError):
+            url = self.app.copy_link(track(3))
+        self.assertIn(url, self.app.toast[0])
+
+    def test_copy_no_link(self):
+        self.assertIsNone(self.app.copy_link(dict(title='x', artist='y')))
+        self.assertIn('No link', self.app.toast[0])
+
+    def test_y_key_copies_selected(self):
+        self.app.store.liked = [track(1), track(2)]
+        self.app.push('liked')
+        self.app.sel['liked:'] = 1
+        self.app.copy_link = Mock()
+        s.handle_key(self.app, 'Y')
+        self.app.copy_link.assert_called_once()
+        self.assertEqual(self.app.copy_link.call_args[0][0]['id'], '2')
+
+    def test_y_key_falls_back_to_current(self):
+        self.app.push('queue')
+        self.app.current = track(5)
+        self.app.copy_link = Mock()
+        s.handle_key(self.app, 'Y')
+        self.app.copy_link.assert_called_once_with(self.app.current)
+
