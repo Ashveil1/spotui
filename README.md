@@ -182,7 +182,8 @@ required. This note is not legal advice.
 appears at the bottom of the sidebar. At expiry SpotUI pauses playback and
 cancels a pending track load; it does not close the app or shut down the computer.
 The timer is not persisted across restarts. Seek and volume bars support dragging
-on terminals that report mouse-motion events.
+on terminals that report mouse-motion events, and clicking the speaker glyph mutes
+(click again to restore).
 
 `f` opens Now Playing with larger cover art, playback status and the next song.
 Click the small cover or title in the player bar to open it too. Its moving bars
@@ -198,7 +199,7 @@ put. Non-finite numbers in a saved library are ignored.
 
 The queue and position are saved in the library file and restored on the next launch. The Home screen shows a **Continue listening** card with where you stopped ("left off at 1:14") - click it to resume the song at that exact position.
 
-When the last queued song starts, **autoplay** quietly lines up similar songs so the music never just stops (`u` toggles it, on by default). Songs autoplay added are marked with a ✦ in the queue and in Now Playing's Up Next, so you can tell them from your own picks; `D` in the queue view drops just those, and the queue header counts how many upcoming songs came from autoplay ("✦ 3 autoplayed"). Now Playing also shows where the queue started from ("From Late Night Drive"), the artist name under the title opens the artist page, and an active sleep timer appears as a countdown chip. The queue view has a seekable progress line under the Now playing row. `E` cycles equalizer presets (off, bass boost, vocal, treble boost) through mpv's audio filters. Clicking the elapsed time in the playerbar switches it to a countdown. Playlist headers show a 2x2 mosaic of the first four covers.
+When the last queued song starts, **autoplay** quietly lines up similar songs so the music never just stops (`u` toggles it, on by default). Songs autoplay added are marked with a ✦ in the queue and in Now Playing's Up Next, so you can tell them from your own picks; `D` in the queue view drops just those, and the queue header counts how many upcoming songs came from autoplay and how long they run ("✦ 3 autoplayed (9 min)"). Now Playing also shows where the queue started from ("From Late Night Drive"), the artist name under the title opens the artist page, and an active sleep timer appears as a countdown chip. The queue view has a seekable progress line under the Now playing row. `E` cycles equalizer presets (off, bass boost, vocal, treble boost) through mpv's audio filters. Clicking the elapsed time in the playerbar switches it to a countdown. Playlist headers show a 2x2 mosaic of the first four covers.
 
 `F` (in Liked, playlists, history, queue) finds and jumps to the first song whose title or artist matches what you type; Enter keeps the selection.
 
@@ -208,13 +209,13 @@ When the last queued song starts, **autoplay** quietly lines up similar songs so
 
 `C` in the queue view clears the upcoming songs and keeps the current song and what already played. The header of the queue view shows how many songs are lined up and about how long is left.
 
-`m` in Liked Songs, a playlist or Recently Played cycles the sort order: default, title A-Z, artist A-Z, recently added, longest first. The choice is saved and applies to all three views. Sorting only changes how the list is shown - the stored order never changes, and playing, liking or deleting always acts on the row you see.
+`m` in Liked Songs, a playlist or Recently Played cycles the sort order: default, title A-Z, artist A-Z, recently added, longest first. The choice is saved and applies to all three views. Sorting only changes how the list is shown - the stored order never changes, and playing, liking or deleting always acts on the row you see. Dates in these lists render relative: Today, Yesterday, the weekday within the last week, then the full date.
 
 `X` in a playlist exports it as JSON to `~/spotui-exports/`. Import one with `python3 spotui.py --import file.json` while SpotUI is closed.
 
 `T` cycles color themes (Spotify, Aurora, Sunset, Ocean, Rose, Amber). Themes redefine terminal palette slots, so they need a terminal that allows it (most do; tmux and `NO_COLOR` do not). The choice is saved.
 
-`i` opens listening stats: your most played artists and songs, counted from what you play in SpotUI (stored locally in the library file). The header shows how much you played this week, with a per-day activity chart and a time-of-day breakdown (morning / afternoon / evening / night) below it. Click a top artist to open its page, or a top song to play it. Artist pages and artist rows in search show their total plays, and the Liked Songs, playlist, and Recently Played headers end with the total play count of their songs.
+`i` opens listening stats: your most played artists and songs, counted from what you play in SpotUI (stored locally in the library file). The header shows how much you played this week, with a per-day activity chart and a time-of-day breakdown (morning / afternoon / evening / night) below it, plus your current listening streak (consecutive days with a play). Click a top artist to open its page, or a top song to play it. Artist pages and artist rows in search show their total plays, and the Liked Songs, playlist, and Recently Played headers end with the total play count of their songs.
 
 `S` cycles shuffle modes and turns shuffle on: **Artist spread** (default), **Discovery** (songs you have played least first) and **Your mood** (your most played songs and artists first). Discovery and mood use the play counts SpotUI keeps locally, so they get better as you listen. All modes keep artists apart when the queue allows it and never add or drop songs. The mode is shown as a D or M next to the shuffle button.
 
