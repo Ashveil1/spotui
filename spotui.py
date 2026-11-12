@@ -3307,6 +3307,12 @@ class UI:
         nplays = plays_for(tracks, app.store.plays)
         if nplays:
             sub += f" \u00b7 {nplays} plays"
+        if kind in ("liked", "playlist"):
+            ym = time.strftime("%Y-%m")
+            new = sum(1 for t in tracks
+                      if str(t.get("added") or "").startswith(ym))
+            if new:
+                sub += f" \u00b7 {new} new this month"
         put(scr, cy + 2, hx, sub, pal[f"g{fi}d"])
 
         by = cy + 4

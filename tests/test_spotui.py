@@ -452,6 +452,32 @@ class AppTests(unittest.TestCase):
         self.assertEqual(s.plays_for([track(9)], plays), 0)
         self.assertEqual(s.plays_for([], plays), 0)
 
+    def test_collection_header_counts_new_this_month(self):
+        from collections import defaultdict
+        ym = s.time.strftime("%Y-%m")
+        self.app.store.liked = [dict(track(1), added=f"{ym}-03"),
+                                dict(track(2), added=f"{ym}-11"),
+                                dict(track(3), added="2020-05-01"),
+                                track(4)]
+        self.app.push('liked')
+        self.app.pal = defaultdict(int)
+        self.app.cover_for = Mock(return_value=None)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        ui.list_header = Mock()
+        ui.track_list = Mock()
+        ui.hint = Mock()
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(str(t))), \
+                patch.object(s, 'draw_art'):
+            ui.v_collection(0, 30, 24, 120, 'liked', None)
+        subs = [t for t in texts if 'new this month' in t]
+        self.assertEqual(len(subs), 1)
+        self.assertIn('2 new this month', subs[0])
+
     def test_artist_plays(self):
         self.app.store.plays = {
             '1': dict(title='A', artist='Luna Waves', n=3),
