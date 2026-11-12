@@ -1557,6 +1557,53 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class SleepEndOfTrackTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.refresh_similar = Mock()
+
+    def test_cycle_reaches_end_of_track_then_off(self):
+        seen = []
+        for _ in range(6):
+            self.app.cycle_sleep()
+            seen.append("eot" if self.app.sleep_eot
+                        else self.app.sleep_minutes)
+        self.assertEqual(seen, [15, 30, 60, 90, "eot", 0])
+        self.assertIsNone(self.app.sleep_deadline)
+
+    def test_end_of_track_pauses_instead_of_advancing(self):
+        self.app.queue = [track(1), track(2)]
+        self.app.qpos = 0
+        self.app.current = self.app.queue[0]
+        self.app.sleep_eot = True
+        self.app.next = Mock()
+        self.app.mpv.cmd = Mock()
+        self.app._track_ended()
+        self.app.next.assert_not_called()
+        self.assertFalse(self.app.sleep_eot)
+        self.assertTrue(self.app.mpv.state["pause"])
+        self.app.mpv.cmd.assert_called_once_with(
+            ["set_property", "pause", True])
+
+    def test_normal_end_advances(self):
+        self.app.queue = [track(1), track(2)]
+        self.app.qpos = 0
+        self.app.current = self.app.queue[0]
+        self.app.next = Mock()
+        self.app._track_ended()
+        self.app.next.assert_called_once_with(auto=True)
+
+
 class SearchPlayCountTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
