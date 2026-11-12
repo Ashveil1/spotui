@@ -3273,3 +3273,31 @@ class LibFreshTests(unittest.TestCase):
         self.app.store.playlists[0]['tracks'] = [track(1)]
         self.assertFalse(s.lib_fresh(self.app.store))
 
+class ScrollWindowTests(unittest.TestCase):
+    TXT = 'abcdefghij'   # 10 cells
+
+    def test_short_text_unchanged(self):
+        self.assertEqual(s.scroll_window('abc', 6, 0), 'abc')
+        self.assertEqual(s.scroll_window('abc', 6, 99), 'abc')
+
+    def test_holds_at_start(self):
+        for tick in range(6):
+            self.assertEqual(s.scroll_window(self.TXT, 6, tick), 'abcdef')
+
+    def test_scrolls_one_cell_per_tick(self):
+        self.assertEqual(s.scroll_window(self.TXT, 6, 6), 'abcdef')
+        self.assertEqual(s.scroll_window(self.TXT, 6, 7), 'bcdefg')
+        self.assertEqual(s.scroll_window(self.TXT, 6, 8), 'cdefgh')
+
+    def test_holds_at_end(self):
+        for tick in (10, 12, 15):
+            self.assertEqual(s.scroll_window(self.TXT, 6, tick), 'efghij')
+
+    def test_wraps_back_to_start(self):
+        cycle = (10 - 6) + 12
+        self.assertEqual(s.scroll_window(self.TXT, 6, cycle), 'abcdef')
+        self.assertEqual(s.scroll_window(self.TXT, 6, cycle + 7), 'bcdefg')
+
+    def test_width_wider_than_text(self):
+        self.assertEqual(s.scroll_window(self.TXT, 20, 5), self.TXT)
+

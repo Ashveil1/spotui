@@ -120,6 +120,31 @@ def wcut(s, w):
     return out
 
 
+def scroll_window(text, width, tick, hold=6):
+    """A sliding window over a too-long title: hold at the start, scroll
+    one cell per tick, hold at the end, then jump back to the start."""
+    if width <= 0 or dlen(text) <= width:
+        return text
+    span = len(text) - width
+    cycle = span + hold * 2
+    t = tick % cycle
+    if t < hold:
+        off = 0
+    elif t < hold + span:
+        off = t - hold
+    else:
+        off = span
+    # plain width-limited slice - no ellipsis, it would read as truncation
+    out, used = "", 0
+    for ch in text[off:]:
+        dw = dwidth(ch)
+        if used + dw > width:
+            break
+        out += ch
+        used += dw
+    return out
+
+
 def fmt_t(sec):
     if sec is None:
         return "–:––"
@@ -3205,7 +3230,12 @@ class UI:
         tx = ax + aw + 4 if wide else x0 + 2
         ty = ay if wide else ay + ah + 1
         tw = max(8, W - tx - 3)
-        put(scr, ty, tx, wcut(track["title"], tw - 4), pal["text"], curses.A_BOLD)
+        ttl = track["title"]
+        if dlen(ttl) > tw - 4 and not app.reduced_motion:
+            ttl = scroll_window(ttl, tw - 4, app.frame // 2)
+        else:
+            ttl = wcut(ttl, tw - 4)
+        put(scr, ty, tx, ttl, pal["text"], curses.A_BOLD)
         put(scr, ty + 1, tx, wcut(track["artist"], tw), pal["dim"],
             curses.A_UNDERLINE)
         self.hit(tx, ty + 1, min(dlen(track["artist"]), tw), 1,
