@@ -3476,3 +3476,54 @@ class OpenSourceTests(unittest.TestCase):
         self.assertEqual(len(self.app.stack), depth)
         self.assertIn('No page', self.app.toast[0])
 
+class DuplicatePlaylistTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_duplicates_tracks(self):
+        self.app.create_playlist('Rock')
+        self.app.back()
+        self.app.store.playlists[0]['tracks'] = [track(1), track(2)]
+        self.app.duplicate_playlist(0)
+        self.assertEqual(len(self.app.store.playlists), 2)
+        dup = self.app.store.playlists[1]
+        self.assertEqual(dup['name'], 'Rock (copy)')
+        self.assertEqual([t['id'] for t in dup['tracks']], ['1', '2'])
+        self.assertEqual(self.app.stack[-1], ('playlist', 1))
+
+    def test_copy_is_independent(self):
+        self.app.create_playlist('Rock')
+        self.app.back()
+        self.app.store.playlists[0]['tracks'] = [track(1)]
+        self.app.duplicate_playlist(0)
+        self.app.store.playlists[1]['tracks'][0]['title'] = 'Changed'
+        self.assertNotEqual(self.app.store.playlists[0]['tracks'][0]['title'], 'Changed')
+
+    def test_name_collision_increments(self):
+        self.app.create_playlist('Rock')
+        self.app.back()
+        self.app.duplicate_playlist(0)
+        self.app.back()
+        self.app.duplicate_playlist(0)
+        names = [p['name'] for p in self.app.store.playlists]
+        self.assertEqual(names, ['Rock', 'Rock (copy)', 'Rock (copy) 2'])
+
+    def test_bad_index_noop(self):
+        self.app.duplicate_playlist(5)
+        self.assertEqual(self.app.store.playlists, [])
+
+    def test_n_key(self):
+        self.app.create_playlist('Rock')
+        self.app.back()
+        self.app.push('playlist', 0)
+        s.handle_key(self.app, 'N')
+        self.assertEqual(len(self.app.store.playlists), 2)
+
