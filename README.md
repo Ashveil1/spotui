@@ -117,7 +117,7 @@ The home page shows three shelves: **Made for you** (tracks in the same style
 as whatever you played or searched last — pulled from YouTube's "Mix" radio,
 so it mixes the artist with similar ones; refreshed in the background and
 cached, so it opens instantly and works offline), **Recently played** (the
-songs you actually played, newest first) and **Songs you like**. Click any
+songs you actually played, newest first, with how long ago each one was) and **Songs you like**. Click any
 card or row to play it, press `R` to roll new picks.
 
 Play something from a search and SpotUI turns the queue into a **radio**:

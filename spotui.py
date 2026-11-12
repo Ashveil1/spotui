@@ -128,6 +128,26 @@ def fmt_t(sec):
     return f"{sec // 60}:{sec % 60:02d}"
 
 
+def fmt_ago(ts):
+    """'5m' / '2h' / '3d' / '2w' for an epoch timestamp; '' when invalid."""
+    try:
+        ts = float(ts or 0)
+    except (TypeError, ValueError):
+        return ""
+    if not math.isfinite(ts) or ts <= 0:
+        return ""
+    d = time.time() - ts
+    if d < 0:
+        return ""
+    if d < 3600:
+        return f"{max(1, int(d // 60))}m"
+    if d < 86400:
+        return f"{int(d // 3600)}h"
+    if d < 7 * 86400:
+        return f"{int(d // 86400)}d"
+    return f"{int(d // (7 * 86400))}w"
+
+
 def fmt_added(v):
     """Date cell for a track: liked stores 'YYYY-MM-DD', history an epoch.
 
@@ -3388,6 +3408,8 @@ class UI:
         if not hist or y0 + 1 >= y1 - 1:
             return y0
         put(scr, y0, x0 + 2, "Recently played", pal["text"], curses.A_BOLD)
+        put(scr, y0, W - 21, "Open Recently Played \u2192", pal["green"])
+        self.hit(W - 22, y0, 24, 1, "tile", ("history", None))
         w = W - x0 - 4
         title_w = max(12, int(w * 0.62))
         n = 0
@@ -3412,8 +3434,14 @@ class UI:
             pal["green"] if play else pal["text"],
             curses.A_BOLD if play else 0)
         ax = x0 + 4 + title_w + 2
-        put(scr, y, ax, wcut(t["artist"], max(2, x0 + w - 9 - ax)),
-            pal["dim"])
+        aw = max(2, x0 + w - 9 - ax)
+        acut = wcut(t["artist"], aw)
+        put(scr, y, ax, acut, pal["dim"])
+        if vk == "history:":
+            rel = fmt_ago(t.get("added"))
+            rx = ax + dlen(acut) + 2
+            if rel and rx + dlen(rel) <= x0 + w - 9:
+                put(scr, y, rx, "\u00b7 " + rel, pal["faint"])
         if t["id"] in app.liked_ids:
             put(scr, y, x0 + w - 8, IC_HEART, pal["green"], curses.A_BOLD)
         put(scr, y, x0 + w - 6, fmt_t(t.get("dur")).rjust(5), pal["dim"])

@@ -1557,6 +1557,23 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class FmtAgoTests(unittest.TestCase):
+    def test_buckets(self):
+        import time as _t
+        now = _t.time()
+        self.assertEqual(s.fmt_ago(now - 300), "5m")
+        self.assertEqual(s.fmt_ago(now - 7200), "2h")
+        self.assertEqual(s.fmt_ago(now - 3 * 86400), "3d")
+        self.assertEqual(s.fmt_ago(now - 14 * 86400), "2w")
+        self.assertEqual(s.fmt_ago(now - 60), "1m")
+
+    def test_invalid(self):
+        self.assertEqual(s.fmt_ago(None), "")
+        self.assertEqual(s.fmt_ago("x"), "")
+        self.assertEqual(s.fmt_ago(float("nan")), "")
+        self.assertEqual(s.fmt_ago(-5), "")
+
+
 class MilestoneTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
