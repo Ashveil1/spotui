@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The queue header shows the wall-clock time the music runs out
+  ("12 songs, 35 min left · ends 17:03"), minus what's already played
+  of the current song (#135)
+
 - Long song titles in Now Playing now scroll marquee-style (hold, slide,
   hold, restart) instead of being cut off; SPOTUI_REDUCED_MOTION keeps
   the old static cut (#134)

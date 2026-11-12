@@ -228,6 +228,15 @@ def fmt_remaining(tracks):
     return f"{m} min left"
 
 
+def fmt_ends(tracks, elapsed=0, now=None):
+    """'ends 16:42' - the wall-clock time the given tracks run out."""
+    tot = sum(t.get("dur") or 0 for t in tracks) - int(elapsed or 0)
+    if tot <= 60:
+        return ""
+    lt = time.localtime((time.time() if now is None else now) + tot)
+    return "ends " + time.strftime("%H:%M", lt)
+
+
 def plays_for(tracks, plays):
     """Total local play count of a list of tracks (0 when never played)."""
     return sum(plays.get(str(t.get("id")), {}).get("n", 0)
@@ -4100,6 +4109,10 @@ class UI:
             left = fmt_remaining(app.queue[max(0, app.qpos):])
             if left:
                 label += f", {left}"
+                ends = fmt_ends(app.queue[max(0, app.qpos):],
+                                app.mpv.state.get("pos") or 0)
+                if ends:
+                    label += f" · {ends}"
             put(scr, y0 + 1, x0 + 9, label, pal["faint"])
             if app.play_source:
                 flabel = f"  \u00b7  From {app.play_source}"
