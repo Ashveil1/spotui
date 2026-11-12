@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Long song titles in Now Playing now scroll marquee-style (hold, slide,
+  hold, restart) instead of being cut off; SPOTUI_REDUCED_MOTION keeps
+  the old static cut (#134)
+
 - First run now shows a welcome panel on home with the three steps to a
   full library (search, play/queue/like, shelves fill up) instead of a
   nearly blank screen (#133)
