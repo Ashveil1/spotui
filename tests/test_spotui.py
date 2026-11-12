@@ -1557,6 +1557,43 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class HomeTileCountsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.refresh_similar = Mock()
+
+    def test_tiles_show_counts_and_minutes(self):
+        from collections import defaultdict
+        self.app.store.liked = [dict(track(1), dur=120),
+                                dict(track(2), dur=180)]
+        self.app.store.playlists = [
+            {"name": "Gym", "tracks": [dict(track(3), dur=600)]}]
+        self.app.pal = defaultdict(int)
+        self.app.cover_for = Mock(return_value=None)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 140)
+        ui = s.UI(self.app, scr)
+        ui.hint = Mock()
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(str(t))), \
+                patch.object(s, 'draw_art'):
+            ui._home_tiles(self.app, self.app.pal, scr, 0, 30, 24, 120)
+        self.assertIn("2 songs \u00b7 5 min", texts)
+        self.assertIn("1 song \u00b7 10 min", texts)
+
+
 class StatsOnRepeatTests(unittest.TestCase):
     def test_counts_repeats_in_week(self):
         import time as _t

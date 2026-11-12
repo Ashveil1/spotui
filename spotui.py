@@ -3154,9 +3154,11 @@ class UI:
 
     def _home_tiles(self, app, pal, scr, y0, y1, x0, W):
         """Shortcut tiles: Liked Songs + your playlists."""
-        tiles = [("liked", IC_HEART, "Liked Songs", "liked", None)]
+        tiles = [("liked", IC_HEART, "Liked Songs", "liked", None,
+                  app.store.liked)]
         for i, pl in enumerate(app.store.playlists):
-            tiles.append(("pl", IC_NOTE, pl["name"], "playlist", i))
+            tiles.append(("pl", IC_NOTE, pl["name"], "playlist", i,
+                          pl["tracks"]))
         tw = min(26, (W - x0 - 4) // 2)
         th = 3
         per_row = max(1, (W - x0 - 2) // (tw + 1))
@@ -3176,6 +3178,16 @@ class UI:
                      icon=(IC_HEART if t[0] == "liked" else IC_NOTE))
             put(scr, y + 1, x + 5, wcut(t[2], tw - 9),
                 pal["pill"] if i == sel_i else pal["dim"], curses.A_BOLD)
+            tracks = t[5]
+            if tracks:
+                n_tr = len(tracks)
+                sub = f"{n_tr} song" + ("s" if n_tr != 1 else "")
+                mins = int(sum(x.get("dur") or 0 for x in tracks) // 60)
+                cand = f"{sub} \u00b7 {mins} min"
+                if mins and dlen(cand) <= tw - 7:
+                    sub = cand
+                put(scr, y + 2, x + 5, wcut(sub, tw - 7),
+                    pal["pilldim"] if i == sel_i else pal["faint"])
             if i == sel_i:
                 put(scr, y + 1, x + tw - 3, f" {IC_PLAY} ", pal["btn"],
                     curses.A_BOLD)
