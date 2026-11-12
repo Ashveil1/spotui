@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The "From Late Night Drive" line in Now Playing is clickable: it opens
+  the playlist, Liked Songs, Recently Played, Made for you, or the
+  artist page the song is playing from (#139)
+
 - Press . to jump the selection to the playing song in any list; in the
   queue it lands on the next-up row (#138)
 
