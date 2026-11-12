@@ -1713,7 +1713,7 @@ class HomeOnRepeatTests(unittest.TestCase):
         tp.start()
         self.addCleanup(tp.stop)
         self.app = s.App()
-        self.app.pal = {key: 0 for key in ['text', 'faint', 'dim']}
+        self.app.pal = {key: 0 for key in ['text', 'faint', 'dim', 'green']}
         now = s.time.time()
         self.app.store.history = [
             {"id": "a", "title": "Alpha", "artist": "A", "dur": 100,
@@ -2018,6 +2018,39 @@ class ChipActionTests(unittest.TestCase):
 
     def test_unknown_chip_raises_keyerror(self):
         self.assertRaises(KeyError, self.app.chip_action, "nope")
+
+
+class HomePolishTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.cover_for = lambda *a, **k: None
+
+    def test_on_repeat_links_to_stats(self):
+        now = s.time.time()
+        self.app.store.history = [
+            {"id": "a", "title": "A", "artist": "X", "dur": 1,
+             "added": now - 3600},
+            {"id": "a", "title": "A", "artist": "X", "dur": 1,
+             "added": now - 7200}]
+        self.app.pal = {key: 0 for key in ['text', 'faint', 'dim', 'green']}
+        scr = Mock()
+        with patch.object(s, 'put'), patch.object(s, 'fill'), \
+                patch.object(s, 'draw_art'), \
+                patch.object(s.curses, 'color_pair', return_value=0):
+            s.UI(self.app, scr)._home_heavy(self.app, self.app.pal, scr,
+                                            0, 30, 0, 120)
+        navs = [r['arg'] for r in self.app.rects if r['act'] == 'nav']
+        self.assertIn("stats", navs)
 
 
 class FmtAgoTests(unittest.TestCase):
