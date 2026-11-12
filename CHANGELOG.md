@@ -5,6 +5,11 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press `x` on a song to hide it from every suggestion surface: daily
+  mixes, Enhance, Made for you and autoplay all skip it. The row gets a
+  small x marker, the info card says "Suggested: no (hidden)", and `x`
+  again brings it back. Saved in the library.
+
 - Press `L` on a playlist to like every song in it at once. Songs
   already liked are skipped and the toast says how many were added.
 

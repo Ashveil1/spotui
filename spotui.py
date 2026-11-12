@@ -394,6 +394,7 @@ class Store:
         self.hist_dedupe = False
         self.zen = False
         self.theme = THEME_NAMES[0]
+        self.blocked = []              # song ids hidden from suggestions
         self._load()
 
     @staticmethod
@@ -496,6 +497,8 @@ class Store:
             self.hist_dedupe = d["hist_dedupe"]
         if isinstance(d.get("zen"), bool):
             self.zen = d["zen"]
+        if isinstance(d.get("blocked"), list):
+            self.blocked = [x for x in d["blocked"] if isinstance(x, str)]
         if d.get("theme") in THEMES:
             self.theme = d["theme"]
         try:
@@ -525,6 +528,7 @@ class Store:
                         "sort_mode": self.sort_mode,
                         "hist_dedupe": self.hist_dedupe,
                         "zen": self.zen,
+                        "blocked": self.blocked,
                     }, f, ensure_ascii=False, indent=1)
                     f.flush()
                     os.fsync(f.fileno())
@@ -1104,7 +1108,7 @@ def daily_mixes(store, n=3):
     Ranks artists by play count plus how many of their songs you saved; each
     mix is that artist's songs plus songs by artists you also listen to.
     """
-    pool, seen = [], set()
+    pool, seen = [], set(getattr(store, "blocked", None) or [])
     for src in (store.liked, store.history, store.similar.get("items", []),
                 *[p["tracks"] for p in store.playlists]):
         for t in src:
@@ -1444,6 +1448,7 @@ class App:
         self.soff = 0                 # sidebar scroll offset
         self.sw_bounds = None         # (SW, y0, y1) for wheel-over-sidebar
         self.liked_ids = {t["id"] for t in self.store.liked}
+        self.blocked_ids = set(self.store.blocked)
         self._sim_busy = False
         self._sim_at = 0.0
         self._radio_busy = False
@@ -1563,7 +1568,9 @@ class App:
             lib = self.artist_tracks(arg or "")
             return lib or self._artist_remote.get(arg or "", [])
         if kind == "similar":
-            return (self.store.similar or {}).get("items") or []
+            items = (self.store.similar or {}).get("items") or []
+            return [t for t in items
+                    if t.get("id") not in self.blocked_ids]
         return []
 
     def find_jump(self):
@@ -1862,7 +1869,8 @@ class App:
                         and self.current.get("id") == track.get("id")):
                     return
                 have = {t.get("id") for t in self.queue}
-                picks = [t for t in picks if t.get("id") not in have]
+                picks = [t for t in picks if t.get("id") not in have
+                         and t.get("id") not in self.blocked_ids]
                 if not picks:
                     return
                 for t in picks:   # tag so the UI can mark autoplayed songs
@@ -2421,6 +2429,23 @@ class App:
                        f"{'s' if len(fresh) != 1 else ''} "
                        f"from {pl['name']}")
 
+    def toggle_block(self, t):
+        """Hide a song from every suggestion surface (mixes, Enhance,
+        Made for you, autoplay) - or bring it back."""
+        if not t:
+            return
+        tid = str(t.get("id") or "")
+        title = t.get("title") or "Song"
+        if tid in self.blocked_ids:
+            self.blocked_ids.discard(tid)
+            self.store.blocked = [x for x in self.store.blocked if x != tid]
+            self.toast_now(f"{title} is back in suggestions")
+        else:
+            self.blocked_ids.add(tid)
+            self.store.blocked.append(tid)
+            self.toast_now(f"Won't suggest {title} again (x to undo)")
+        self.store.save()
+
     def add_queue(self, t):
         if not t:
             return
@@ -2817,7 +2842,7 @@ class App:
 
     def enhance_candidates(self, pl):
         """Library songs not in pl, same-artist first, ranked by plays."""
-        seen = {t["id"] for t in pl["tracks"]}
+        seen = {t["id"] for t in pl["tracks"]} | self.blocked_ids
         artists = {self._norm_artist(t.get("artist"))
                    for t in pl["tracks"]}
         pool = []
@@ -2925,6 +2950,8 @@ class App:
             pass
         rows.append(("Plays", plays))
         rows.append(("Liked", "yes" if tid in self.liked_ids else "no"))
+        rows.append(("Suggested", "no (hidden)" if tid in self.blocked_ids
+                     else "yes"))
         in_pls = [pl["name"] for pl in self.store.playlists
                   if any(str(x.get("id")) == tid for x in pl["tracks"])]
         rows.append(("In playlists", ", ".join(in_pls) if in_pls else "-"))
@@ -4715,6 +4742,10 @@ class UI:
             ax = tx + min(dlen(t["title"]), title_w) + 1
             if ax < cx_safe - 1:
                 put(scr, y, ax, IC_AUTO, cp(pal["accent"]))
+        elif t["id"] in app.blocked_ids:
+            ax = tx + min(dlen(t["title"]), title_w) + 1
+            if ax < cx_safe - 1:
+                put(scr, y, ax, "\u00d7", cp(pal["faint"]))
 
         cx = tx + title_w + 2
         if chan_w:
@@ -4946,7 +4977,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("O", "open song in browser"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -5456,6 +5487,8 @@ def handle_key(app, k):
             app.open_info(app.track_under() or app.current)
         elif k == "O":
             app.open_in_browser(app.track_under() or app.current)
+        elif k == "x":
+            app.toggle_block(app.track_under() or app.current)
         elif k == "Q" and kind == "search":
             app.queue_all(list(app.results))
         elif k == "a":
