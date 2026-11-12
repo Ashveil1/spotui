@@ -1531,6 +1531,9 @@ class App:
         self.orig_queue = None
         self.play_source = source
         self.queue = [dict(t) for t in tracks]
+        if source:
+            for t in self.queue:
+                t["src"] = source
         self.qpos = pos
         if self.shuffle:
             self._apply_shuffle(True)
@@ -2115,9 +2118,9 @@ class App:
             self.play([t], 0)
             return
         self.queue_revision += 1
-        self.queue.append(dict(t))
+        self.queue.append(dict(t, src="Added"))
         if self.shuffle and self.orig_queue:
-            self.orig_queue.append(dict(t))
+            self.orig_queue.append(dict(t, src="Added"))
         self.toast_now(f"Added to queue: {t['title'][:30]}")
 
     def play_next(self, t):
@@ -2127,9 +2130,9 @@ class App:
             self.play([t], 0)
             return
         self.queue_revision += 1
-        self.queue.insert(self.qpos + 1, dict(t))
+        self.queue.insert(self.qpos + 1, dict(t, src="Added"))
         if self.shuffle and self.orig_queue is not None:
-            self.orig_queue.append(dict(t))
+            self.orig_queue.append(dict(t, src="Added"))
         self.toast_now(f"Plays next: {t['title'][:30]}")
 
     def move_queue(self, idx, d):
@@ -3802,13 +3805,28 @@ class UI:
         cx = tx + title_w + 2
         if chan_w:
             put(scr, y, cx, wcut(t["artist"], chan_w), cp(pal["dim"]))
+            ptxt = ""
             if (vk.startswith("search:")
                     or (vk.startswith("history") and app.store.hist_dedupe)):
                 # songs you played before carry their local play count
                 np_ = (app.store.plays.get(t["id"]) or {}).get("n", 0)
                 ptxt = f" \u00b7 {np_} plays" if np_ else ""
-                ax = cx + min(dlen(t["artist"]), chan_w)
-                if ptxt and ax + dlen(ptxt) <= cx + chan_w:
+            elif vk.startswith("queue") and not t.get("auto"):
+                # queue rows note where a song came from when it differs
+                # from the queue's own origin (manual adds, other lists)
+                src_ = (t.get("src") or "").strip()
+                if src_ and src_ != (app.play_source or ""):
+                    ptxt = f" \u00b7 {src_}"
+            ax = cx + min(dlen(t["artist"]), chan_w)
+            if ptxt:
+                room = cx + chan_w - ax
+                if vk.startswith("queue"):
+                    # queue rows have no date column: the free space up to
+                    # the duration column may hold the tag
+                    room = max(room, x0 + w - dur_w - 2 - ax)
+                if 4 <= room < dlen(ptxt):
+                    ptxt = wcut(ptxt, room)
+                if dlen(ptxt) <= room:
                     put(scr, y, ax, ptxt, cp(pal["faint"]))
 
         if show_date and date_w:
