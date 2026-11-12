@@ -1977,6 +1977,49 @@ class SimilarViewTests(unittest.TestCase):
         self.assertTrue(any("No picks yet" in x for x in texts))
 
 
+class ChipActionTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+
+    def test_speed_chip_resets_to_normal(self):
+        self.app.speed = 1.5
+        self.app.chip_action("speed")
+        self.assertEqual(self.app.speed, 1.0)
+
+    def test_repeat_chip_cycles(self):
+        before = self.app.repeat
+        self.app.chip_action("repeat")
+        self.assertNotEqual(self.app.repeat, before)
+
+    def test_shuffle_chip_toggles(self):
+        before = self.app.shuffle
+        self.app.chip_action("shuffle")
+        self.assertNotEqual(self.app.shuffle, before)
+
+    def test_eq_chip_cycles(self):
+        before = self.app.store.eq_preset
+        self.app.chip_action("eq")
+        self.assertNotEqual(self.app.store.eq_preset, before)
+
+    def test_autoplay_chip_toggles(self):
+        before = self.app.store.autoplay
+        self.app.chip_action("autoplay")
+        self.assertNotEqual(self.app.store.autoplay, before)
+
+    def test_unknown_chip_raises_keyerror(self):
+        self.assertRaises(KeyError, self.app.chip_action, "nope")
+
+
 class FmtAgoTests(unittest.TestCase):
     def test_buckets(self):
         import time as _t
