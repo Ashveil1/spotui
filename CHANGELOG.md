@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The sidebar has a Stats entry (with its own icon) under Home and Search,
+  so the listening-stats view is discoverable and clickable, not just `i` (#122)
+
 - Search now surfaces your own playlists too: matching playlists appear as
   clickable chips (with song counts) next to the artist chips (#121)
 

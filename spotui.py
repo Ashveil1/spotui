@@ -74,6 +74,7 @@ IC_NOTE = "♫"
 IC_SPK = "◁"
 IC_PLUS = "+"
 IC_HIST = "↺"
+IC_STATS = "▤"
 IC_AUTO = "✦"
 
 # seconds before a sleep timer fires when the volume starts to fade
@@ -2810,7 +2811,8 @@ class UI:
         elif app.sleep_eot:
             put(scr, y1 - 2, 2, "Sleep: end of track", pal["sgreen"])
         kind, _ = app.stack[-1]
-        navs = [("home", IC_HOME, "Home"), ("search", IC_SEARCH, "Search")]
+        navs = [("home", IC_HOME, "Home"), ("search", IC_SEARCH, "Search"),
+                ("stats", IC_STATS, "Stats")]
         for i, (k, ic, label) in enumerate(navs):
             y = y0 + 3 + i
             active = kind == k
@@ -2823,8 +2825,8 @@ class UI:
                 curses.A_BOLD if active else 0)
             self.hit(1, y, SW - 2, 1, "nav", k)
 
-        put(scr, y0 + 5, 2, "─" * (SW - 4), pal["sfaint"])
-        y = y0 + 6
+        put(scr, y0 + 6, 2, "─" * (SW - 4), pal["sfaint"])
+        y = y0 + 7
         put(scr, y, 2, "Your Library", pal["sdim"], curses.A_BOLD)
         put(scr, y, SW - 3, IC_PLUS, pal["sdim"], curses.A_BOLD)
         self.hit(SW - 4, y, 2, 1, "create")
@@ -2833,7 +2835,7 @@ class UI:
                  ("history", IC_HIST, "Recently Played")]
         for i, pl in enumerate(app.store.playlists):
             items.append(("playlist", IC_NOTE, pl["name"], i))
-        top, bot = y0 + 8, y1 - (
+        top, bot = y0 + 9, y1 - (
             2 if (app.sleep_deadline is not None or app.sleep_eot)
             else 1)
         vis = max(1, bot - top)
