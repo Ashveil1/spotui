@@ -4072,3 +4072,72 @@ class OpenBrowserTests(unittest.TestCase):
             s.handle_key(self.app, 'O')
         self.assertTrue(self.mock_popen.called)
 
+class UndoDeleteTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.create_playlist('A')
+        self.app.back()
+        self.app.create_playlist('B')
+        self.app.back()
+        self.app.store.playlists[0]['tracks'] = [track(1), track(2)]
+        self.app.store.playlists[1]['tracks'] = [track(3)]
+
+    def test_undo_playlist(self):
+        self.app.delete_playlist(0)
+        self.assertEqual([p['name'] for p in self.app.store.playlists], ['B'])
+        self.app.undo_delete()
+        self.assertEqual([p['name'] for p in self.app.store.playlists],
+                         ['A', 'B'])
+        self.assertEqual(self.app.store.playlists[0]['tracks'],
+                         [track(1), track(2)])
+        self.assertIn('Restored playlist: A', self.app.toast[0])
+
+    def test_undo_track(self):
+        self.app.push('playlist', 0)
+        self.app.sel[self.app.key()] = 1     # select Song 2
+        self.app.delete_selected()
+        self.assertEqual(self.app.store.playlists[0]['tracks'], [track(1)])
+        self.app.undo_delete()
+        self.assertEqual(self.app.store.playlists[0]['tracks'],
+                         [track(1), track(2)])
+        self.assertIn('Restored Song 2', self.app.toast[0])
+
+    def test_undo_empty(self):
+        self.app.undo_delete()
+        self.assertIn('Nothing to restore', self.app.toast[0])
+
+    def test_undo_is_one_level(self):
+        self.app.delete_playlist(0)
+        self.app.undo_delete()
+        self.app.undo_delete()
+        self.assertIn('Nothing to restore', self.app.toast[0])
+
+    def test_undo_track_gone_playlist(self):
+        self.app.push('playlist', 0)
+        self.app.sel[self.app.key()] = 0
+        self.app.delete_selected()
+        self.app._trash = ('track', 9, 0, track(1))
+        self.app.undo_delete()
+        self.assertIn('That playlist is gone', self.app.toast[0])
+
+    def test_latest_delete_wins(self):
+        self.app.delete_playlist(0)
+        self.app.delete_playlist(0)     # now deletes B
+        self.app.undo_delete()
+        names = [p['name'] for p in self.app.store.playlists]
+        self.assertEqual(names, ['B'])  # only B restored
+
+    def test_u_key(self):
+        self.app.delete_playlist(0)
+        s.handle_key(self.app, 'U')
+        self.assertEqual([p['name'] for p in self.app.store.playlists],
+                         ['A', 'B'])
+
