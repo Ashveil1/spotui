@@ -3177,10 +3177,31 @@ class UI:
         if not app.query:
             put(scr, y0 + 1, x0 + 2, "Recent searches", pal["text"],
                 curses.A_BOLD)
-            self._recent_chips(scr, y0 + 3, x0 + 2, W)
+            last = self._recent_chips(scr, y0 + 3, x0 + 2, W)
             if not app.store.recent:
                 put(scr, y0 + 3, x0 + 2, f"Type in the search bar above — press / "
                                     "to start", pal["faint"])
+                return
+            y = last + 2
+            if app.store.history and y + 2 < y1 - 2:
+                put(scr, y, x0 + 2, "Jump back in", pal["text"],
+                    curses.A_BOLD)
+                w = W - x0 - 4
+                for i, t in enumerate(app.store.history[:6]):
+                    yy = y + 2 + i
+                    if yy >= y1 - 2:
+                        break
+                    put(scr, yy, x0 + 2, f"{i + 1}", pal["faint"])
+                    put(scr, yy, x0 + 5, wcut(t["title"], w // 2 - 8),
+                        pal["text"])
+                    put(scr, yy, x0 + 4 + w // 2,
+                        wcut(t["artist"], w // 2 - 8), pal["dim"])
+                    if t.get("dur"):
+                        dtxt = fmt_t(t["dur"])
+                        put(scr, yy, x0 + 2 + w - dlen(dtxt), dtxt,
+                            pal["faint"])
+                    self.hit(x0 + 2, yy, w, 1, "playtrack",
+                             (t, "Jump back in"))
             return
 
         # filter chips: All / Songs / Artists (mouse, like Spotify's)
@@ -3331,7 +3352,10 @@ class UI:
         self.hint(y1 - 2, x0, "search")
 
     def _recent_chips(self, scr, y, x0, W):
-        """Recent-search pills with click-to-search and ×-to-remove."""
+        """Recent-search pills with click-to-search and ×-to-remove.
+
+        Returns the row of the last chip line, so callers can stack more
+        content below."""
         app, pal = self.app, self.pal
         x = x0
         for q in app.store.recent:
@@ -3345,6 +3369,7 @@ class UI:
             self.hit(x, y, w - 2, 1, "recent", q)
             self.hit(x + w - 2, y, 2, 1, "delrecent", q)
             x += w + 1
+        return y
 
     def v_collection(self, y0, y1, x0, W, kind, arg):
         app, pal = self.app, self.pal
@@ -4426,7 +4451,10 @@ def handle_mouse(app):
             if tracks:
                 app.play(tracks, pos, source=app._source_for_vk(vk2))
         elif act == "playtrack":
-            app.play([arg], 0, source="Listening stats")
+            if isinstance(arg, tuple):
+                app.play([arg[0]], 0, source=arg[1])
+            else:
+                app.play([arg], 0, source="Listening stats")
         elif act == "dropauto":
             app.drop_autoplayed()
         elif act == "delrecent":

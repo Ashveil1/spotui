@@ -1557,6 +1557,67 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class JumpBackInTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.refresh_similar = Mock()
+
+    def _render(self):
+        from collections import defaultdict
+        self.app.pal = defaultdict(int)
+        self.app.query = ""
+        self.app.searching = False
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        ui.hint = Mock()
+        self.app.rects = []
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(str(t))), \
+                patch.object(s, 'draw_art'):
+            ui.v_search(0, 34, 24, 120)
+        return texts
+
+    def test_empty_search_offers_jump_back_in(self):
+        self.app.store.recent = ["midnight"]
+        self.app.store.history = [dict(track(1), added=100.0),
+                                  dict(track(2), added=90.0)]
+        texts = self._render()
+        self.assertIn("Jump back in", texts)
+        self.assertIn("Song 1", texts)
+        hits = [r for r in self.app.rects if r["act"] == "playtrack"]
+        self.assertEqual(len(hits), 2)
+        trk, source = hits[0]["arg"]
+        self.assertEqual(trk["id"], "1")
+        self.assertEqual(source, "Jump back in")
+        self.app.play = Mock()
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, hits[0]["x0"] + 1, hits[0]["y0"],
+                                        0, s.curses.BUTTON1_CLICKED)):
+            s.handle_mouse(self.app)
+        self.app.play.assert_called_once()
+        self.assertEqual(self.app.play.call_args[1]["source"],
+                         "Jump back in")
+
+    def test_no_jump_back_in_without_history(self):
+        self.app.store.recent = ["midnight"]
+        self.app.store.history = []
+        texts = self._render()
+        self.assertNotIn("Jump back in", texts)
+
+
 class QueueRemainingTests(unittest.TestCase):
     def test_fmt_remaining(self):
         self.assertEqual(s.fmt_remaining([]), "")
