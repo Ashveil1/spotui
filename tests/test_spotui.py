@@ -1255,6 +1255,45 @@ class ArtistViewTests(unittest.TestCase):
         self.app.push("artist", "Luna Waves")
         self.assertEqual(len(self.app.view_tracks()), 2)
 
+    def test_popular_section_orders_by_plays_and_plays(self):
+        from collections import defaultdict
+        self.app.store.liked = [dict(track(1), artist="Luna Waves"),
+                                dict(track(2), artist="Luna Waves"),
+                                dict(track(3), artist="Luna Waves")]
+        self.app.store.plays = {
+            "1": dict(title="Song 1", artist="Luna Waves", n=2),
+            "2": dict(title="Song 2", artist="Luna Waves", n=9),
+            "3": dict(title="Song 3", artist="Luna Waves", n=5)}
+        self.app.push("artist", "Luna Waves")
+        self.app.pal = defaultdict(int)
+        self.app.cover_for = Mock(return_value=None)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        ui.hint = Mock()
+        self.app.rects = []
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(str(t))), \
+                patch.object(s, 'draw_art'):
+            ui.v_artist(0, 34, 24, 120)
+        self.assertIn("POPULAR", texts)
+        i = texts.index("POPULAR")
+        self.assertEqual(texts[i + 1:i + 4], ["1", "Song 2", "9 plays"])
+        hits = [r for r in self.app.rects if r["act"] == "playat"]
+        self.assertEqual(len(hits), 3)
+        self.app.play = Mock()
+        r = hits[0]
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, r["x0"] + 1, r["y0"], 0,
+                                        s.curses.BUTTON1_CLICKED)):
+            s.handle_mouse(self.app)
+        self.app.play.assert_called_once()
+        tracks_arg, pos_arg = self.app.play.call_args[0][:2]
+        self.assertEqual(pos_arg, 0)
+        self.assertEqual(tracks_arg[0]["id"], "2")
+
     def test_o_opens_artist_of_selection(self):
         self._lib()
         self.app.push("liked")
