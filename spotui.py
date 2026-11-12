@@ -485,6 +485,9 @@ class Mpv:
                 self.proc = subprocess.Popen(
                     ["mpv", "--no-video", "--no-terminal", "--audio-display=no",
                      "--idle=yes", "--keep-open=no", "--really-quiet",
+                     # less silence between songs (mpv still opens each
+                     # stream separately, so this is not a crossfade)
+                     "--gapless-audio=yes",
                      "--osd-level=0", "--no-osc",       # no font/libass stack
                      # audio-only streams: small in-RAM cache keeps mpv light
                      "--demuxer-max-bytes=10MiB",

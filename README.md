@@ -126,7 +126,7 @@ queue view (`v`) shows what is lined up, and any song that did not come from the
 ## Notes
 
 - RAM footprint (measured): TUI ~14 MiB idle / ~16 MiB while playing; mpv ~55–65 MiB. Searches never load yt-dlp into the app — they run in a short-lived helper process.
-- Audio only (no video) — mpv plays the bestaudio stream resolved by yt-dlp.
+- Audio only (no video) — mpv plays the bestaudio stream resolved by yt-dlp. mpv's gapless-audio is on, which removes most of the silence between songs; streams are still opened one by one, so it is not a true crossfade.
 
 ## Development checks
 
