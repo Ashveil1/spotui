@@ -646,6 +646,24 @@ class AppTests(unittest.TestCase):
         glyphs = [c.args[3] for c in pt.call_args_list]
         self.assertIn(s.IC_HEART, glyphs)
 
+    def test_now_playing_shows_play_count(self):
+        ui = self._playing_ui()
+        self.app.play_source = "Late Night Drive"
+        self.app.store.plays = {"1": dict(title="Song 1", artist="A", n=45)}
+        with patch.object(s, 'draw_art'), patch.object(s, 'put') as pt:
+            ui.v_playing(0, 34, 24, 120)
+        texts = [str(c.args[3]) for c in pt.call_args_list]
+        self.assertIn("From Late Night Drive  \u00b7  45 plays", texts)
+
+    def test_now_playing_no_play_count_when_unplayed(self):
+        ui = self._playing_ui()
+        self.app.play_source = "Late Night Drive"
+        self.app.store.plays = {}
+        with patch.object(s, 'draw_art'), patch.object(s, 'put') as pt:
+            ui.v_playing(0, 34, 24, 120)
+        texts = [str(c.args[3]) for c in pt.call_args_list]
+        self.assertIn("From Late Night Drive", texts)
+
     def test_now_playing_narrow_shows_up_next(self):
         ui = self._playing_ui()
         self.app.rects = []
