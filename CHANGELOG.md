@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The green play glyph on the selected home tile is a real button now:
+  it plays Liked Songs or the playlist (clicking the rest of the tile
+  still opens it) (#142)
+
 - The sleep timer learned custom minutes: keep pressing t past
   "end of track" and a prompt takes any value from 1 to 1440 (#141)
 

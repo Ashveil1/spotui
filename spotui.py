@@ -2814,6 +2814,21 @@ class App:
         self.toast_now("No page for this source")
         return False
 
+    def play_tile(self, kind, pidx):
+        """Green play button on a home tile: play Liked Songs or a playlist."""
+        if kind == "liked":
+            tracks, src = self.store.liked, "Liked Songs"
+        elif 0 <= (pidx if pidx is not None else -1) < len(self.store.playlists):
+            pl = self.store.playlists[pidx]
+            tracks, src = pl["tracks"], pl["name"]
+        else:
+            return False
+        if not tracks:
+            self.toast_now("Nothing to play here yet")
+            return False
+        self.play(tracks, 0, source=src)
+        return True
+
     @staticmethod
     def _norm_artist(name):
         return unicodedata.normalize("NFKC", name or "").casefold().strip()
@@ -3601,6 +3616,8 @@ class UI:
                 put(scr, y + 1, x + tw - 3, f" {IC_PLAY} ", pal["btn"],
                     curses.A_BOLD)
             self.hit(x, y, tw, th, "tile", (t[3], t[4]))
+            if i == sel_i:
+                self.hit(x + tw - 3, y + 1, 3, 1, "tileplay", (t[3], t[4]))
         if sel_i >= len(tiles):
             app.sel["home:"] = 0
         return last + 1
@@ -5258,6 +5275,8 @@ def handle_mouse(app):
             app.name_buf = ""
         elif act == "tile":
             app.push(arg[0], arg[1])
+        elif act == "tileplay":
+            app.play_tile(arg[0], arg[1])
         elif act == "mix":
             app.play_mix(arg)
         elif act == "toggletime":
