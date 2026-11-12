@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The stats header remembers your first-ever play and shows it
+  ("· since 13 Oct 2026") when it fits (#126)
+
 - Clear your play history: `X` in Recently Played asks for confirmation,
   then resets Recently Played, play counts and stats. Playlists and Liked
   Songs are kept (#125)
