@@ -1294,6 +1294,42 @@ class ArtistViewTests(unittest.TestCase):
         self.assertEqual(pos_arg, 0)
         self.assertEqual(tracks_arg[0]["id"], "2")
 
+    def test_popular_highlights_currently_playing(self):
+        from collections import defaultdict
+        self.app.store.liked = [dict(track(1), artist="Luna Waves"),
+                                dict(track(2), artist="Luna Waves"),
+                                dict(track(3), artist="Luna Waves")]
+        self.app.store.plays = {
+            "1": dict(title="Song 1", artist="Luna Waves", n=2),
+            "2": dict(title="Song 2", artist="Luna Waves", n=9),
+            "3": dict(title="Song 3", artist="Luna Waves", n=5)}
+        self.app.current = self.app.store.liked[1]
+        self.app.mpv.state["idle"] = False
+        self.app.push("artist", "Luna Waves")
+        self.app.pal = defaultdict(int)
+        self.app.cover_for = Mock(return_value=None)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        ui.hint = Mock()
+        self.app.rects = []
+        calls = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          calls.append((y, x, str(t), a, k))), \
+                patch.object(s, 'draw_art'):
+            ui.v_artist(0, 34, 24, 120)
+        # the popular section sits above the full list: its "Song 2" row is
+        # the topmost one, bold, with eq bars instead of the rank number
+        titles = sorted((y, a) for y, x, t, a, k in calls
+                        if x == 29 and t == "Song 2")
+        self.assertEqual(len(titles), 1)   # only the popular row is at x=29
+        py, pa = titles[0]
+        self.assertTrue(pa[1] & s.curses.A_BOLD)
+        nums = [t for y, x, t, a, k in calls
+                if y == py and x == 26]
+        self.assertEqual(nums, [s.eq_bars(self.app)[:3]])
+
     def test_o_opens_artist_of_selection(self):
         self._lib()
         self.app.push("liked")
