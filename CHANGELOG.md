@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- First run now shows a welcome panel on home with the three steps to a
+  full library (search, play/queue/like, shelves fill up) instead of a
+  nearly blank screen (#133)
+
 - Press Y to copy the selected (or playing) song's YouTube link - via
   termux-clipboard-set / wl-copy / xclip / xsel / pbcopy when present,
   an OSC 52 escape otherwise, and the toast shows the link as a
