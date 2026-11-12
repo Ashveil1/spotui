@@ -3378,3 +3378,60 @@ class QueueAllTests(unittest.TestCase):
         s.handle_key(self.app, 'Q')
         self.app.queue_all.assert_not_called()
 
+class JumpToCurrentTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_selects_playing_in_list(self):
+        self.app.store.liked = [track(i) for i in range(10)]
+        self.app.push('liked')
+        self.app.current = track(6)
+        self.app.sel['liked:'] = 0
+        self.app.jump_to_current()
+        self.assertEqual(self.app.sel['liked:'], 6)
+
+    def test_nothing_playing(self):
+        self.app.push('liked')
+        self.app.current = None
+        self.app.jump_to_current()
+        self.assertIn('Nothing', self.app.toast[0])
+
+    def test_not_in_list(self):
+        self.app.store.liked = [track(1)]
+        self.app.push('liked')
+        self.app.current = track(99)
+        self.app.jump_to_current()
+        self.assertIn('not in this list', self.app.toast[0])
+        self.assertEqual(self.app.sel.get('liked:', 0), 0)
+
+    def test_queue_jumps_to_next_up(self):
+        self.app.queue = [track(i) for i in range(5)]
+        self.app.qpos = 1
+        self.app.current = track(1)
+        self.app.push('queue')
+        self.app.jump_to_current()
+        self.assertEqual(self.app.sel['queue:'], 2)
+
+    def test_queue_at_end_toasts(self):
+        self.app.queue = [track(1)]
+        self.app.qpos = 0
+        self.app.current = track(1)
+        self.app.push('queue')
+        self.app.jump_to_current()
+        self.assertIn('last', self.app.toast[0])
+
+    def test_dot_key(self):
+        self.app.store.liked = [track(i) for i in range(10)]
+        self.app.push('liked')
+        self.app.current = track(4)
+        s.handle_key(self.app, '.')
+        self.assertEqual(self.app.sel['liked:'], 4)
+
