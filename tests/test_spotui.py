@@ -1557,6 +1557,51 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class SearchPlayCountTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.refresh_similar = Mock()
+
+    def _row_texts(self, vk):
+        from collections import defaultdict
+        self.app.pal = defaultdict(int)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 140)
+        ui = s.UI(self.app, scr)
+        self.app.rects = []
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(str(t))):
+            ui.row(3, 24, 86, dict(track(1), artist="Luna Waves"),
+                   0, vk, 0, show_date=False)
+        return texts
+
+    def test_search_rows_show_play_count(self):
+        self.app.store.plays = {"1": dict(title="S", artist="A", n=45)}
+        self.assertIn(" \u00b7 45 plays", self._row_texts("search:"))
+
+    def test_other_lists_stay_quiet(self):
+        self.app.store.plays = {"1": dict(title="S", artist="A", n=45)}
+        texts = self._row_texts("liked:")
+        self.assertNotIn("\u00b7 45 plays", texts)
+
+    def test_unplayed_songs_show_nothing(self):
+        self.app.store.plays = {}
+        texts = self._row_texts("search:")
+        self.assertNotIn("\u00b7 0 plays", texts)
+
+
 class JumpBackInTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

@@ -3689,6 +3689,13 @@ class UI:
         cx = tx + title_w + 2
         if chan_w:
             put(scr, y, cx, wcut(t["artist"], chan_w), cp(pal["dim"]))
+            if vk.startswith("search:"):
+                # songs you played before carry their local play count
+                np_ = (app.store.plays.get(t["id"]) or {}).get("n", 0)
+                ptxt = f" \u00b7 {np_} plays" if np_ else ""
+                ax = cx + min(dlen(t["artist"]), chan_w)
+                if ptxt and ax + dlen(ptxt) <= cx + chan_w:
+                    put(scr, y, ax, ptxt, cp(pal["faint"]))
 
         if show_date and date_w:
             dx = cx + chan_w + 2
