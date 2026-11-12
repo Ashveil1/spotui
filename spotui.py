@@ -1241,6 +1241,34 @@ def stats_on_repeat(store, top=5):
     return [(meta[tid], n) for tid, n in rows[:top]]
 
 
+def stats_week_top(store):
+    """(artist, plays) most played in the last 7 days, or ("", 0).
+
+    Counted from the (capped) history list, like stats_week(). Ties go
+    to the artist played most recently.
+    """
+    cutoff = time.time() - 7 * 86400
+    counts, last = {}, {}
+    for h in store.history:
+        if not isinstance(h, dict):
+            continue
+        try:
+            ts = float(h.get("added") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(ts) or ts < cutoff:
+            continue
+        a = (h.get("artist") or "").strip()
+        if not a:
+            continue
+        counts[a] = counts.get(a, 0) + 1
+        last[a] = max(last.get(a, 0), ts)
+    if not counts:
+        return "", 0
+    best = max(counts, key=lambda a: (counts[a], last[a]))
+    return best, counts[best]
+
+
 def stats_hours(store):
     """Plays per time-of-day bucket, counted from the (capped) history list.
 
@@ -2949,6 +2977,12 @@ class UI:
                 put(scr, by + 7, x0 + 2,
                     f"{big[0]} are your biggest listening day",
                     pal["faint"])
+            wtop, wtop_n = stats_week_top(app.store)
+            if wtop and by + 8 <= y1 - 3:
+                put(scr, by + 8, x0 + 2,
+                    f"Top this week: {wtop} ({wtop_n} plays)",
+                    pal["faint"])
+                by += 1
             by += 8
             rep = stats_on_repeat(app.store)
             if rep and by + 2 <= y1 - 3:
@@ -3785,6 +3819,11 @@ class UI:
             if left:
                 label += f", {left}"
             put(scr, y0 + 1, x0 + 9, label, pal["faint"])
+            if app.play_source:
+                flabel = f"  \u00b7  From {app.play_source}"
+                put(scr, y0 + 1, x0 + 9 + dlen(label), flabel,
+                    pal["faint"])
+                label += flabel
             auto_tail = [t for t in app.queue[max(0, app.qpos):]
                          if t.get("auto")]
             n_auto = len(auto_tail)
