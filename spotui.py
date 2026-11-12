@@ -208,7 +208,7 @@ def fmt_added(v):
 VIEW_HINTS = {
     "search": "Enter plays \u00b7 a queues \u00b7 Q queues all \u00b7 o opens artist \u00b7 Tab switches All/Songs/Artists",
     "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
-    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates \u00b7 B merges \u00b7 w pins \u00b7 h enhances",
+    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates \u00b7 B merges \u00b7 w pins \u00b7 h enhances \u00b7 L likes all",
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 X clears",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
@@ -2399,6 +2399,27 @@ class App:
             self.store.liked.insert(0, dict(t, added=time.strftime("%Y-%m-%d")))
             self.toast_now("Added to Liked Songs")
         self.store.save()
+
+    def like_all(self, pi):
+        """Like every song of playlist pi at once."""
+        if not 0 <= pi < len(self.store.playlists):
+            return
+        pl = self.store.playlists[pi]
+        if not pl["tracks"]:
+            self.toast_now("This playlist is empty")
+            return
+        today = time.strftime("%Y-%m-%d")
+        fresh = [t for t in pl["tracks"] if t["id"] not in self.liked_ids]
+        if not fresh:
+            self.toast_now(f"Every song in {pl['name']} is already liked")
+            return
+        for t in reversed(fresh):
+            self.store.liked.insert(0, dict(t, added=today))
+            self.liked_ids.add(t["id"])
+        self.store.save()
+        self.toast_now(f"Liked {len(fresh)} song"
+                       f"{'s' if len(fresh) != 1 else ''} "
+                       f"from {pl['name']}")
 
     def add_queue(self, t):
         if not t:
@@ -4925,7 +4946,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("O", "open song in browser"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("O", "open song in browser"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -5496,6 +5517,8 @@ def handle_key(app, k):
             app.toggle_pin(arg)
         elif k == "h" and kind == "playlist":
             app.toggle_enhance(arg)
+        elif k == "L" and kind == "playlist":
+            app.like_all(arg)
         elif k == "e" and kind == "playlist":
             app.rename_index = arg
             app.name_buf = app.store.playlists[arg]["name"]

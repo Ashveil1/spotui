@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press `L` on a playlist to like every song in it at once. Songs
+  already liked are skipped and the toast says how many were added.
+
 - Press `U` to undo the last destructive delete: a playlist comes back
   at its old spot with every song, a removed song returns to its row.
   One level, like Spotify's undo toast.
