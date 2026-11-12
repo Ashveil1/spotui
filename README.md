@@ -84,7 +84,8 @@ SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in 
 | `i` | listening stats | `S` | shuffle mode |
 | `y` | recently played | `1`-`3` | play a daily mix (home) |
 | `o` | open artist | `u` | autoplay on/off |
-| `E` | equalizer preset | | |
+| `E` | equalizer preset | `z` | hide / show the sidebar (full-width view) |
+
 | `?` | help | | |
 | `Backspace` | back | `q` | quit |
 

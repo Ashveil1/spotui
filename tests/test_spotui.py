@@ -1557,6 +1557,30 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class ZenModeTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+
+    def test_toggle_persists(self):
+        self.assertFalse(self.app.store.zen)
+        self.app.toggle_zen()
+        self.assertTrue(self.app.store.zen)
+        st = s.Store()
+        self.assertTrue(st.zen)
+        self.app.toggle_zen()
+        self.assertFalse(self.app.store.zen)
+
+
 class FmtAgoTests(unittest.TestCase):
     def test_buckets(self):
         import time as _t

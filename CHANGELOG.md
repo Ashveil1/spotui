@@ -3,6 +3,11 @@
 SpotUI has no versioned releases yet; this log lists notable changes by the
 day they landed on `main`.
 
+## 2026-11-12
+
+- Zen mode: `z` hides the sidebar so the main view takes the full terminal
+  width; press `z` again to bring it back. Remembered across restarts (#119)
+
 ## 2026-11-11
 
 New views and navigation:
