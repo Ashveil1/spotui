@@ -2950,6 +2950,9 @@ class UI:
                 and q[app.qpos].get("id") == t.get("id")
                 and app._resume_t > 5):
             sub += f"  \u00b7  left off at {fmt_t(app._resume_t)}"
+        n_plays = (app.store.plays.get(t["id"]) or {}).get("n", 0)
+        if n_plays:
+            sub += f"  \u00b7  {n_plays} plays"
         put(scr, y0 + 3, tx, wcut(sub, tw), pal["pilldim"])
         bx = x0 + 2 + bw - 9
         put(scr, y0 + 2, bx, f"  {IC_PLAY}  ", pal["btn"], curses.A_BOLD)

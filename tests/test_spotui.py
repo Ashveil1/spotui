@@ -646,6 +646,20 @@ class AppTests(unittest.TestCase):
         glyphs = [c.args[3] for c in pt.call_args_list]
         self.assertIn(s.IC_HEART, glyphs)
 
+    def test_home_hero_shows_play_count(self):
+        from collections import defaultdict
+        self.app.store.history = [dict(track(7), added=s.time.time())]
+        self.app.store.plays = {"7": dict(title="Song 7", artist="A", n=12)}
+        self.app.pal = defaultdict(int)
+        self.app.cover_for = Mock(return_value=None)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 140)
+        ui = s.UI(self.app, scr)
+        with patch.object(s, 'draw_art'), patch.object(s, 'put') as pt:
+            ui._home_hero(self.app, ui.pal, scr, 4, 30, 24, 120)
+        texts = [str(c.args[3]) for c in pt.call_args_list]
+        self.assertTrue(any(t.endswith("12 plays") for t in texts), texts)
+
     def test_now_playing_up_next_shows_durations(self):
         ui = self._playing_ui()
         with patch.object(s, 'draw_art'), patch.object(s, 'put') as pt:
