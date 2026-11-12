@@ -99,6 +99,7 @@ Tips that make it nicer on a phone:
 | `U` | undo the last deleted playlist or song | |
 | `Z` | shuffle your whole library into the queue | |
 | `H` (playlist) | remove duplicate songs (undoable with `U`) | |
+| `0`-`9` (now playing) | seek to 0-90% of the song | |
 | `L` (playlist) | like every song in the playlist at once | |
 | `x` | hide a song from suggestions (mixes, Enhance, Made for you, autoplay); press again to bring it back | |
 | `V` (playlist) | copy the tracklist as numbered shareable text | |
