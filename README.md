@@ -88,7 +88,7 @@ SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in 
 | `?` | help | | |
 | `Backspace` | back | `q` | quit |
 
-Search is live: results appear as you type (after a short pause) —
+Search is live: results appear as you type (after a short pause), and the result list header counts them —
 `Enter` keeps them and saves the query to recent searches, `Esc` just
 closes the bar. Filter chips under the bar narrow results to songs or
 artists. Matching artists from your library show as chips above the
@@ -220,6 +220,8 @@ In Recently Played, `D` collapses repeat plays of the same song into its most re
 `X` in a playlist exports it as JSON to `~/spotui-exports/`. Import one with `python3 spotui.py --import file.json` while SpotUI is closed.
 
 `T` cycles color themes (Spotify, Aurora, Sunset, Ocean, Rose, Amber). Themes redefine terminal palette slots, so they need a terminal that allows it (most do; tmux and `NO_COLOR` do not). The choice is saved.
+
+Play milestones pop a toast: every 25 plays of one song, and every 500 plays overall.
 
 `i` opens listening stats: your most played artists and songs, counted from what you play in SpotUI (stored locally in the library file). The header shows how much you played this week, with a per-day activity chart (plays, with about how many minutes each day ran underneath) and a time-of-day breakdown (morning / afternoon / evening / night) beside it, plus your current listening streak (consecutive days with a play), and, once there's enough history, a caption naming your biggest listening day. Songs you played twice or more this week appear as clickable **On repeat this week** chips under the chart. Click a top artist to open its page, or a top song to play it; top songs also note when you last played them. An artist page's header adds about how long you have listened to them ("~2 hr 4 min listened", from play counts x song lengths, so it is a floor). Artist pages open with a Popular section - that artist's five most-played songs, with animated bars on the one that's playing, one click or Enter away from playing - and link to your other most-played artists. Artist rows in search show their total plays, and song rows show your own play count on the right. The Liked Songs, playlist, and Recently Played headers end with the total play count of their songs, and Liked and playlist headers also count how many songs you added this month ("3 new this month").
 
