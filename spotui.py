@@ -1650,6 +1650,14 @@ class App:
                 title=str(rec.get("title") or ""), artist=str(rec.get("artist") or "Unknown"), n=0)
             p["n"] += 1
             self.store.plays[pid] = p
+            # milestones: every 25 plays of one song, every 500 overall
+            if p["n"] % 25 == 0:
+                self.toast_now(
+                    f"{rec.get('title') or '?'} - {p['n']} plays!")
+            else:
+                total = sum(x["n"] for x in self.store.plays.values())
+                if total % 500 == 0:
+                    self.toast_now(f"{total} plays on SpotUI!")
             if len(self.store.plays) > 2000:
                 for k in sorted(self.store.plays, key=lambda k: self.store.plays[k]["n"])[:200]:
                     del self.store.plays[k]
@@ -3615,6 +3623,8 @@ class UI:
             fy0 = y0 + 1
 
         put(scr, fy0, x0 + 2, "All", pal["text"], curses.A_BOLD)
+        if tracks:
+            put(scr, fy0, x0 + 6, f"{len(tracks)} songs", pal["faint"])
         self.list_header(fy0 + 1, x0 + 2, mw - 4, show_date=False)
         self.track_list(fy0 + 2, y1 - 2, x0 + 2, mw - 4, tracks, "search:",
                         show_date=False)

@@ -1557,6 +1557,42 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class MilestoneTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.toast_now = Mock()
+        self.app.snapshot_session = Mock()
+        self.app.refresh_similar = Mock()
+
+    def test_song_milestone(self):
+        self.app.store.plays = {"1": dict(title="S1", artist="A", n=24)}
+        self.app._note_history(track(1))
+        args = self.app.toast_now.call_args[0][0]
+        self.assertIn("25 plays!", args)
+
+    def test_total_milestone(self):
+        self.app.store.plays = {"1": dict(title="S1", artist="A", n=490),
+                                "2": dict(title="S2", artist="B", n=9)}
+        self.app._note_history(track(2))
+        args = self.app.toast_now.call_args[0][0]
+        self.assertIn("500 plays on SpotUI!", args)
+
+    def test_no_milestone(self):
+        self.app.store.plays = {"1": dict(title="S1", artist="A", n=10)}
+        self.app._note_history(track(1))
+        self.app.toast_now.assert_not_called()
+
+
 class StatsWeekTopTests(unittest.TestCase):
     def test_top_artist_this_week(self):
         import time as _t
