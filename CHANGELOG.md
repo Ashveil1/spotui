@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press `U` to undo the last destructive delete: a playlist comes back
+  at its old spot with every song, a removed song returns to its row.
+  One level, like Spotify's undo toast.
+
 - Press `O` to open the selected (or playing) song's link in the system
   browser - uses termux-open-url on Termux, then xdg-open/open/wslview.
   Works from the song info card too, and shows the link when no opener

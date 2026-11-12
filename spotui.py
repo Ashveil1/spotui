@@ -1459,6 +1459,7 @@ class App:
         self.info_track = None         # song shown in the info modal
         self.theme_orig = None         # theme to revert to (picker)
         self.theme_idx = 0             # highlighted theme in the picker
+        self._trash = None             # last deleted playlist/song (undo)
         self._fade_level = None        # last level sent (1/sec throttle)
         self._muted_from = None      # volume before muting, None = not muted
         self.speed = 1.0
@@ -2634,6 +2635,7 @@ class App:
         if not 0 <= pi < len(self.store.playlists):
             return
         name = self.store.playlists[pi]["name"]
+        self._trash = ("playlist", pi, dict(self.store.playlists[pi]))
         del self.store.playlists[pi]
         # Playlist view keys use indices; remove deleted views and reindex
         # every saved selection and back-stack entry after that index.
@@ -2653,6 +2655,28 @@ class App:
             state.update(updated)
         self.store.save()
         self.toast_now(f"Deleted playlist: {name}")
+
+    def undo_delete(self):
+        """Restore the last deleted playlist or playlist song (one level)."""
+        trash, self._trash = self._trash, None
+        if not trash:
+            self.toast_now("Nothing to restore")
+            return
+        if trash[0] == "playlist":
+            _, pi, pl = trash
+            pi = max(0, min(pi, len(self.store.playlists)))
+            self.store.playlists.insert(pi, pl)
+            self.store.save()
+            self.toast_now(f"Restored playlist: {pl['name']}")
+        else:
+            _, pi, idx, t = trash
+            if not 0 <= pi < len(self.store.playlists):
+                self.toast_now("That playlist is gone")
+                return
+            tracks = self.store.playlists[pi]["tracks"]
+            tracks.insert(max(0, min(idx, len(tracks))), t)
+            self.store.save()
+            self.toast_now(f"Restored {t.get('title') or 'song'}")
 
     def add_to_playlist(self, pi, t):
         try:
@@ -2677,6 +2701,7 @@ class App:
             pl = self.store.playlists[arg]["tracks"]
             for i, item in enumerate(pl):
                 if item is t:
+                    self._trash = ("track", arg, i, item)
                     del pl[i]
                     break
             else:
@@ -4900,7 +4925,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("O", "open song in browser"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("O", "open song in browser"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -5452,6 +5477,8 @@ def handle_key(app, k):
             app.toggle_autoplay()
         elif k == "b":
             app.toggle_private()
+        elif k == "U":
+            app.undo_delete()
         elif k == "E":
             app.cycle_eq()
         elif k == "f":

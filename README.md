@@ -96,6 +96,7 @@ Tips that make it nicer on a phone:
 | `Y` | copy song link to the clipboard (Termux, Wayland, X11, macOS, or OSC 52; shows the link when none work) | |
 | `I` | song info card: plays, last played, liked, playlists it sits in, link | |
 | `O` | open the song's link in the browser (termux-open-url / xdg-open / open / wslview) | |
+| `U` | undo the last deleted playlist or song | |
 | `Q` (search) | queue all search results (skips songs already queued) | |
 | `D` | drop autoplayed songs (queue) / hide repeats (Recently Played) | `X` (Recently Played) | clear play history (asks first; playlists and likes stay) |
 | `R` | Made for you (home) / new picks (inside) | `T` | theme picker with live preview |
