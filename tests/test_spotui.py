@@ -1930,6 +1930,53 @@ class SearchTabFilterTests(unittest.TestCase):
         self.assertEqual(self.app.query, "")
 
 
+class SimilarViewTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.store.similar = {
+            "seed": "Luna Waves", "kind": "artist",
+            "items": [{"id": "x", "title": "Pick", "artist": "Luna Waves",
+                       "dur": 100, "url": "u"}]}
+
+    def test_r_on_home_opens_made_for_you(self):
+        s.handle_key(self.app, "R")
+        self.assertEqual(self.app.stack[-1][0], "similar")
+
+    def test_r_inside_refreshes(self):
+        self.app.push("similar")
+        with patch.object(self.app, 'refresh_similar') as rs:
+            s.handle_key(self.app, "R")
+        rs.assert_called_once_with(force=True)
+
+    def test_view_tracks_returns_items(self):
+        tracks = self.app.view_tracks("similar:")
+        self.assertEqual([t["id"] for t in tracks], ["x"])
+
+    def test_empty_state_draws_hint(self):
+        self.app.store.similar = {}
+        self.app.push("similar")
+        self.app.pal = {key: 0 for key in ['text', 'faint', 'dim']}
+        scr = Mock()
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t_, *a, **k:
+                          texts.append(str(t_))), \
+                patch.object(s, 'fill'), \
+                patch.object(s.curses, 'color_pair', return_value=0):
+            s.UI(self.app, scr).v_similar(0, 30, 0, 120)
+        self.assertTrue(any("No picks yet" in x for x in texts))
+
+
 class FmtAgoTests(unittest.TestCase):
     def test_buckets(self):
         import time as _t

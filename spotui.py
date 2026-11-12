@@ -187,6 +187,7 @@ VIEW_HINTS = {
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
     "playing": "Space pause \u00b7 l like \u00b7 v queue \u00b7 S shuffle \u00b7 click Up Next to jump",
     "stats": "Click a top artist to open it \u00b7 a top song plays \u00b7 Backspace back",
+    "similar": "Enter plays \u00b7 a queues \u00b7 R finds new picks \u00b7 Backspace back",
 }
 
 
@@ -2968,6 +2969,8 @@ class UI:
             self.v_playing(y0, y1, x0, W)
         elif kind == "stats":
             self.v_stats(y0, y1, x0, W)
+        elif kind == "similar":
+            self.v_similar(y0, y1, x0, W)
         self._reveal(y0, y1, x0, W)
 
     REVEAL_FRAMES = 6
@@ -3305,7 +3308,7 @@ class UI:
         y = self._home_liked(app, pal, scr, y, y1, x0, W)
         y = self._home_recent(app, pal, scr, y, y1, x0, W)
         put(scr, y1 - 2, x0 + 2,
-            "Type / to search · Enter opens · ? for shortcuts",
+            "Type / to search \u00b7 Enter opens \u00b7 R: Made for you \u00b7 ? for shortcuts",
             pal["faint"])
 
     def _home_hero(self, app, pal, scr, y0, y1, x0, W):
@@ -3948,6 +3951,30 @@ class UI:
                 put(scr, ly + 2, x0 + 5,
                     f"No YouTube results for {wcut(name, 30)} either",
                     pal["faint"])
+
+    def v_similar(self, y0, y1, x0, W):
+        """Made for you as a full list - the keyboard way into the picks."""
+        app, pal, scr = self.app, self.pal, self.scr
+        cache = app.store.similar or {}
+        items = cache.get("items") or []
+        seed = cache.get("seed") or ""
+        skind = cache.get("kind") or "artist"
+        put(scr, y0 + 1, x0 + 2, "Made for you", pal["text"], curses.A_BOLD)
+        if seed:
+            label = (f"in the style of {seed}" if skind == "artist"
+                     else f"after \u201c{seed}\u201d")
+            put(scr, y0 + 1, x0 + 16, wcut(label, W - x0 - 18), pal["faint"])
+        if not items:
+            put(scr, y0 + 3, x0 + 2,
+                "No picks yet - play something, or press R to look now",
+                pal["dim"])
+            self.hint(y1 - 2, x0, "similar")
+            return
+        ly = y0 + 3
+        self.list_header(ly, x0 + 2, W - x0 - 4, show_date=False)
+        self.track_list(ly + 1, y1 - 2, x0 + 2, W - x0 - 4, items,
+                        "similar:", show_date=False)
+        self.hint(y1 - 2, x0, "similar")
 
     def v_queue(self, y0, y1, x0, W):
         app, pal = self.app, self.pal
@@ -4752,8 +4779,11 @@ def handle_key(app, k):
         elif k == "T":
             app.cycle_theme()
         elif k == "R":
-            app.refresh_similar(force=True)
-            app.toast_now("Finding new picks…")
+            if kind == "home":
+                app.push("similar")
+            else:
+                app.refresh_similar(force=True)
+                app.toast_now("Finding new picks…")
         elif k == "r":
             app.cycle_repeat()
         elif k == "u":
