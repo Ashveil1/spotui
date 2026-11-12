@@ -4266,3 +4266,45 @@ class HideSongTests(unittest.TestCase):
         s.handle_key(self.app, 'x')
         self.assertIn('1', self.app.blocked_ids)
 
+class CopyTracklistTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.create_playlist('Mix')
+        self.app.back()
+        self.app.store.playlists[0]['tracks'] = [
+            dict(track(1), title='One', artist='A', dur=61),
+            dict(track(2), title='Two', artist='B', dur=None)]
+
+    def test_tracklist_text(self):
+        self.app.copy_text = Mock(return_value=True)
+        text = self.app.copy_tracklist(0)
+        self.assertEqual(text, 'Mix\n1. One - A (1:01)\n2. Two - B')
+        self.assertEqual(self.app.copy_text.call_args[0][0], text)
+
+    def test_tracklist_toast_on_copy(self):
+        with patch.object(s.shutil, 'which', return_value=None),              patch('builtins.open', side_effect=OSError('no tty')):
+            self.app.copy_tracklist(0)
+        self.assertIn('Tracklist:', self.app.toast[0])
+
+    def test_tracklist_empty(self):
+        self.app.store.playlists[0]['tracks'] = []
+        self.assertIsNone(self.app.copy_tracklist(0))
+        self.assertIn('empty', self.app.toast[0])
+
+    def test_tracklist_bad_index(self):
+        self.assertIsNone(self.app.copy_tracklist(9))
+
+    def test_V_key(self):
+        self.app.copy_text = Mock(return_value=True)
+        self.app.push('playlist', 0)
+        s.handle_key(self.app, 'V')
+        self.assertTrue(self.app.copy_text.called)
+

@@ -5,6 +5,11 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press `V` on a playlist to copy its tracklist as numbered text
+  ("1. Title - Artist (2:24)") for sharing anywhere. Same clipboard
+  chain as `Y` (Termux, Wayland, X11, macOS, OSC 52); without a
+  clipboard the toast previews the first songs.
+
 - Press `x` on a song to hide it from every suggestion surface: daily
   mixes, Enhance, Made for you and autoplay all skip it. The row gets a
   small x marker, the info card says "Suggested: no (hidden)", and `x`

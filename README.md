@@ -99,6 +99,7 @@ Tips that make it nicer on a phone:
 | `U` | undo the last deleted playlist or song | |
 | `L` (playlist) | like every song in the playlist at once | |
 | `x` | hide a song from suggestions (mixes, Enhance, Made for you, autoplay); press again to bring it back | |
+| `V` (playlist) | copy the tracklist as numbered shareable text | |
 | `Q` (search) | queue all search results (skips songs already queued) | |
 | `D` | drop autoplayed songs (queue) / hide repeats (Recently Played) | `X` (Recently Played) | clear play history (asks first; playlists and likes stay) |
 | `R` | Made for you (home) / new picks (inside) | `T` | theme picker with live preview |
