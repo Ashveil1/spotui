@@ -1068,6 +1068,18 @@ class HistoryViewTests(unittest.TestCase):
         self.assertEqual(s.fmt_added(None), "\u2014")
         self.assertEqual(s.fmt_added(0), "\u2014")
 
+    def test_fmt_added_relative_labels(self):
+        import time as _t
+        now = _t.time()
+        self.assertEqual(s.fmt_added(now), "Today")
+        self.assertEqual(s.fmt_added(now - 86400), "Yesterday")
+        three = now - 3 * 86400
+        self.assertEqual(s.fmt_added(three),
+                         _t.strftime("%a", _t.localtime(three)))
+        old = now - 30 * 86400
+        self.assertEqual(s.fmt_added(old),
+                         _t.strftime("%Y-%m-%d", _t.localtime(old)))
+
     def test_history_view_tracks(self):
         t = track(1)
         self.app.store.history = [t]

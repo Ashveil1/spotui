@@ -126,14 +126,29 @@ def fmt_t(sec):
 
 
 def fmt_added(v):
-    """Date cell for a track: liked stores 'YYYY-MM-DD', history an epoch."""
+    """Date cell for a track: liked stores 'YYYY-MM-DD', history an epoch.
+
+    Epochs render relative: Today / Yesterday / weekday within the last
+    week, then the full date.
+    """
     if v is None or isinstance(v, bool):
         return "—"
     if isinstance(v, (int, float)):
         if not math.isfinite(v) or v <= 0:
             return "—"
         try:
-            return time.strftime("%Y-%m-%d", time.localtime(v))
+            lt = time.localtime(v)
+            now = time.localtime()
+            today0 = time.mktime((now.tm_year, now.tm_mon, now.tm_mday,
+                                  0, 0, 0, 0, 0, -1))
+            d = int((v - today0) // 86400)
+            if d == 0:
+                return "Today"
+            if d == -1:
+                return "Yesterday"
+            if -7 < d < -1:
+                return time.strftime("%a", lt)
+            return time.strftime("%Y-%m-%d", lt)
         except (OverflowError, OSError, ValueError):
             return "—"
     return str(v) if v else "—"
