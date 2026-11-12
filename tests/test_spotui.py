@@ -1557,6 +1557,31 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class StatsDayMinutesTests(unittest.TestCase):
+    def test_minutes_per_day(self):
+        import time as _t
+        store = s.Store()
+        now = _t.time()
+        store.history = [
+            {"id": "1", "added": now - 3600, "dur": 180},        # today 3m
+            {"id": "2", "added": now - 3600, "dur": 120},        # today +2m
+            {"id": "3", "added": now - 26 * 3600, "dur": 600},   # yesterday 10m
+            {"id": "4", "added": now - 8 * 86400, "dur": 300},   # outside
+            {"id": "5", "added": now - 3600},                    # no dur
+        ]
+        mins = s.stats_day_minutes(store)
+        self.assertEqual(len(mins), 7)
+        self.assertEqual(mins[-1], 5)
+        self.assertEqual(mins[-2], 10)
+        self.assertEqual(sum(mins), 15)
+
+    def test_bad_entries_ignored(self):
+        store = s.Store()
+        store.history = [None, {"added": "x", "dur": "y"},
+                         {"added": float("nan"), "dur": 60}]
+        self.assertEqual(s.stats_day_minutes(store), [0] * 7)
+
+
 class NowPlayingMoreFromTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
