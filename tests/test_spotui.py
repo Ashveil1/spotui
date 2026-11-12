@@ -1877,6 +1877,30 @@ class FirstPlayTests(unittest.TestCase):
         self.assertIsNone(s.Store().first_play)
 
 
+class MuteKeyTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+
+    def test_m_key_mutes_and_restores(self):
+        self.app.mpv.state["vol"] = 70
+        s.handle_key(self.app, "M")
+        self.assertEqual(self.app.mpv.state["vol"], 0)
+        self.assertEqual(self.app._muted_from, 70)
+        s.handle_key(self.app, "M")
+        self.assertEqual(self.app.mpv.state["vol"], 70)
+        self.assertIsNone(self.app._muted_from)
+
+
 class FmtAgoTests(unittest.TestCase):
     def test_buckets(self):
         import time as _t

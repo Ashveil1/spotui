@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- `M` mutes and unmutes from the keyboard (the speaker icon was the only
+  way before); the level is remembered and restored (#127)
+
 - The stats header remembers your first-ever play and shows it
   ("· since 13 Oct 2026") when it fits (#126)
 
