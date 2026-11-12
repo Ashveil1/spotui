@@ -1099,6 +1099,25 @@ def stats_streak(store):
     return n
 
 
+def stats_last_played(store):
+    """Video id -> most recent play epoch, from the (capped) history list.
+
+    Entries with missing ids or non-finite timestamps are ignored.
+    """
+    out = {}
+    for h in store.history:
+        if not isinstance(h, dict) or not h.get("id"):
+            continue
+        try:
+            ts = float(h.get("added") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(ts):
+            continue
+        if ts > out.get(h["id"], 0):
+            out[h["id"]] = ts
+    return out
+
 def stats_weekday(store):
     """(name, plays) of the busiest local weekday over the history list.
 
@@ -2773,10 +2792,14 @@ class UI:
                 put(scr, yy, x + label_w, "█" * filled, pal["green"])
                 put(scr, yy, x + label_w + filled + 1, str(n), pal["faint"])
                 if sub:
-                    put(scr, yy + 1, x + 3, wcut(sub, label_w - 3), pal["faint"])
+                    # the row below a bar is free: subtitles may run the
+                    # full block width
+                    put(scr, yy + 1, x + 3, wcut(sub, w - 6), pal["faint"])
                 if act:
                     self.hit(x, yy, w, 2 if sub else 1, act[0], act[1])
-        song_rows = [(t, a, n, ("playtrack",
+        last = stats_last_played(app.store)
+        song_rows = [(t, (a + "  \u00b7  " + fmt_added(last[vid]))
+                      if vid in last else a, n, ("playtrack",
                                 {"id": vid, "title": t, "artist": a,
                                  "url": f"https://www.youtube.com/watch?v={vid}",
                                  "dur": None}))

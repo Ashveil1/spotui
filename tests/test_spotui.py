@@ -1979,6 +1979,27 @@ class StatsStreakTests(unittest.TestCase):
         self.assertEqual(s.stats_streak(self._store([])), 0)
 
 
+class StatsLastPlayedTests(unittest.TestCase):
+    def _store(self, rows):
+        st = s.Store.__new__(s.Store)     # bare store, no disk
+        st.history = rows
+        return st
+
+    def test_latest_epoch_wins(self):
+        st = self._store([{"id": "1", "added": 100.0},
+                          {"id": "1", "added": 250.0},
+                          {"id": "2", "added": 90.0}])
+        self.assertEqual(s.stats_last_played(st), {"1": 250.0, "2": 90.0})
+
+    def test_ignores_bad_rows(self):
+        st = self._store([{"id": "1", "added": 100.0},
+                          {"added": 500.0},
+                          {"id": "2", "added": "soon"},
+                          {"id": "3", "added": float("nan")},
+                          "junk"])
+        self.assertEqual(s.stats_last_played(st), {"1": 100.0})
+
+
 class StatsWeekdayTests(unittest.TestCase):
     def _store(self, stamps):
         st = s.Store.__new__(s.Store)     # bare store, no disk
