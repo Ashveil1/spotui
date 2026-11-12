@@ -4475,3 +4475,50 @@ class DedupePlaylistTests(unittest.TestCase):
         self.app.stack = [("playlist", 0)]
         s.handle_key(self.app, 'H')
         self.assertEqual(self.ids(), ["1", "2", "3"])
+
+
+class SeekPercentTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+        self.app.play([dict(track(1), dur=200)], 0)
+        self.app.current = self.app.queue[0]
+        self.app.mpv.seek_abs = Mock()
+        self.app.mpv.state["dur"] = 200.0
+
+    def test_seek_halfway(self):
+        self.app.seek_percent(50)
+        self.app.mpv.seek_abs.assert_called_once_with(100.0)
+
+    def test_seek_zero_goes_to_start(self):
+        self.app.seek_percent(0)
+        self.app.mpv.seek_abs.assert_called_once_with(0.0)
+
+    def test_no_duration_toasts_instead(self):
+        self.app.mpv.state["dur"] = 0.0
+        self.app.toast_now = Mock()
+        self.app.seek_percent(50)
+        self.app.mpv.seek_abs.assert_not_called()
+        self.app.toast_now.assert_called_once()
+
+    def test_digit_key_seeks_in_playing_view(self):
+        self.app.mode = "normal"
+        self.app.stack = [("playing", None)]
+        s.handle_key(self.app, '5')
+        self.app.mpv.seek_abs.assert_called_once_with(100.0)
+
+    def test_digit_key_ignored_elsewhere(self):
+        self.app.mode = "normal"
+        self.app.stack = [("liked", None)]
+        s.handle_key(self.app, '5')
+        self.app.mpv.seek_abs.assert_not_called()

@@ -212,7 +212,7 @@ VIEW_HINTS = {
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 X clears",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
-    "playing": "Space pause \u00b7 l like \u00b7 v queue \u00b7 chips and Up Next are clickable",
+    "playing": "Space pause \u00b7 l like \u00b7 0-9 seeks \u00b7 v queue \u00b7 chips and Up Next are clickable",
     "stats": "Click a top artist to open it \u00b7 a top song plays \u00b7 Y copies summary \u00b7 Backspace back",
     "similar": "Enter plays \u00b7 a queues \u00b7 R finds new picks \u00b7 Backspace back",
 }
@@ -2126,6 +2126,15 @@ class App:
         elif self.qpos > 0:
             self.qpos -= 1
             self._play_current()
+
+    def seek_percent(self, pct):
+        """Jump to pct% of the current song (0-90, like YouTube's 0-9)."""
+        dur = self.mpv.state.get("dur") or 0
+        if not self.current or dur <= 0:
+            self.toast_now("Nothing to seek in")
+            return
+        self.mpv.seek_abs(dur * pct / 100.0)
+        self.toast_now(f"Jumped to {pct}%")
 
     def toggle_shuffle(self):
         self.shuffle = not self.shuffle
@@ -5095,7 +5104,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link / stats summary"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("V", "playlist: copy tracklist"), ("H", "playlist: remove duplicates"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("Z", "shuffle whole library"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link / stats summary"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("V", "playlist: copy tracklist"), ("H", "playlist: remove duplicates"), ("[ / ]", "speed down / up"), ("0-9", "now playing: seek to 0-90%"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("Z", "shuffle whole library"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -5623,6 +5632,8 @@ def handle_key(app, k):
             app.cycle_shuffle_mode()
         elif k in ("1", "2", "3") and kind == "home":
             app.play_mix(int(k) - 1)
+        elif k in tuple("0123456789") and kind == "playing":
+            app.seek_percent(int(k) * 10)
         elif k == "i":
             app.push("stats")
         elif k == "o":
