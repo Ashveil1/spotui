@@ -1232,6 +1232,44 @@ class SearchArtistChipTests(unittest.TestCase):
                                 for i in range(10)]
         self.assertEqual(len(self.app.search_artists("art")), 5)
 
+    def _render_search(self, query):
+        from collections import defaultdict
+        self.app.pal = defaultdict(int)
+        self.app.query = query
+        self.app.search_filter = "all"
+        self.app.searching = False
+        self.app.cover_for = Mock(return_value=None)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        ui.list_header = Mock()
+        ui.track_list = Mock()
+        ui.hint = Mock()
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(str(t))), \
+                patch.object(s, 'draw_art'):
+            ui.v_search(0, 30, 24, 120)
+        return texts
+
+    def test_top_result_is_artist_on_strong_match(self):
+        self.app.store.liked = [dict(track(1), artist="Luna Waves")]
+        self.app.results = [dict(track(1), artist="Luna Waves"),
+                            dict(track(2), artist="Other")]
+        texts = self._render_search("luna")
+        self.assertIn("Luna Waves", texts)
+        self.assertIn("Artist \u2022 1 songs", texts)
+        self.assertNotIn("Song \u2022 Luna Waves", texts)
+
+    def test_top_result_stays_song_on_weak_match(self):
+        self.app.store.liked = [dict(track(1), artist="Luna Waves")]
+        self.app.results = [dict(track(1), artist="Luna Waves"),
+                            dict(track(2), artist="Other")]
+        texts = self._render_search("waves")  # substring, not prefix
+        self.assertIn("Song \u2022 Luna Waves", texts)
+        self.assertNotIn("Artist \u2022 1 songs", texts)
+
 
 class QueueRemainingTests(unittest.TestCase):
     def test_fmt_remaining(self):
