@@ -208,7 +208,7 @@ def fmt_added(v):
 VIEW_HINTS = {
     "search": "Enter plays \u00b7 a queues \u00b7 Q queues all \u00b7 o opens artist \u00b7 Tab switches All/Songs/Artists",
     "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
-    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates \u00b7 B merges \u00b7 w pins \u00b7 h enhances \u00b7 L likes all",
+    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates \u00b7 B merges \u00b7 w pins \u00b7 h enhances \u00b7 L likes all \u00b7 V copies tracklist",
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 X clears",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
@@ -2526,29 +2526,59 @@ class App:
         if not url:
             self.toast_now("No link for this song")
             return None
+        if self.copy_text(url, "Link"):
+            return url
+        self.toast_now(f"Link: {url}")
+        return url
+
+    def copy_text(self, text, what="Text"):
+        """Copy text to the system clipboard (Termux, Wayland, X11, macOS,
+        OSC 52 fallback). True when a clipboard took it."""
         for cmd in (["termux-clipboard-set"], ["wl-copy"],
                     ["xclip", "-selection", "clipboard"],
                     ["xsel", "--clipboard", "--input"], ["pbcopy"]):
             if shutil.which(cmd[0]):
                 try:
-                    subprocess.run(cmd, input=url.encode(), timeout=3,
+                    subprocess.run(cmd, input=text.encode(), timeout=3,
                                    stdout=subprocess.DEVNULL,
                                    stderr=subprocess.DEVNULL, check=True)
-                    self.toast_now("Link copied to clipboard")
-                    return url
+                    self.toast_now(f"{what} copied to clipboard")
+                    return True
                 except (OSError, subprocess.SubprocessError):
                     continue
         try:
             with open("/dev/tty", "wb") as tty:
-                tty.write(b"\x1b]52;c;" + base64.b64encode(url.encode())
+                tty.write(b"\x1b]52;c;" + base64.b64encode(text.encode())
                           + b"\a")
                 tty.flush()
-            self.toast_now("Link copied to clipboard")
-            return url
+            self.toast_now(f"{what} copied to clipboard")
+            return True
         except OSError:
             pass
-        self.toast_now(f"Link: {url}")
-        return url
+        return False
+
+    def copy_tracklist(self, pi):
+        """Copy a playlist's tracklist as shareable numbered text."""
+        if not 0 <= pi < len(self.store.playlists):
+            return None
+        pl = self.store.playlists[pi]
+        if not pl["tracks"]:
+            self.toast_now("This playlist is empty")
+            return None
+        lines = [pl["name"]]
+        for i, t in enumerate(pl["tracks"], 1):
+            line = (f"{i}. {t.get('title') or '?'} - "
+                    f"{t.get('artist') or 'Unknown'}")
+            if t.get("dur"):
+                line += f" ({fmt_t(t['dur'])})"
+            lines.append(line)
+        text = "\n".join(lines)
+        if self.copy_text(text, "Tracklist"):
+            return text
+        preview = " \u00b7 ".join(
+            f"{t.get('title') or '?'}" for t in pl["tracks"][:3])
+        self.toast_now(f"Tracklist: {preview} \u2026")
+        return text
 
     def export_playlist(self, pi):
         if not 0 <= pi < len(self.store.playlists):
@@ -4977,7 +5007,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("V", "playlist: copy tracklist"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -5552,6 +5582,8 @@ def handle_key(app, k):
             app.toggle_enhance(arg)
         elif k == "L" and kind == "playlist":
             app.like_all(arg)
+        elif k == "V" and kind == "playlist":
+            app.copy_tracklist(arg)
         elif k == "e" and kind == "playlist":
             app.rename_index = arg
             app.name_buf = app.store.playlists[arg]["name"]
