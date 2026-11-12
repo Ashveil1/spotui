@@ -1293,6 +1293,17 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertIn("Song \u2022 Luna Waves", texts)
         self.assertNotIn("Artist \u2022 1 songs", texts)
 
+    def test_no_results_offers_recent_searches(self):
+        self.app.store.recent = ["midnight", "rain"]
+        self.app.results = []
+        self.app.rects = []
+        texts = self._render_search("zzzz nothing")
+        self.assertIn("Recent searches", texts)
+        self.assertIn("midnight", texts)
+        hits = [r for r in self.app.rects
+                if r["act"] == "recent" and r["arg"] == "midnight"]
+        self.assertTrue(hits)
+
 
 class QueueRemainingTests(unittest.TestCase):
     def test_fmt_remaining(self):
