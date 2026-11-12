@@ -1557,6 +1557,25 @@ class SearchArtistChipTests(unittest.TestCase):
         self.assertTrue(hits)
 
 
+class StatsWeekTopTests(unittest.TestCase):
+    def test_top_artist_this_week(self):
+        import time as _t
+        store = s.Store()
+        now = _t.time()
+        store.history = [
+            dict(track(1), artist="Luna Waves", added=now - 3600),
+            dict(track(2), artist="Luna Waves", added=now - 7200),
+            dict(track(3), artist="Neon Coast", added=now - 1800),
+            dict(track(4), artist="Neon Coast", added=now - 8 * 86400),
+        ]
+        self.assertEqual(s.stats_week_top(store), ("Luna Waves", 2))
+
+    def test_empty(self):
+        store = s.Store()
+        store.history = [dict(track(1), artist="", added=1e12)]
+        self.assertEqual(s.stats_week_top(store), ("", 0))
+
+
 class ArtistMinutesTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

@@ -123,7 +123,7 @@ card or row to play it, press `R` to roll new picks.
 Play something from a search and SpotUI turns the queue into a **radio**:
 same channel and same artist first, then similar artists, shuffled — so
 `n` keeps the music going instead of walking down the result list. The
-queue view (`v`) shows what is lined up, and any song that did not come from the queue's own origin - one you added by hand with `a` / `A`, for example - is tagged with where it came from ("· Added").
+queue view (`v`) shows what is lined up and where the queue started ("From Late Night Drive"), and any song that did not come from the queue's own origin - one you added by hand with `a` / `A`, for example - is tagged with where it came from ("· Added").
 
 ## Notes
 
