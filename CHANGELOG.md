@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press . to jump the selection to the playing song in any list; in the
+  queue it lands on the next-up row (#138)
+
 - The Termux section grew into a real guide: OpenSL ES audio flag,
   termux-wake-lock for screen-off playback, termux-api for the copy-link
   key, small-screen tips, and where the data lives (#137)

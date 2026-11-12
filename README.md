@@ -77,6 +77,7 @@ Tips that make it nicer on a phone:
 | `/` | search | `a` / `A` | add to queue / play next |
 | `j/k` ↑/↓ | move | `l` | like / unlike |
 | `g` / `G` | top / bottom of a list | | |
+| `.` | jump to the playing song | |
 | `Enter` | play | `s` | shuffle |
 | `Space` | play / pause | `r` | repeat off/all/one |
 | `n` / `p` | next / prev | `v` | queue view |

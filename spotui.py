@@ -2721,6 +2721,30 @@ class App:
         idx = self.sel_row()
         return tracks[idx] if 0 <= idx < len(tracks) else None
 
+    def jump_to_current(self):
+        """'.' key: select the playing song in the current list.
+
+        In the queue the playing row sits in its own Now playing box, so
+        the jump lands on the next-up row instead."""
+        if not self.current:
+            self.toast_now("Nothing is playing")
+            return
+        kind, _ = self.stack[-1]
+        if kind == "queue":
+            nxt = min(self.qpos + 1, max(0, len(self.queue) - 1))
+            if self.qpos + 1 >= len(self.queue):
+                self.toast_now("Already at the last queued song")
+                return
+            self.sel["queue:"] = nxt
+            return
+        tracks = self.view_tracks()
+        cid = self.current.get("id")
+        for i, t in enumerate(tracks):
+            if t.get("id") == cid:
+                self.sel[self.key()] = i
+                return
+        self.toast_now("The playing song is not in this list")
+
     @staticmethod
     def _norm_artist(name):
         return unicodedata.normalize("NFKC", name or "").casefold().strip()
@@ -4511,7 +4535,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -4845,6 +4869,8 @@ def handle_key(app, k):
             app.toast_now("Find: type to jump, Enter to stay")
         elif k == " ":
             app.toggle()
+        elif k == ".":
+            app.jump_to_current()
         elif k == "g":
             app.sel[vk] = 0
         elif k == "G":
