@@ -208,7 +208,7 @@ def fmt_added(v):
 VIEW_HINTS = {
     "search": "Enter plays \u00b7 a queues \u00b7 Q queues all \u00b7 o opens artist \u00b7 Tab switches All/Songs/Artists",
     "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
-    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates \u00b7 B merges \u00b7 w pins \u00b7 h enhances \u00b7 L likes all \u00b7 V copies tracklist",
+    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates \u00b7 B merges \u00b7 w pins \u00b7 h enhances \u00b7 L likes all \u00b7 V copies tracklist \u00b7 H dedupes",
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 X clears",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
@@ -2799,6 +2799,17 @@ class App:
             self.store.playlists.insert(pi, pl)
             self.store.save()
             self.toast_now(f"Restored playlist: {pl['name']}")
+        elif trash[0] == "tracks":
+            _, pi, items = trash
+            if not 0 <= pi < len(self.store.playlists):
+                self.toast_now("That playlist is gone")
+                return
+            tracks = self.store.playlists[pi]["tracks"]
+            for i, t in items:
+                tracks.insert(max(0, min(i, len(tracks))), t)
+            self.store.save()
+            n = len(items)
+            self.toast_now(f"Restored {n} song{'s' if n != 1 else ''}")
         else:
             _, pi, idx, t = trash
             if not 0 <= pi < len(self.store.playlists):
@@ -2808,6 +2819,28 @@ class App:
             tracks.insert(max(0, min(idx, len(tracks))), t)
             self.store.save()
             self.toast_now(f"Restored {t.get('title') or 'song'}")
+
+    def dedupe_playlist(self, pi):
+        """Remove duplicate songs from playlist pi, keeping the first copy."""
+        if not 0 <= pi < len(self.store.playlists):
+            return
+        pl = self.store.playlists[pi]
+        seen, keep, dropped = set(), [], []
+        for i, t in enumerate(pl["tracks"]):
+            if t.get("id") in seen:
+                dropped.append((i, t))
+            else:
+                seen.add(t.get("id"))
+                keep.append(t)
+        if not dropped:
+            self.toast_now(f"No duplicates in {pl['name']}")
+            return
+        pl["tracks"] = keep
+        self._trash = ("tracks", pi, dropped)
+        self.store.save()
+        n = len(dropped)
+        self.toast_now(f"Removed {n} duplicate{'s' if n != 1 else ''} "
+                       f"from {pl['name']} - U to undo")
 
     def add_to_playlist(self, pi, t):
         try:
@@ -5062,7 +5095,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link / stats summary"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("V", "playlist: copy tracklist"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("Z", "shuffle whole library"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link / stats summary"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("V", "playlist: copy tracklist"), ("H", "playlist: remove duplicates"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("Z", "shuffle whole library"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -5643,6 +5676,8 @@ def handle_key(app, k):
             app.like_all(arg)
         elif k == "V" and kind == "playlist":
             app.copy_tracklist(arg)
+        elif k == "H" and kind == "playlist":
+            app.dedupe_playlist(arg)
         elif k == "e" and kind == "playlist":
             app.rename_index = arg
             app.name_buf = app.store.playlists[arg]["name"]

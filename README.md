@@ -98,6 +98,7 @@ Tips that make it nicer on a phone:
 | `O` | open the song's link in the browser (termux-open-url / xdg-open / open / wslview) | |
 | `U` | undo the last deleted playlist or song | |
 | `Z` | shuffle your whole library into the queue | |
+| `H` (playlist) | remove duplicate songs (undoable with `U`) | |
 | `L` (playlist) | like every song in the playlist at once | |
 | `x` | hide a song from suggestions (mixes, Enhance, Made for you, autoplay); press again to bring it back | |
 | `V` (playlist) | copy the tracklist as numbered shareable text | |

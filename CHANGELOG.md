@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- `H` in a playlist removes duplicate songs, keeping the first copy of each; `U` restores them.
 - `Z` shuffles your entire library (liked songs, history and every playlist, deduped, skipping hidden songs) into the queue with the current shuffle mode.
 - Press `Y` in Stats to copy a shareable summary: plays, unique songs,
   listening time, top artist, top song, streak and this week's plays.

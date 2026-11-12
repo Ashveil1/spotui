@@ -4418,3 +4418,60 @@ class LibraryShuffleTests(unittest.TestCase):
         self.app.shuffle_library = Mock()
         s.handle_key(self.app, 'Z')
         self.app.shuffle_library.assert_called_once()
+
+
+class DedupePlaylistTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.store.playlists = [{"name": "Mix", "tracks": [
+            dict(track(1)), dict(track(2)), dict(track(1)),
+            dict(track(3)), dict(track(2))]}]
+        self.app.store.save = Mock()
+
+    def ids(self):
+        return [t["id"] for t in self.app.store.playlists[0]["tracks"]]
+
+    def test_dedupe_keeps_first_copy(self):
+        self.app.dedupe_playlist(0)
+        self.assertEqual(self.ids(), ["1", "2", "3"])
+
+    def test_dedupe_sets_undo_trash(self):
+        self.app.dedupe_playlist(0)
+        kind, pi, items = self.app._trash
+        self.assertEqual(kind, "tracks")
+        self.assertEqual(pi, 0)
+        self.assertEqual([t["id"] for _, t in items], ["1", "2"])
+
+    def test_undo_restores_original_positions(self):
+        self.app.dedupe_playlist(0)
+        self.app.undo_delete()
+        self.assertEqual(self.ids(), ["1", "2", "1", "3", "2"])
+
+    def test_no_duplicates_toasts_and_keeps_list(self):
+        self.app.store.playlists[0]["tracks"] = [dict(track(1)),
+                                                 dict(track(2))]
+        self.app.toast_now = Mock()
+        self.app.dedupe_playlist(0)
+        self.assertEqual(self.ids(), ["1", "2"])
+        self.assertIsNone(self.app._trash)
+        self.assertIn("No duplicates",
+                      self.app.toast_now.call_args[0][0])
+
+    def test_bad_index_is_safe(self):
+        self.app.dedupe_playlist(9)
+
+    def test_h_key_dedupes_playlist(self):
+        self.app.mode = "normal"
+        self.app.stack = [("playlist", 0)]
+        s.handle_key(self.app, 'H')
+        self.assertEqual(self.ids(), ["1", "2", "3"])
