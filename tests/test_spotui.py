@@ -502,7 +502,7 @@ class AppTests(unittest.TestCase):
                           side_effect=lambda sc, y, x, t, *a, **k:
                           texts.append(t)):
             ui.v_queue(0, 30, 24, 120)
-        self.assertIn(f'  \u00b7  {s.IC_AUTO} 2 autoplayed', texts)
+        self.assertIn(f'  \u00b7  {s.IC_AUTO} 2 autoplayed (4 min)', texts)
 
     def test_autoplay_dedupes_queued_songs(self):
         self.app.current = track(1)
