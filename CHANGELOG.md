@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press `I` on any song for its info card: length, your play count and
+  last-played date, liked status, every playlist it sits in, and its
+  link (Y copies it straight from the card).
+
 - Press `b` for a private session: plays and history stop being recorded
   until you press `b` again. A "Private session" line sits at the bottom
   of the sidebar while it is on. Session-only, never saved.

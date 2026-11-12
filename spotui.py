@@ -1456,6 +1456,7 @@ class App:
         self.sleep_eot = False
         self._fading = False           # sleep fade is ramping mpv's volume
         self.private = False           # private session: nothing is recorded
+        self.info_track = None         # song shown in the info modal
         self._fade_level = None        # last level sent (1/sec throttle)
         self._muted_from = None      # volume before muting, None = not muted
         self.speed = 1.0
@@ -2809,6 +2810,46 @@ class App:
         self.toast_now("Private session on \u00b7 plays won't count"
                        if self.private else
                        "Private session off \u00b7 listening counts again")
+
+    def open_info(self, t):
+        """Song-info modal: every local fact about one track."""
+        if not t:
+            self.toast_now("Nothing to show")
+            return
+        self.info_track = dict(t)
+        self.mode = "info"
+
+    def info_rows(self):
+        """(label, value) facts about the info-track, all local data."""
+        t = self.info_track or {}
+        tid = str(t.get("id") or "")
+        rows = [("Title", t.get("title") or "?"),
+                ("Channel", t.get("artist") or "Unknown")]
+        if t.get("dur"):
+            rows.append(("Length", fmt_t(t["dur"])))
+        p = self.store.plays.get(tid) or {}
+        n = p.get("n", 0)
+        plays = f"{n} play{'s' if n != 1 else ''}"
+        last = next((h.get("added") for h in self.store.history
+                     if isinstance(h, dict)
+                     and str(h.get("id")) == tid), None)
+        try:
+            if last:
+                plays += (" \u00b7 last "
+                          + time.strftime("%d %b",
+                                          time.localtime(float(last))))
+        except (TypeError, ValueError, OverflowError):
+            pass
+        rows.append(("Plays", plays))
+        rows.append(("Liked", "yes" if tid in self.liked_ids else "no"))
+        in_pls = [pl["name"] for pl in self.store.playlists
+                  if any(str(x.get("id")) == tid for x in pl["tracks"])]
+        rows.append(("In playlists", ", ".join(in_pls) if in_pls else "-"))
+        if t.get("added"):
+            rows.append(("Added", fmt_added(t.get("added"))))
+        if t.get("url"):
+            rows.append(("Link", t["url"]))
+        return rows
 
     def pick_view(self):
         """Picker rows as filtered by pick_filter ("+ New" always stays)."""
@@ -4802,7 +4843,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -4832,6 +4873,24 @@ class UI:
         footer = f"Page {self.app.help_page + 1}/{self.app.help_pages}  j/k: page  Esc: close"
         put(self.scr, y + h - 2, x + 2, wcut(footer, w - 4), pal["sfaint"])
         self.hit(x, y, w, h, "helpclose")
+
+    def info_modal(self, W):
+        app, pal = self.app, self.pal
+        rows = app.info_rows()
+        w = 56
+        h = len(rows) + 5
+        H = self.scr.getmaxyx()[0]
+        y = max(1, (H - h) // 2)
+        x = (W - w) // 2
+        box(self.scr, y, x, w, h, pal["dim"], pal["side"])
+        put(self.scr, y + 1, x + 2, "Song info", pal["side"], curses.A_BOLD)
+        lw = max(dlen(label) for label, _ in rows)
+        for i, (label, value) in enumerate(rows):
+            put(self.scr, y + 3 + i, x + 2, label, pal["sfaint"])
+            put(self.scr, y + 3 + i, x + 4 + lw,
+                wcut(str(value), w - lw - 7), pal["side"])
+        put(self.scr, y + h - 2, x + 2, "Y: copy link \u00b7 Esc: close",
+            pal["sfaint"])
 
     def name_modal(self, y0, W):
         app, pal = self.app, self.pal
@@ -4968,11 +5027,13 @@ class UI:
             self.sleep_modal(y1, W)
         if app.mode == "pick":
             self.pick_modal(y1, W)
+        if app.mode == "info":
+            self.info_modal(W)
         if app.mode == "confirm_delete":
             self.delete_modal(W)
         if app.mode == "confirm_clearhist":
             self.clearhist_modal(W)
-        if not app.show_help and app.mode not in ("name", "pick", "confirm_delete", "confirm_clearhist", "sleep"):
+        if not app.show_help and app.mode not in ("name", "pick", "confirm_delete", "confirm_clearhist", "sleep", "info"):
             self.toast(y1 - 1, W)
         # cursor for text input
         if app.mode == "search" and hasattr(app, "search_xy"):
@@ -5100,6 +5161,15 @@ def handle_key(app, k):
             app.name_buf = app.name_buf[:-1]
         elif isinstance(k, str) and k >= " " and unicodedata.category(k)[0] != "C":
             app.name_buf += k
+        return
+
+    if app.mode == "info":
+        if k in ("\x1b", 27, "q", "I", "\n", "\r", curses.KEY_ENTER,
+                 10, 13):
+            app.mode = "normal"
+            app.info_track = None
+        elif k == "Y":
+            app.copy_link(app.info_track)
         return
 
     if app.mode == "pick":
@@ -5238,6 +5308,8 @@ def handle_key(app, k):
                 app.move_in_playlist(arg, app.sel_row(), 1 if k == "J" else -1)
         elif k == "Y":
             app.copy_link(app.track_under() or app.current)
+        elif k == "I":
+            app.open_info(app.track_under() or app.current)
         elif k == "Q" and kind == "search":
             app.queue_all(list(app.results))
         elif k == "a":

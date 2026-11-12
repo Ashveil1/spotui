@@ -3912,3 +3912,69 @@ class PrivateSessionTests(unittest.TestCase):
         s.handle_key(self.app, 'b')
         self.assertFalse(self.app.private)
 
+class SongInfoTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.create_playlist('Mix')
+        self.app.back()
+
+    def _seed(self):
+        t = track(1)
+        self.app.store.playlists[0]['tracks'] = [t]
+        self.app.store.liked = [t]
+        self.app.liked_ids.add(t['id'])
+        self.app.store.history = [dict(t, added=1700000000.0)]
+        self.app.store.plays = {'1': {'title': t['title'],
+                                      'artist': t['artist'], 'n': 7}}
+        return t
+
+    def test_open_info(self):
+        t = self._seed()
+        self.app.open_info(t)
+        self.assertEqual(self.app.mode, 'info')
+        rows = dict(self.app.info_rows())
+        self.assertEqual(rows['Title'], t['title'])
+        self.assertEqual(rows['Liked'], 'yes')
+        self.assertEqual(rows['In playlists'], 'Mix')
+        self.assertIn('7 plays', rows['Plays'])
+        self.assertIn('last', rows['Plays'])
+        self.assertEqual(rows['Link'], t['url'])
+
+    def test_open_info_empty(self):
+        self.app.open_info(None)
+        self.assertNotEqual(self.app.mode, 'info')
+        self.assertIn('Nothing to show', self.app.toast[0])
+
+    def test_info_rows_sparse(self):
+        self.app.open_info(track(9))
+        rows = dict(self.app.info_rows())
+        self.assertEqual(rows['Plays'], '0 plays')
+        self.assertEqual(rows['Liked'], 'no')
+        self.assertEqual(rows['In playlists'], '-')
+
+    def test_i_key_and_close(self):
+        t = self._seed()
+        self.app.push('playlist', 0)
+        s.handle_key(self.app, 'I')
+        self.assertEqual(self.app.mode, 'info')
+        s.handle_key(self.app, '\x1b')
+        self.assertEqual(self.app.mode, 'normal')
+        self.assertIsNone(self.app.info_track)
+
+    def test_y_copies_from_modal(self):
+        t = self._seed()
+        self.app.open_info(t)
+        seen = []
+        self.app.copy_link = lambda x: seen.append(x)
+        s.handle_key(self.app, 'Y')
+        self.assertEqual(seen, [self.app.info_track])
+        self.assertEqual(self.app.mode, 'info')   # stays open
+
