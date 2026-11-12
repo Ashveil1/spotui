@@ -1443,6 +1443,8 @@ class App:
         self._muted_from = None      # volume before muting, None = not muted
         self.speed = 1.0
         self.sleep_minutes = 0
+        self.sleep_buf = ""          # custom-minutes modal input
+        self._sleep_cycle_at = None  # cycle position while the modal is up
         self.search_filter = "all"   # search filter chips: all/songs/artists
         self.drag_rect = None
         self.drag_row = None           # [view key, index] being row-dragged
@@ -2223,9 +2225,22 @@ class App:
         self.toast_now(f"Theme: {name}")
 
     def cycle_sleep(self):
-        options = [0, 15, 30, 60, 90, "eot"]
-        cur = "eot" if self.sleep_eot else self.sleep_minutes
-        nxt = options[(options.index(cur) + 1) % len(options)]
+        options = [0, 15, 30, 60, 90, "eot", "custom"]
+        cur = self._sleep_cycle_at or \
+            ("eot" if self.sleep_eot else self.sleep_minutes)
+        self._sleep_cycle_at = None
+        try:
+            i = options.index(cur)
+        except ValueError:
+            i = 0      # a custom value is armed: cycle from off
+        nxt = options[(i + 1) % len(options)]
+        if nxt == "custom":
+            self.mode = "sleep"
+            self.sleep_buf = ""
+            # remember where the cycle stopped, so the next t moves on to
+            # off even if the user cancels the prompt
+            self._sleep_cycle_at = "custom"
+            return
         self.sleep_eot = nxt == "eot"
         self.sleep_minutes = 0 if self.sleep_eot else nxt
         self.sleep_deadline = (time.monotonic() + self.sleep_minutes * 60
@@ -2236,6 +2251,22 @@ class App:
             self.toast_now(f"Sleep timer: {self.sleep_minutes} min")
         else:
             self.toast_now("Sleep timer off")
+
+    def set_sleep_custom(self):
+        """Arm the sleep timer from the typed-in minutes (sleep modal)."""
+        try:
+            mins = int(self.sleep_buf or "0")
+        except ValueError:
+            mins = 0
+        self.sleep_buf = ""
+        self.mode = "normal"
+        if not 1 <= mins <= 1440:
+            self.toast_now("Sleep timer unchanged")
+            return
+        self.sleep_eot = False
+        self.sleep_minutes = mins
+        self.sleep_deadline = time.monotonic() + mins * 60
+        self.toast_now(f"Sleep timer: {mins} min")
 
     def _track_ended(self):
         """Natural track end: advance, unless the end-of-track sleep timer
@@ -4585,7 +4616,7 @@ class UI:
             ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
-            ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
+            ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
             ("c", "create playlist"), ("P", "add to playlist"),
             ("d", "delete from list"), ("e / D", "playlist: rename / delete"),
             ("Backspace", "back"),
@@ -4627,6 +4658,23 @@ class UI:
             curses.A_BOLD)
         app.name_xy = (x + 3 + min(dlen(app.name_buf), w - 9), y + 3)
         put(self.scr, y + h - 2, x + 2, "Enter: save · Esc: cancel",
+            pal["sfaint"])
+
+    def sleep_modal(self, y0, W):
+        app, pal = self.app, self.pal
+        w, h = 44, 7
+        y = max(2, y0 - 8)
+        x = (W - w) // 2
+        box(self.scr, y, x, w, h, pal["dim"], pal["side"])
+        put(self.scr, y + 1, x + 2, "Sleep timer - custom", pal["side"],
+            curses.A_BOLD)
+        fill(self.scr, y + 3, x + 2, w - 4, pal["pill"])
+        buf = app.sleep_buf or ""
+        put(self.scr, y + 3, x + 3, wcut(buf + " min" if buf else "minutes",
+                                         w - 8),
+            pal["pill"] if buf else pal["pilldim"],
+            curses.A_BOLD if buf else 0)
+        put(self.scr, y + h - 2, x + 2, "Enter: start \u00b7 Esc: cancel",
             pal["sfaint"])
 
     def pick_modal(self, y0, W):
@@ -4727,13 +4775,15 @@ class UI:
             self.help(3, W)
         if app.mode == "name":
             self.name_modal(y1, W)
+        if app.mode == "sleep":
+            self.sleep_modal(y1, W)
         if app.mode == "pick":
             self.pick_modal(y1, W)
         if app.mode == "confirm_delete":
             self.delete_modal(W)
         if app.mode == "confirm_clearhist":
             self.clearhist_modal(W)
-        if not app.show_help and app.mode not in ("name", "pick", "confirm_delete", "confirm_clearhist"):
+        if not app.show_help and app.mode not in ("name", "pick", "confirm_delete", "confirm_clearhist", "sleep"):
             self.toast(y1 - 1, W)
         # cursor for text input
         if app.mode == "search" and hasattr(app, "search_xy"):
@@ -4821,6 +4871,18 @@ def handle_key(app, k):
         elif isinstance(k, str) and k >= " " and unicodedata.category(k)[0] != "C":
             app.find_buf += k
             app.find_jump()
+        return
+
+    if app.mode == "sleep":
+        if k in ("\n", "\r", curses.KEY_ENTER, 10, 13):
+            app.set_sleep_custom()
+        elif k in ("\x1b", 27):
+            app.sleep_buf = ""
+            app.mode = "normal"
+        elif k in ("\x7f", "\b", curses.KEY_BACKSPACE, 127, 8, 263):
+            app.sleep_buf = app.sleep_buf[:-1]
+        elif isinstance(k, str) and k.isdigit() and len(app.sleep_buf) < 4:
+            app.sleep_buf += k
         return
 
     if app.mode == "name":

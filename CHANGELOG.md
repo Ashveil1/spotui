@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The sleep timer learned custom minutes: keep pressing t past
+  "end of track" and a prompt takes any value from 1 to 1440 (#141)
+
 - Press N in a playlist to duplicate it, tracks included, as
   "<name> (copy)" (numbered when that name is taken) (#140)
 
