@@ -1901,6 +1901,35 @@ class MuteKeyTests(unittest.TestCase):
         self.assertIsNone(self.app._muted_from)
 
 
+class SearchTabFilterTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.mode = "search"
+
+    def test_tab_cycles_filters(self):
+        self.assertEqual(self.app.search_filter, "all")
+        s.handle_key(self.app, "\t")
+        self.assertEqual(self.app.search_filter, "songs")
+        s.handle_key(self.app, "\t")
+        self.assertEqual(self.app.search_filter, "artists")
+        s.handle_key(self.app, "\t")
+        self.assertEqual(self.app.search_filter, "all")
+
+    def test_tab_does_not_enter_query(self):
+        s.handle_key(self.app, "\t")
+        self.assertEqual(self.app.query, "")
+
+
 class FmtAgoTests(unittest.TestCase):
     def test_buckets(self):
         import time as _t
