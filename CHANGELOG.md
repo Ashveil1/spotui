@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press `b` for a private session: plays and history stop being recorded
+  until you press `b` again. A "Private session" line sits at the bottom
+  of the sidebar while it is on. Session-only, never saved.
+
 - Press `h` on a playlist to Enhance it: suggestions from your library
   (same artists first, ranked by your plays) weave in every 2 songs with
   a ✦ marker. Press `h` again to drop them. Duplicating a playlist keeps

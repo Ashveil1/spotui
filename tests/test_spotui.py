@@ -3860,3 +3860,55 @@ class EnhancePlaylistTests(unittest.TestCase):
         s.handle_key(self.app, 'h')
         self.assertTrue(self.app.store.playlists[0]['enhanced'])
 
+class PrivateSessionTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_default_off(self):
+        self.assertFalse(self.app.private)
+
+    def test_toggle_and_toast(self):
+        self.app.toggle_private()
+        self.assertTrue(self.app.private)
+        self.assertIn("Private session on", self.app.toast[0])
+        self.app.toggle_private()
+        self.assertFalse(self.app.private)
+        self.assertIn("Private session off", self.app.toast[0])
+
+    def test_private_skips_recording(self):
+        self.app.toggle_private()
+        self.app._note_history(track(1))
+        self.assertEqual(self.app.store.history, [])
+        self.assertEqual(self.app.store.plays, {})
+
+    def test_recording_resumes(self):
+        self.app._note_history(track(1))
+        self.app.toggle_private()
+        self.app._note_history(track(2))
+        self.app.toggle_private()
+        self.app._note_history(track(3))
+        ids = [h['id'] for h in self.app.store.history]
+        self.assertEqual(ids, ['3', '1'])
+        self.assertEqual(self.app.store.plays['1']['n'], 1)
+        self.assertNotIn('2', self.app.store.plays)
+
+    def test_session_only(self):
+        self.app.toggle_private()
+        with patch.object(s.threading.Thread, 'start'):
+            fresh = s.App()
+        self.assertFalse(fresh.private)
+
+    def test_b_key(self):
+        s.handle_key(self.app, 'b')
+        self.assertTrue(self.app.private)
+        s.handle_key(self.app, 'b')
+        self.assertFalse(self.app.private)
+
