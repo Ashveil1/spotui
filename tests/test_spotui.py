@@ -4010,3 +4010,65 @@ class SongInfoTests(unittest.TestCase):
         self.assertEqual(seen, [self.app.info_track])
         self.assertEqual(self.app.mode, 'info')   # stays open
 
+class OpenBrowserTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.popen = patch.object(s.subprocess, 'Popen')
+        self.mock_popen = self.popen.start()
+        self.addCleanup(self.popen.stop)
+
+    def test_opens_with_available_opener(self):
+        with patch.object(s.shutil, 'which',
+                          side_effect=lambda n: '/bin/xdg-open'
+                          if n == 'xdg-open' else None):
+            ok = self.app.open_in_browser(track(1))
+        self.assertTrue(ok)
+        self.mock_popen.assert_called_once()
+        args = self.mock_popen.call_args[0][0]
+        self.assertEqual(args, ['/bin/xdg-open', track(1)['url']])
+        self.assertIn('Opening Song 1 in browser', self.app.toast[0])
+
+    def test_prefers_termux(self):
+        with patch.object(s.shutil, 'which',
+                          side_effect=lambda n: f'/bin/{n}'):
+            self.app.open_in_browser(track(1))
+        args = self.mock_popen.call_args[0][0]
+        self.assertEqual(args[0], '/bin/termux-open-url')
+
+    def test_no_opener_shows_link(self):
+        with patch.object(s.shutil, 'which', return_value=None):
+            ok = self.app.open_in_browser(track(1))
+        self.assertFalse(ok)
+        self.mock_popen.assert_not_called()
+        self.assertIn('No browser opener', self.app.toast[0])
+        self.assertIn(track(1)['url'], self.app.toast[0])
+
+    def test_no_url(self):
+        ok = self.app.open_in_browser({'id': 'x', 'title': 'T'})
+        self.assertFalse(ok)
+        self.assertIn('No link', self.app.toast[0])
+
+    def test_popen_failure(self):
+        self.mock_popen.side_effect = OSError('nope')
+        with patch.object(s.shutil, 'which', return_value='/bin/xdg-open'):
+            ok = self.app.open_in_browser(track(1))
+        self.assertFalse(ok)
+        self.assertIn('Could not open', self.app.toast[0])
+
+    def test_o_key(self):
+        self.app.create_playlist('Mix')
+        self.app.back()
+        self.app.store.playlists[0]['tracks'] = [track(1)]
+        self.app.push('playlist', 0)
+        with patch.object(s.shutil, 'which', return_value='/bin/xdg-open'):
+            s.handle_key(self.app, 'O')
+        self.assertTrue(self.mock_popen.called)
+

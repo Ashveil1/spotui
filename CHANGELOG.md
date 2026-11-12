@@ -5,6 +5,11 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press `O` to open the selected (or playing) song's link in the system
+  browser - uses termux-open-url on Termux, then xdg-open/open/wslview.
+  Works from the song info card too, and shows the link when no opener
+  exists.
+
 - `T` now opens a theme picker with live preview: j/k repaints the whole
   app in the highlighted theme, Enter keeps it, Esc reverts to the saved
   one (marked "saved" in the list).
