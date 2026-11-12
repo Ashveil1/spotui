@@ -4141,3 +4141,58 @@ class UndoDeleteTests(unittest.TestCase):
         self.assertEqual([p['name'] for p in self.app.store.playlists],
                          ['A', 'B'])
 
+class LikeAllTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.create_playlist('Mix')
+        self.app.back()
+        self.app.store.playlists[0]['tracks'] = [track(1), track(2), track(3)]
+
+    def test_like_all(self):
+        self.app.like_all(0)
+        self.assertEqual([t['id'] for t in self.app.store.liked],
+                         ['1', '2', '3'])
+        self.assertIn('Liked 3 songs from Mix', self.app.toast[0])
+        for i in '123':
+            self.assertIn(i, self.app.liked_ids)
+
+    def test_like_all_skips_liked(self):
+        self.app.like(track(2))
+        self.app.like_all(0)
+        self.assertEqual([t['id'] for t in self.app.store.liked],
+                         ['1', '3', '2'])
+        self.assertIn('Liked 2 songs', self.app.toast[0])
+
+    def test_like_all_already_all_liked(self):
+        self.app.like_all(0)
+        self.app.like_all(0)
+        self.assertIn('already liked', self.app.toast[0])
+        self.assertEqual(len(self.app.store.liked), 3)
+
+    def test_like_all_empty(self):
+        self.app.store.playlists[0]['tracks'] = []
+        self.app.like_all(0)
+        self.assertIn('empty', self.app.toast[0])
+        self.assertEqual(self.app.store.liked, [])
+
+    def test_like_all_bad_index(self):
+        self.app.like_all(9)
+        self.assertEqual(self.app.store.liked, [])
+
+    def test_L_key(self):
+        self.app.push('playlist', 0)
+        s.handle_key(self.app, 'L')
+        self.assertEqual(len(self.app.store.liked), 3)
+
+    def test_like_all_persists(self):
+        self.app.like_all(0)
+        self.assertEqual(len(s.Store().liked), 3)
+
