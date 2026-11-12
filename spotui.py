@@ -1176,6 +1176,33 @@ def stats_days(store):
              counts[i]) for i in range(7)]
 
 
+def stats_day_minutes(store):
+    """Listening minutes per local day for the last 7 days, oldest first.
+
+    Same window and sources as stats_days(), but each history entry counts
+    its track duration instead of one play. Entries without a known
+    duration are skipped, so these are approximate - like stats_minutes().
+    """
+    lt = time.localtime()
+    today0 = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday,
+                          0, 0, 0, 0, 0, -1))
+    sec = [0] * 7
+    for h in store.history:
+        if not isinstance(h, dict):
+            continue
+        try:
+            ts = float(h.get("added") or 0)
+            d = float(h.get("dur") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(ts) or not math.isfinite(d) or d <= 0:
+            continue
+        idx = int((ts - today0) // 86400)
+        if -6 <= idx <= 0:
+            sec[6 + idx] += d
+    return [int(s // 60) for s in sec]
+
+
 def stats_hours(store):
     """Plays per time-of-day bucket, counted from the (capped) history list.
 
@@ -2762,21 +2789,30 @@ class UI:
         by = y0 + 3
         days = stats_days(app.store)
         week_n = sum(n for _, n in days)
-        if week_n and by + 7 <= y1 - 1:
+        day_min = stats_day_minutes(app.store)
+        week_min = sum(day_min)
+        if week_n and by + 8 <= y1 - 1:
             put(scr, by, x0 + 2, "LAST 7 DAYS", pal["dim"], curses.A_BOLD)
-            put(scr, by, x0 + 15, f"{week_n} plays", pal["faint"])
+            cap = f"{week_n} plays"
+            if week_min:
+                cap += f"  \u00b7  ~{week_min} min"
+            put(scr, by + 1, x0 + 2, cap, pal["faint"])
             bh, top_n = 3, max(n for _, n in days)
             for i, (lab, n) in enumerate(days):
-                x = x0 + 3 + i * 3
+                x = x0 + 3 + i * 4
                 filled = round(n / top_n * bh) if top_n else 0
                 col = pal["green"] if i == 6 else pal["sdim"]
                 for r in range(bh - filled, bh):
                     put(scr, by + 2 + r, x, "\u2588", col)
                 put(scr, by + 2 + bh, x, lab, pal["faint"])
+                m = day_min[i]
+                if m:
+                    mtxt = f"{m}m" if m < 100 else f"{m // 60}h"
+                    put(scr, by + 3 + bh, x, mtxt, pal["faint"])
             # time-of-day mini chart beside the daily one, when wide enough
             hours = stats_hours(app.store)
             htot = sum(n for _, n in hours)
-            hx = x0 + 32
+            hx = x0 + 36
             if htot and inner >= 80:
                 put(scr, by, hx, "TIME OF DAY", pal["dim"], curses.A_BOLD)
                 streak = stats_streak(app.store)
@@ -2795,10 +2831,10 @@ class UI:
                     put(scr, hy, hx + 10 + hbw + 1, str(n), pal["faint"])
             big = stats_weekday(app.store)
             if big:
-                put(scr, by + 6, x0 + 2,
+                put(scr, by + 7, x0 + 2,
                     f"{big[0]} are your biggest listening day",
                     pal["faint"])
-            by += 7
+            by += 8
         # rows are (label, subtitle-or-None, count, click action-or-None)
         def block(y, x, w, title, rows):
             put(scr, y, x, title, pal["dim"], curses.A_BOLD)
