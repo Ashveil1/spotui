@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- `Z` shuffles your entire library (liked songs, history and every playlist, deduped, skipping hidden songs) into the queue with the current shuffle mode.
 - Press `Y` in Stats to copy a shareable summary: plays, unique songs,
   listening time, top artist, top song, streak and this week's plays.
   Without a clipboard the toast previews the headline.

@@ -4360,3 +4360,61 @@ class ShareStatsTests(unittest.TestCase):
         text = self.app.stats_share_text()
         self.assertEqual(text, 'My SpotUI stats\n0 plays · 0 different songs')
 
+
+
+class LibraryShuffleTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+
+    def seed(self):
+        self.app.store.liked = [dict(track(1)), dict(track(2))]
+        self.app.store.history = [dict(track(2)), dict(track(3))]
+        self.app.store.playlists = [
+            {"name": "Mix", "tracks": [dict(track(3)), dict(track(4))]}]
+        self.app.store.save = Mock()
+
+    def test_library_tracks_dedupes(self):
+        self.seed()
+        ids = [t["id"] for t in self.app.library_tracks()]
+        self.assertEqual(sorted(ids), ["1", "2", "3", "4"])
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_shuffle_library_skips_blocked(self):
+        self.seed()
+        self.app.blocked_ids = {"2"}
+        self.app.shuffle_library()
+        self.assertEqual(len(self.app.queue), 3)
+        self.assertNotIn("2", [t["id"] for t in self.app.queue])
+        self.assertEqual(self.app.play_source, "Library shuffle")
+
+    def test_shuffle_library_plays_all(self):
+        self.seed()
+        self.app.shuffle_library()
+        self.assertEqual(len(self.app.queue), 4)
+        self.assertTrue(all(t.get("src") == "Library shuffle"
+                            for t in self.app.queue))
+        self.app._play_current.assert_called_once()
+
+    def test_shuffle_library_empty_toasts(self):
+        self.app.toast_now = Mock()
+        self.app.shuffle_library()
+        self.assertEqual(self.app.queue, [])
+        self.app.toast_now.assert_called_once()
+
+    def test_z_key_shuffles_library(self):
+        self.seed()
+        self.app.mode = "normal"
+        self.app.shuffle_library = Mock()
+        s.handle_key(self.app, 'Z')
+        self.app.shuffle_library.assert_called_once()
