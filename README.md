@@ -211,7 +211,7 @@ When the last queued song starts, **autoplay** quietly lines up similar songs so
 
 `W` in the queue view saves the queue as a new playlist (duplicates removed).
 
-`[` and `]` change playback speed (0.75x, 1x, 1.25x, 1.5x, 2x). Speed resets to 1x when SpotUI restarts.
+`[` and `]` change playback speed (0.75x, 1x, 1.25x, 1.5x, 2x). A non-1x speed shows as a badge next to the playerbar time and as a chip in Now Playing. Speed resets to 1x when SpotUI restarts. Now Playing's Up Next rows mark songs you have liked with a heart.
 
 `C` in the queue view clears the upcoming songs and keeps the current song and what already played. The header of the queue view shows how many songs are lined up and about how long is left.
 

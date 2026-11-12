@@ -3178,10 +3178,14 @@ class UI:
                     put(scr, uy + 1 + j,
                         x0 + 5 + dlen(nxt["title"]) + 1, IC_AUTO, pal["accent"])
                 put(scr, uy + 1 + j, x0 + 5 + width // 2 - 2, wcut(nxt["artist"], max(8, width // 2 - 6)), pal["dim"])
+                rx = x0 + 2 + width
                 if nxt.get("dur"):
                     dtxt = fmt_t(nxt["dur"])
-                    put(scr, uy + 1 + j, x0 + 2 + width - dlen(dtxt),
+                    put(scr, uy + 1 + j, rx - dlen(dtxt),
                         dtxt, pal["faint"])
+                    rx -= dlen(dtxt) + 1
+                if nxt["id"] in app.liked_ids and rx - 1 > x0 + 5 + width // 2:
+                    put(scr, uy + 1 + j, rx - 1, IC_HEART, pal["green"])
                 self.hit(x0 + 2, uy + 1 + j, width - 2, 1, "qjump", qi)
         elif not wide and uy < y1 - 2 and app.qpos + 1 < len(app.queue):
             nxt = app.queue[app.qpos + 1]
@@ -4093,7 +4097,8 @@ class UI:
         vx = (W - 11) if narrow else (W - 20)
         spx = vx - 4                        # speaker glyph column
         bx = hx + 4                         # seekbar starts after the heart
-        bw = max(4, min(132, spx - bx - 6))
+        # reserve room for a speed badge after the duration when needed
+        bw = max(4, min(132, spx - bx - (13 if app.speed != 1.0 else 6)))
         cx = max(hx + 4, (W - 22) // 2)     # transport cluster centered
         if cx + 22 > rz:
             cx = max(hx + 4, rz - 22)
@@ -4143,6 +4148,12 @@ class UI:
             put(scr, y0 + 1, bx + i, ch, p,
                 curses.A_BOLD if ch == "●" else 0)
         put(scr, y0 + 1, bx + bw + 1, fmt_t(dur), pal["bsdim"])
+        if app.speed != 1.0:
+            sptxt = f"{app.speed:g}x"
+            sx = bx + bw + 7      # past the duration text (4 cells + gap)
+            if sx + len(sptxt) <= spx:
+                put(scr, y0 + 1, sx, sptxt, pal["bsgreen"],
+                    curses.A_BOLD)
         self.hit(bx, y0 + 1, bw, 1, "seek", (bx, bw))
 
         # --- right: queue + volume (squeezed on narrow terminals)
