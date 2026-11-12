@@ -1271,6 +1271,7 @@ class App:
         self.help_page = 0
         self.help_pages = 1
         self.sleep_deadline = None
+        self.sleep_eot = False
         self._muted_from = None      # volume before muting, None = not muted
         self.speed = 1.0
         self.sleep_minutes = 0
@@ -2001,12 +2002,32 @@ class App:
         self.toast_now(f"Theme: {name}")
 
     def cycle_sleep(self):
-        options = [0, 15, 30, 60, 90]
-        self.sleep_minutes = options[(options.index(self.sleep_minutes) + 1) % len(options)]
+        options = [0, 15, 30, 60, 90, "eot"]
+        cur = "eot" if self.sleep_eot else self.sleep_minutes
+        nxt = options[(options.index(cur) + 1) % len(options)]
+        self.sleep_eot = nxt == "eot"
+        self.sleep_minutes = 0 if self.sleep_eot else nxt
         self.sleep_deadline = (time.monotonic() + self.sleep_minutes * 60
                                if self.sleep_minutes else None)
-        self.toast_now(f"Sleep timer: {self.sleep_minutes} min" if self.sleep_minutes
-                       else "Sleep timer off")
+        if self.sleep_eot:
+            self.toast_now("Sleep timer: end of track")
+        elif self.sleep_minutes:
+            self.toast_now(f"Sleep timer: {self.sleep_minutes} min")
+        else:
+            self.toast_now("Sleep timer off")
+
+    def _track_ended(self):
+        """Natural track end: advance, unless the end-of-track sleep timer
+        is armed - then pause here instead and disarm it."""
+        if self.sleep_eot:
+            self.sleep_eot = False
+            self.load_token += 1
+            self.loading = False
+            self.mpv.cmd(["set_property", "pause", True])
+            self.mpv.state["pause"] = True
+            self.toast_now("Sleep timer - playback paused")
+        else:
+            self.next(auto=True)
 
     def tick(self):
         self._tick_live_search()
@@ -2554,6 +2575,8 @@ class UI:
         if app.sleep_deadline is not None:
             remaining = max(0, int(app.sleep_deadline - time.monotonic()))
             put(scr, y1 - 2, 2, f"Sleep {fmt_t(remaining)}", pal["sgreen"])
+        elif app.sleep_eot:
+            put(scr, y1 - 2, 2, "Sleep: end of track", pal["sgreen"])
         kind, _ = app.stack[-1]
         navs = [("home", IC_HOME, "Home"), ("search", IC_SEARCH, "Search")]
         for i, (k, ic, label) in enumerate(navs):
@@ -2578,7 +2601,9 @@ class UI:
                  ("history", IC_HIST, "Recently Played")]
         for i, pl in enumerate(app.store.playlists):
             items.append(("playlist", IC_NOTE, pl["name"], i))
-        top, bot = y0 + 8, y1 - (2 if app.sleep_deadline is not None else 1)
+        top, bot = y0 + 8, y1 - (
+            2 if (app.sleep_deadline is not None or app.sleep_eot)
+            else 1)
         vis = max(1, bot - top)
         app.soff_max = max(0, len(items) - vis)
         app.soff = max(0, min(app.soff, app.soff_max))
@@ -2869,6 +2894,8 @@ class UI:
         if app.sleep_deadline is not None:
             left = max(0, int(app.sleep_deadline - time.monotonic()))
             chips.append((f"Sleep {fmt_t(left)}", True))
+        elif app.sleep_eot:
+            chips.append(("Sleep: end of track", True))
         cx, cy = tx, ty + 3
         for label, _on in chips:
             w = dlen(label) + 2
@@ -4601,7 +4628,7 @@ def run(scr):
                 app.tick()
                 if app.mpv.on_end.is_set():
                     app.mpv.on_end.clear()
-                    app.next(auto=True)
+                    app._track_ended()
             try:
                 ui.draw()
             except curses.error:
