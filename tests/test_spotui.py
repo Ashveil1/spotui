@@ -3324,3 +3324,57 @@ class FmtEndsTests(unittest.TestCase):
     def test_elapsed_past_total(self):
         self.assertEqual(s.fmt_ends([dict(dur=90)], elapsed=200), '')
 
+class QueueAllTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_appends_and_toasts(self):
+        self.app.current = track(100)
+        self.app.queue = [track(100)]
+        n = self.app.queue_all([track(1), track(2), track(3)])
+        self.assertEqual(n, 3)
+        self.assertEqual(len(self.app.queue), 4)
+        self.assertIn('3 songs', self.app.toast[0])
+
+    def test_skips_songs_already_queued(self):
+        self.app.current = track(100)
+        self.app.queue = [track(100), track(2)]
+        n = self.app.queue_all([track(1), track(2), track(3)])
+        self.assertEqual(n, 2)
+        self.assertEqual([t['id'] for t in self.app.queue], ['100', '2', '1', '3'])
+
+    def test_all_already_queued(self):
+        self.app.current = track(1)
+        self.app.queue = [track(1), track(2)]
+        n = self.app.queue_all([track(1), track(2)])
+        self.assertEqual(n, 0)
+        self.assertIn('already', self.app.toast[0])
+        self.assertEqual(len(self.app.queue), 2)
+
+    def test_nothing_playing_starts_playback(self):
+        self.app.play = Mock()
+        self.app.queue_all([track(1), track(2)])
+        self.app.play.assert_called_once()
+        self.assertEqual(len(self.app.play.call_args[0][0]), 2)
+
+    def test_q_key_queues_results(self):
+        self.app.push('search')
+        self.app.results = [track(1), track(2)]
+        self.app.queue_all = Mock(return_value=2)
+        s.handle_key(self.app, 'Q')
+        self.app.queue_all.assert_called_once_with([self.app.results[0], self.app.results[1]])
+
+    def test_q_key_only_in_search(self):
+        self.app.push('liked')
+        self.app.queue_all = Mock()
+        s.handle_key(self.app, 'Q')
+        self.app.queue_all.assert_not_called()
+

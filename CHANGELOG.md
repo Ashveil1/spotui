@@ -5,6 +5,10 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Search results can be queued in one go: the "Queue all →" link in the
+  All header (or pressing Q) appends every result, skipping songs that
+  are already in the queue (#136)
+
 - The queue header shows the wall-clock time the music runs out
   ("12 songs, 35 min left · ends 17:03"), minus what's already played
   of the current song (#135)
