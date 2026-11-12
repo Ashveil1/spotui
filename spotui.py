@@ -346,6 +346,7 @@ class Store:
         self.eq_preset = "off"
         self.sort_mode = "default"
         self.hist_dedupe = False
+        self.zen = False
         self.theme = THEME_NAMES[0]
         self._load()
 
@@ -437,6 +438,8 @@ class Store:
             self.sort_mode = d["sort_mode"]
         if isinstance(d.get("hist_dedupe"), bool):
             self.hist_dedupe = d["hist_dedupe"]
+        if isinstance(d.get("zen"), bool):
+            self.zen = d["zen"]
         if d.get("theme") in THEMES:
             self.theme = d["theme"]
         try:
@@ -465,6 +468,7 @@ class Store:
                         "plays": self.plays, "shuffle_mode": self.shuffle_mode, "autoplay": self.autoplay, "time_left": self.time_left, "eq_preset": self.eq_preset,
                         "sort_mode": self.sort_mode,
                         "hist_dedupe": self.hist_dedupe,
+                        "zen": self.zen,
                     }, f, ensure_ascii=False, indent=1)
                     f.flush()
                     os.fsync(f.fileno())
@@ -2063,6 +2067,12 @@ class App:
         self._apply_shuffle(False)       # restore original order, then reshuffle
         self._apply_shuffle(True)
         self.toast_now("Shuffle: " + SHUFFLE_LABEL[self.store.shuffle_mode])
+
+    def toggle_zen(self):
+        self.store.zen = not self.store.zen
+        self.store.save()
+        self.toast_now("Sidebar hidden - z brings it back"
+                       if self.store.zen else "Sidebar shown")
 
     def toggle_hist_dedupe(self):
         self.store.hist_dedupe = not self.store.hist_dedupe
@@ -4231,6 +4241,7 @@ class UI:
             ("/", "focus search"), ("j/k or ↑/↓", "move"),
             ("g / G", "top / bottom of a list"),
             ("1-3", "home: play a daily mix"),
+            ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
             ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
@@ -4342,11 +4353,12 @@ class UI:
         # terminal's own background as patchwork boxes around text
         for y in range(H):
             fill(scr, y, 0, W, pal["text"])
-        SW = max(24, min(32, W // 4))
+        SW = 0 if app.store.zen else max(24, min(32, W // 4))
         y1 = H - 3
         app.sw_bounds = (SW, 3, y1)
         self.topbar(0, W, SW)
-        self.sidebar(3, y1, SW)
+        if SW:
+            self.sidebar(3, y1, SW)
         self.main(3, y1, SW, W)
         self.playerbar(H - 3, W)
         if app.show_help:
@@ -4585,6 +4597,8 @@ def handle_key(app, k):
                 app.push("artist", t["artist"].strip())
             else:
                 app.toast_now("No artist for this song")
+        elif k == "z":
+            app.toggle_zen()
         elif k == "y":
             app.push("history")
         elif k == "t":
