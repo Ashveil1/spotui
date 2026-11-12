@@ -1738,6 +1738,25 @@ class StatsHoursTests(unittest.TestCase):
                           ("Evening", 0), ("Night", 0)])
 
 
+class StatsStreakTests(unittest.TestCase):
+    def _store(self, days_ago):
+        st = s.Store.__new__(s.Store)     # bare store, no disk
+        now = s.time.time()
+        st.history = [{"id": str(i), "added": now - d * 86400}
+                      for i, d in enumerate(days_ago)]
+        return st
+
+    def test_consecutive_days_ending_today(self):
+        self.assertEqual(s.stats_streak(self._store([0, 1, 2, 4])), 3)
+
+    def test_streak_may_end_yesterday(self):
+        self.assertEqual(s.stats_streak(self._store([1, 2])), 2)
+
+    def test_older_last_play_breaks_the_streak(self):
+        self.assertEqual(s.stats_streak(self._store([2, 3])), 0)
+        self.assertEqual(s.stats_streak(self._store([])), 0)
+
+
 class GTopBottomTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

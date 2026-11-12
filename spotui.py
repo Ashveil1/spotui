@@ -1054,6 +1054,36 @@ def stats_week(store):
         return 0
 
 
+def stats_streak(store):
+    """Consecutive days with at least one play, ending today or yesterday.
+
+    Counted from the (capped) history list. A streak only counts when the
+    most recent play is from today or yesterday; an older last play means
+    the streak is already broken. Returns the number of days.
+    """
+    lt = time.localtime()
+    today0 = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday,
+                          0, 0, 0, 0, 0, -1))
+    days = set()
+    for h in store.history:
+        if not isinstance(h, dict):
+            continue
+        try:
+            ts = float(h.get("added") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(ts):
+            continue
+        days.add(int((ts - today0) // 86400))
+    start = 0 if 0 in days else (-1 if -1 in days else None)
+    if start is None:
+        return 0
+    n, d = 0, start
+    while d in days:
+        n, d = n + 1, d - 1
+    return n
+
+
 def stats_days(store):
     """Plays per local day for the last 7 days, oldest first, today last.
 
@@ -2633,6 +2663,10 @@ class UI:
             hx = x0 + 32
             if htot and inner >= 80:
                 put(scr, by, hx, "TIME OF DAY", pal["dim"], curses.A_BOLD)
+                streak = stats_streak(app.store)
+                if streak >= 2:
+                    put(scr, by, hx + 13, f"{streak}-day streak",
+                        pal["faint"])
                 htop = max(n for _, n in hours)
                 hbw = 12
                 for i, (lab, n) in enumerate(hours):
