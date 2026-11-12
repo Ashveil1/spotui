@@ -3727,3 +3727,52 @@ class MergePlaylistTests(unittest.TestCase):
         self.assertEqual(self.app.mode, 'pick')
         self.assertEqual(self.app.pick_merge, 0)
 
+class PinPlaylistTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.create_playlist('A')
+        self.app.back()
+        self.app.create_playlist('B')
+        self.app.back()
+        self.app.create_playlist('C')
+        self.app.back()
+
+    def test_toggle_pin(self):
+        self.app.toggle_pin(1)
+        self.assertTrue(self.app.store.playlists[1]['pinned'])
+        self.assertIn('Pinned B', self.app.toast[0])
+        self.app.toggle_pin(1)
+        self.assertFalse(self.app.store.playlists[1]['pinned'])
+        self.assertIn('Unpinned B', self.app.toast[0])
+
+    def test_toggle_pin_bad_index(self):
+        self.app.toggle_pin(9)
+        self.assertEqual([p.get('pinned') for p in self.app.store.playlists],
+                         [None, None, None])
+
+    def test_pinned_order_stable(self):
+        self.app.toggle_pin(2)
+        self.app.toggle_pin(0)
+        self.assertEqual(self.app.pinned_order(), [0, 2, 1])
+        self.app.toggle_pin(2)
+        self.assertEqual(self.app.pinned_order(), [0, 1, 2])
+
+    def test_pin_survives_reload(self):
+        self.app.toggle_pin(1)
+        store = s.Store()
+        self.assertTrue(store.playlists[1].get('pinned'))
+
+    def test_w_key(self):
+        self.app.push('playlist', 2)
+        s.handle_key(self.app, 'w')
+        self.assertTrue(self.app.store.playlists[2]['pinned'])
+        self.assertEqual(self.app.pinned_order(), [2, 0, 1])
+

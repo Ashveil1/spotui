@@ -5,6 +5,9 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Press `w` on a playlist to pin it: pinned playlists rise to the top of
+  the sidebar and the home tiles with a ★, and the pin survives restarts.
+
 - Press `B` on a playlist to merge all its songs into another playlist
   (or a new one) in one step. Songs already in the target are skipped,
   so merging is never destructive and the toast says how many moved.

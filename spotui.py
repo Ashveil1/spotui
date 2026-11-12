@@ -77,6 +77,7 @@ IC_PLUS = "+"
 IC_HIST = "↺"
 IC_STATS = "▤"
 IC_AUTO = "✦"
+IC_PIN = "★"
 
 # seconds before a sleep timer fires when the volume starts to fade
 FADE_SECS = 20
@@ -207,7 +208,7 @@ def fmt_added(v):
 VIEW_HINTS = {
     "search": "Enter plays \u00b7 a queues \u00b7 Q queues all \u00b7 o opens artist \u00b7 Tab switches All/Songs/Artists",
     "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
-    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates \u00b7 B merges",
+    "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates \u00b7 B merges \u00b7 w pins",
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 X clears",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
@@ -437,7 +438,11 @@ class Store:
         self.playlists = []
         for pl in d.get("playlists", []) if isinstance(d.get("playlists"), list) else []:
             if isinstance(pl, dict) and isinstance(pl.get("name"), str):
-                self.playlists.append(dict(name=pl["name"], tracks=self._tracks(pl.get("tracks"))))
+                entry = dict(name=pl["name"],
+                             tracks=self._tracks(pl.get("tracks")))
+                if pl.get("pinned"):
+                    entry["pinned"] = True
+                self.playlists.append(entry)
         sess = d.get("session") if isinstance(d.get("session"), dict) else {}
         self.session = {"queue": self._tracks(sess.get("queue"))[:500]}
         try:
@@ -2703,6 +2708,22 @@ class App:
                            f"into {b['name']}")
         return len(fresh)
 
+    def pinned_order(self):
+        """Playlist indexes, pinned ones first, stable within each group."""
+        pls = self.store.playlists
+        return ([i for i, p in enumerate(pls) if p.get("pinned")]
+                + [i for i, p in enumerate(pls) if not p.get("pinned")])
+
+    def toggle_pin(self, pi):
+        """Pin/unpin a playlist to the top of the sidebar and home tiles."""
+        if not 0 <= pi < len(self.store.playlists):
+            return
+        pl = self.store.playlists[pi]
+        pl["pinned"] = not pl.get("pinned")
+        self.store.save()
+        self.toast_now(("Pinned " if pl["pinned"] else "Unpinned ")
+                       + pl["name"])
+
     def pick_view(self):
         """Picker rows as filtered by pick_filter ("+ New" always stays)."""
         if not self.pick_filter:
@@ -3115,8 +3136,11 @@ class UI:
 
         items = [("liked", IC_HEART, "Liked Songs"),
                  ("history", IC_HIST, "Recently Played")]
-        for i, pl in enumerate(app.store.playlists):
-            items.append(("playlist", IC_NOTE, pl["name"], i))
+        for i in app.pinned_order():
+            pl = app.store.playlists[i]
+            items.append(("playlist",
+                          IC_PIN if pl.get("pinned") else IC_NOTE,
+                          pl["name"], i))
         top, bot = y0 + 9, y1 - (
             2 if (app.sleep_deadline is not None or app.sleep_eot)
             else 1)
@@ -3635,9 +3659,11 @@ class UI:
         """Shortcut tiles: Liked Songs + your playlists."""
         tiles = [("liked", IC_HEART, "Liked Songs", "liked", None,
                   app.store.liked)]
-        for i, pl in enumerate(app.store.playlists):
-            tiles.append(("pl", IC_NOTE, pl["name"], "playlist", i,
-                          pl["tracks"]))
+        for i in app.pinned_order():
+            pl = app.store.playlists[i]
+            tiles.append(("pl",
+                          IC_PIN if pl.get("pinned") else IC_NOTE,
+                          pl["name"], "playlist", i, pl["tracks"]))
         tw = min(26, (W - x0 - 4) // 2)
         th = 3
         per_row = max(1, (W - x0 - 2) // (tw + 1))
@@ -4685,7 +4711,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -5174,6 +5200,8 @@ def handle_key(app, k):
             app.duplicate_playlist(arg)
         elif k == "B" and kind == "playlist":
             app.open_pick_merge(arg)
+        elif k == "w" and kind == "playlist":
+            app.toggle_pin(arg)
         elif k == "e" and kind == "playlist":
             app.rename_index = arg
             app.name_buf = app.store.playlists[arg]["name"]
