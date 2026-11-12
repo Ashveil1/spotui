@@ -158,7 +158,7 @@ VIEW_HINTS = {
     "search": "Enter plays \u00b7 a queues \u00b7 o opens artist",
     "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
     "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K or drag reorders \u00b7 e renames",
-    "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds",
+    "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
     "playing": "Space pause \u00b7 l like \u00b7 v queue \u00b7 S shuffle \u00b7 click Up Next to jump",
@@ -322,6 +322,7 @@ class Store:
         self.time_left = False
         self.eq_preset = "off"
         self.sort_mode = "default"
+        self.hist_dedupe = False
         self.theme = THEME_NAMES[0]
         self._load()
 
@@ -411,6 +412,8 @@ class Store:
             self.eq_preset = d["eq_preset"]
         if d.get("sort_mode") in SORT_MODES:
             self.sort_mode = d["sort_mode"]
+        if isinstance(d.get("hist_dedupe"), bool):
+            self.hist_dedupe = d["hist_dedupe"]
         if d.get("theme") in THEMES:
             self.theme = d["theme"]
         try:
@@ -438,6 +441,7 @@ class Store:
                         "session": self.session, "theme": self.theme,
                         "plays": self.plays, "shuffle_mode": self.shuffle_mode, "autoplay": self.autoplay, "time_left": self.time_left, "eq_preset": self.eq_preset,
                         "sort_mode": self.sort_mode,
+                        "hist_dedupe": self.hist_dedupe,
                     }, f, ensure_ascii=False, indent=1)
                     f.flush()
                     os.fsync(f.fileno())
@@ -1383,7 +1387,18 @@ class App:
         if kind == "queue":
             return self.queue
         if kind == "history":
-            return sort_tracks(self.store.history, self.store.sort_mode)
+            hist = self.store.history
+            if self.store.hist_dedupe:
+                seen, ded = set(), []
+                for t in hist:
+                    tid = t.get("id")
+                    if tid is not None:
+                        if tid in seen:
+                            continue
+                        seen.add(tid)
+                    ded.append(t)
+                hist = ded
+            return sort_tracks(hist, self.store.sort_mode)
         if kind == "artist":
             lib = self.artist_tracks(arg or "")
             return lib or self._artist_remote.get(arg or "", [])
@@ -1952,6 +1967,14 @@ class App:
         self._apply_shuffle(False)       # restore original order, then reshuffle
         self._apply_shuffle(True)
         self.toast_now("Shuffle: " + SHUFFLE_LABEL[self.store.shuffle_mode])
+
+    def toggle_hist_dedupe(self):
+        self.store.hist_dedupe = not self.store.hist_dedupe
+        self.store.save()
+        if self.store.hist_dedupe:
+            self.toast_now("Recently Played: repeats hidden")
+        else:
+            self.toast_now("Recently Played: repeats shown")
 
     def cycle_sort(self):
         i = SORT_MODES.index(self.store.sort_mode)
@@ -3500,6 +3523,8 @@ class UI:
         nplays = plays_for(tracks, app.store.plays)
         if nplays:
             sub += f" \u00b7 {nplays} plays"
+        if kind == "history" and app.store.hist_dedupe:
+            sub += " \u00b7 repeats hidden"
         if kind in ("liked", "playlist"):
             ym = time.strftime("%Y-%m")
             new = sum(1 for t in tracks
@@ -3777,7 +3802,8 @@ class UI:
         cx = tx + title_w + 2
         if chan_w:
             put(scr, y, cx, wcut(t["artist"], chan_w), cp(pal["dim"]))
-            if vk.startswith("search:"):
+            if (vk.startswith("search:")
+                    or (vk.startswith("history") and app.store.hist_dedupe)):
                 # songs you played before carry their local play count
                 np_ = (app.store.plays.get(t["id"]) or {}).get("n", 0)
                 ptxt = f" \u00b7 {np_} plays" if np_ else ""
@@ -3979,7 +4005,7 @@ class UI:
             ("g / G", "top / bottom of a list"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed"), ("X", "playlist: export JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer"),
@@ -4300,6 +4326,8 @@ def handle_key(app, k):
             app.clear_upcoming()
         elif k == "D" and kind == "queue":
             app.drop_autoplayed()
+        elif k == "D" and kind == "history":
+            app.toggle_hist_dedupe()
         elif k == "W" and kind == "queue":
             app.save_queue_as_playlist()
         elif k in ("J", "K") and kind == "queue":

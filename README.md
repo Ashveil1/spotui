@@ -79,7 +79,7 @@ SpotUI uses Termux's temp folder for mpv's control socket and detects Termux in 
 | `f` | Now Playing | `t` | sleep timer |
 | `J` / `K` | reorder queue | `W` | save queue as playlist |
 | `C` | clear upcoming queue | `X` | export playlist JSON |
-| `D` | drop autoplayed songs (queue) | | |
+| `D` | drop autoplayed songs (queue) / hide repeats (Recently Played) | | |
 | `R` | new "Made for you" picks | `T` | cycle color theme |
 | `i` | listening stats | `S` | shuffle mode |
 | `y` | recently played | `1`-`3` | play a daily mix (home) |
@@ -211,7 +211,7 @@ When the last queued song starts, **autoplay** quietly lines up similar songs so
 
 `C` in the queue view clears the upcoming songs and keeps the current song and what already played. The header of the queue view shows how many songs are lined up and about how long is left.
 
-`m` in Liked Songs, a playlist or Recently Played cycles the sort order: default, title A-Z, artist A-Z, recently added, longest first. The choice is saved and applies to all three views. Sorting only changes how the list is shown - the stored order never changes, and playing, liking or deleting always acts on the row you see. Dates in these lists render relative: Today, Yesterday, the weekday within the last week, then the full date.
+In Recently Played, `D` collapses repeat plays of the same song into its most recent row, which then carries your total play count; the header notes "repeats hidden" and the choice is saved. `m` in Liked Songs, a playlist or Recently Played cycles the sort order: default, title A-Z, artist A-Z, recently added, longest first. The choice is saved and applies to all three views. Sorting only changes how the list is shown - the stored order never changes, and playing, liking or deleting always acts on the row you see. Dates in these lists render relative: Today, Yesterday, the weekday within the last week, then the full date.
 
 `X` in a playlist exports it as JSON to `~/spotui-exports/`. Import one with `python3 spotui.py --import file.json` while SpotUI is closed.
 
