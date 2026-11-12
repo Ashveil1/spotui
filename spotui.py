@@ -2242,7 +2242,9 @@ class App:
     def open_pick(self, t):
         self.pick_pending = t
         self.pick_rows = [{"name": "+ New playlist", "new": True}] + [
-            {"name": p["name"], "new": False} for p in self.store.playlists]
+            {"name": p["name"], "new": False, "n": len(p["tracks"]),
+             "has": any(x["id"] == t["id"] for x in p["tracks"])}
+            for p in self.store.playlists]
         self.pick_idx = 0
         self.mode = "pick"
 
@@ -3853,11 +3855,22 @@ class UI:
         for i in range(start, min(start + count, len(app.pick_rows))):
             r = app.pick_rows[i]
             yy = y + 3 + i - start
-            if i == app.pick_idx:
+            sel = i == app.pick_idx
+            if sel:
                 fill(self.scr, yy, x + 2, w - 4, pal["hover"])
-            put(self.scr, yy, x + 4, wcut(r["name"], w - 8),
-                pal["hover"] if i == app.pick_idx else pal["sdim"],
-                curses.A_BOLD if i == app.pick_idx else 0)
+            suffix = ""
+            if not r.get("new") and r.get("n") is not None:
+                suffix = str(r["n"])
+                if r.get("has"):
+                    suffix = "\u2713 " + suffix
+            name_w = w - 8 - (dlen(suffix) + 2 if suffix else 0)
+            put(self.scr, yy, x + 4, wcut(r["name"], name_w),
+                pal["hover"] if sel else pal["sdim"],
+                curses.A_BOLD if sel else 0)
+            if suffix:
+                put(self.scr, yy, x + w - 3 - dlen(suffix), suffix,
+                    pal["hover"] if sel
+                    else (pal["green"] if r.get("has") else pal["sfaint"]))
             self.hit(x, yy, w, 1, "pickrow", i)
 
     def delete_modal(self, W):

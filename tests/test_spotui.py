@@ -338,6 +338,30 @@ class AppTests(unittest.TestCase):
             s.put(scr, 0, 0, 'song\nname\x1b', 0)
         self.assertEqual(scr.addstr.call_args.args[2], 'songname')
 
+    def test_picker_marks_playlists_already_having_the_song(self):
+        t = track(1)
+        self.app.store.playlists = [
+            {"name": "Has it", "tracks": [dict(t)]},
+            {"name": "Empty", "tracks": []}]
+        self.app.open_pick(t)
+        rows = self.app.pick_rows
+        self.assertEqual(rows[1], {"name": "Has it", "new": False,
+                                   "n": 1, "has": True})
+        self.assertEqual(rows[2], {"name": "Empty", "new": False,
+                                   "n": 0, "has": False})
+        self.app.pal = {key: 0 for key in
+                        ['dim', 'side', 'hover', 'sdim', 'sfaint', 'green']}
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t_, *a, **k:
+                          texts.append(str(t_))), \
+                patch.object(s.curses, 'color_pair', return_value=0):
+            s.UI(self.app, scr).pick_modal(35, 120)
+        self.assertIn("\u2713 1", texts)
+        self.assertIn("0", texts)
+
     def test_playlist_picker_scrolls_selected_item_into_view(self):
         self.app.pick_rows = [dict(name=str(i)) for i in range(25)]
         self.app.pick_idx = 24
