@@ -3372,6 +3372,24 @@ class UI:
             pal["green"] if app.shuffle else pal["dim"], curses.A_BOLD)
         self.hit(x0 + 8, by - 1, 3, 2, "shuffle")
         ly = by + 2
+        # Spotify-style Popular: the artist's most played songs, from local
+        # play counts, above the full list (only when tall enough to keep
+        # several full-list rows visible).
+        pop = sorted((t for t in tracks
+                      if (app.store.plays.get(t["id"]) or {}).get("n")),
+                     key=lambda t: (-app.store.plays[t["id"]]["n"],
+                                    t["title"]))[:5]
+        if pop and y1 - ly >= 14:
+            put(scr, ly, x0 + 2, "POPULAR", pal["dim"], curses.A_BOLD)
+            pw = W - x0 - 4
+            for i, t in enumerate(pop):
+                py = ly + 1 + i
+                put(scr, py, x0 + 2, f"{i + 1}", pal["faint"])
+                put(scr, py, x0 + 5, wcut(t["title"], pw - 20), pal["text"])
+                pn = f"{app.store.plays[t['id']]['n']} plays"
+                put(scr, py, x0 + 2 + pw - dlen(pn), pn, pal["faint"])
+                self.hit(x0 + 2, py, pw, 1, "playat", (vk, pop, i))
+            ly += len(pop) + 2
         self.list_header(ly, x0 + 2, W - x0 - 4, show_date=True)
         self.track_list(ly + 1, y1, x0 + 2, W - x0 - 4, tracks, vk,
                         show_date=True)
@@ -4281,6 +4299,10 @@ def handle_mouse(app):
             vk2, tracks = arg
             if tracks:
                 app.play(tracks, 0, source=app._source_for_vk(vk2))
+        elif act == "playat":
+            vk2, tracks, pos = arg
+            if tracks:
+                app.play(tracks, pos, source=app._source_for_vk(vk2))
         elif act == "playtrack":
             app.play([arg], 0, source="Listening stats")
         elif act == "dropauto":
