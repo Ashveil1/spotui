@@ -2888,6 +2888,26 @@ class App:
             rows.append(("Link", t["url"]))
         return rows
 
+    def open_in_browser(self, t):
+        """Open the song's link in the system browser (Termux-friendly)."""
+        url = (t or {}).get("url") or ""
+        if not url.startswith("http"):
+            self.toast_now("No link for this song")
+            return False
+        opener = (shutil.which("termux-open-url") or shutil.which("xdg-open")
+                  or shutil.which("open") or shutil.which("wslview"))
+        if not opener:
+            self.toast_now("No browser opener found - link: " + url)
+            return False
+        try:
+            subprocess.Popen([opener, url], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError:
+            self.toast_now("Could not open the browser - link: " + url)
+            return False
+        self.toast_now(f"Opening {t.get('title') or 'song'} in browser")
+        return True
+
     def pick_view(self):
         """Picker rows as filtered by pick_filter ("+ New" always stays)."""
         if not self.pick_filter:
@@ -4880,7 +4900,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("O", "open song in browser"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -4950,7 +4970,8 @@ class UI:
             put(self.scr, y + 3 + i, x + 2, label, pal["sfaint"])
             put(self.scr, y + 3 + i, x + 4 + lw,
                 wcut(str(value), w - lw - 7), pal["side"])
-        put(self.scr, y + h - 2, x + 2, "Y: copy link \u00b7 Esc: close",
+        put(self.scr, y + h - 2, x + 2,
+            "Y: copy link \u00b7 O: open in browser \u00b7 Esc: close",
             pal["sfaint"])
 
     def name_modal(self, y0, W):
@@ -5245,6 +5266,8 @@ def handle_key(app, k):
             app.info_track = None
         elif k == "Y":
             app.copy_link(app.info_track)
+        elif k == "O":
+            app.open_in_browser(app.info_track)
         return
 
     if app.mode == "pick":
@@ -5385,6 +5408,8 @@ def handle_key(app, k):
             app.copy_link(app.track_under() or app.current)
         elif k == "I":
             app.open_info(app.track_under() or app.current)
+        elif k == "O":
+            app.open_in_browser(app.track_under() or app.current)
         elif k == "Q" and kind == "search":
             app.queue_all(list(app.results))
         elif k == "a":
