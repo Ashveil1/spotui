@@ -1457,6 +1457,8 @@ class App:
         self._fading = False           # sleep fade is ramping mpv's volume
         self.private = False           # private session: nothing is recorded
         self.info_track = None         # song shown in the info modal
+        self.theme_orig = None         # theme to revert to (picker)
+        self.theme_idx = 0             # highlighted theme in the picker
         self._fade_level = None        # last level sent (1/sec throttle)
         self._muted_from = None      # volume before muting, None = not muted
         self.speed = 1.0
@@ -2243,6 +2245,41 @@ class App:
         self.store.theme = name
         self.store.save()
         self.toast_now(f"Theme: {name}")
+
+    def open_theme_picker(self):
+        """Theme picker with live preview: moving applies instantly."""
+        if self.pal is None or not self.pal.can_theme():
+            self.toast_now("Themes need a terminal with palette "
+                           "support (not NO_COLOR)")
+            return
+        self.theme_orig = self.store.theme
+        self.theme_idx = (THEME_NAMES.index(self.store.theme)
+                          if self.store.theme in THEMES else 0)
+        self.mode = "theme"
+
+    def theme_move(self, d):
+        self.theme_idx = (self.theme_idx + d) % len(THEME_NAMES)
+        name = THEME_NAMES[self.theme_idx]
+        if not self.pal.apply_theme(name):
+            self.pal.apply_theme(self.theme_orig)
+            self.store.theme = self.theme_orig
+            self.mode = "normal"
+            self.toast_now("Themes need a terminal with palette "
+                           "support (not NO_COLOR)")
+            return
+        self.store.theme = name   # live preview; saved only on Enter
+
+    def theme_apply(self):
+        name = THEME_NAMES[self.theme_idx]
+        self.store.theme = name
+        self.store.save()
+        self.mode = "normal"
+        self.toast_now(f"Theme: {name}")
+
+    def theme_cancel(self):
+        self.pal.apply_theme(self.theme_orig)
+        self.store.theme = self.theme_orig
+        self.mode = "normal"
 
     def cycle_sleep(self):
         options = [0, 15, 30, 60, 90, "eot", "custom"]
@@ -4843,7 +4880,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("[ / ]", "speed down / up"), ("T", "cycle color theme"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link"), ("I", "song info"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("[ / ]", "speed down / up"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -4873,6 +4910,30 @@ class UI:
         footer = f"Page {self.app.help_page + 1}/{self.app.help_pages}  j/k: page  Esc: close"
         put(self.scr, y + h - 2, x + 2, wcut(footer, w - 4), pal["sfaint"])
         self.hit(x, y, w, h, "helpclose")
+
+    def theme_modal(self, W):
+        app, pal = self.app, self.pal
+        w = 36
+        h = len(THEME_NAMES) + 5
+        H = self.scr.getmaxyx()[0]
+        y = max(1, (H - h) // 2)
+        x = (W - w) // 2
+        box(self.scr, y, x, w, h, pal["dim"], pal["side"])
+        put(self.scr, y + 1, x + 2, "Theme", pal["side"], curses.A_BOLD)
+        for i, name in enumerate(THEME_NAMES):
+            ry = y + 3 + i
+            sel = i == app.theme_idx
+            if sel:
+                fill(self.scr, ry, x + 1, w - 2, pal["pill"])
+            put(self.scr, ry, x + 3, name,
+                pal["pill"] if sel else pal["side"],
+                curses.A_BOLD if sel else 0)
+            if name == app.theme_orig:
+                put(self.scr, ry, x + w - 9, "saved",
+                    pal["pilldim"] if sel else pal["sfaint"])
+        put(self.scr, y + h - 2, x + 2,
+            "j/k: preview \u00b7 Enter: keep \u00b7 Esc: revert",
+            pal["sfaint"])
 
     def info_modal(self, W):
         app, pal = self.app, self.pal
@@ -5029,11 +5090,14 @@ class UI:
             self.pick_modal(y1, W)
         if app.mode == "info":
             self.info_modal(W)
+        if app.mode == "theme":
+            self.theme_modal(W)
         if app.mode == "confirm_delete":
             self.delete_modal(W)
         if app.mode == "confirm_clearhist":
             self.clearhist_modal(W)
-        if not app.show_help and app.mode not in ("name", "pick", "confirm_delete", "confirm_clearhist", "sleep", "info"):
+        if not app.show_help and app.mode not in ("name", "pick", "confirm_delete", "confirm_clearhist", "sleep", "info",
+                          "theme"):
             self.toast(y1 - 1, W)
         # cursor for text input
         if app.mode == "search" and hasattr(app, "search_xy"):
@@ -5161,6 +5225,17 @@ def handle_key(app, k):
             app.name_buf = app.name_buf[:-1]
         elif isinstance(k, str) and k >= " " and unicodedata.category(k)[0] != "C":
             app.name_buf += k
+        return
+
+    if app.mode == "theme":
+        if k in (curses.KEY_UP, "k"):
+            app.theme_move(-1)
+        elif k in (curses.KEY_DOWN, "j"):
+            app.theme_move(1)
+        elif k in ("\n", "\r", curses.KEY_ENTER, 10, 13):
+            app.theme_apply()
+        elif k in ("\x1b", 27, "q"):
+            app.theme_cancel()
         return
 
     if app.mode == "info":
@@ -5339,7 +5414,7 @@ def handle_key(app, k):
         elif k == "t":
             app.cycle_sleep()
         elif k == "T":
-            app.cycle_theme()
+            app.open_theme_picker()
         elif k == "R":
             if kind == "home":
                 app.push("similar")

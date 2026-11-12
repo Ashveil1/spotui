@@ -97,7 +97,7 @@ Tips that make it nicer on a phone:
 | `I` | song info card: plays, last played, liked, playlists it sits in, link | |
 | `Q` (search) | queue all search results (skips songs already queued) | |
 | `D` | drop autoplayed songs (queue) / hide repeats (Recently Played) | `X` (Recently Played) | clear play history (asks first; playlists and likes stay) |
-| `R` | Made for you (home) / new picks (inside) | `T` | cycle color theme |
+| `R` | Made for you (home) / new picks (inside) | `T` | theme picker with live preview |
 | `i` or the sidebar | listening stats (plays, minutes, streaks, and how long you have listened) | `S` | shuffle mode |
 | `y` | recently played | `1`-`3` | play a daily mix (home) |
 | `o` | open artist | `u` | autoplay on/off |
