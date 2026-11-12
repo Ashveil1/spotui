@@ -3611,3 +3611,39 @@ class SleepCustomTests(unittest.TestCase):
         self.assertEqual(self.app.sleep_minutes, 20)
         self.assertEqual(self.app.mode, 'normal')
 
+class PlayTileTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_liked_tile(self):
+        self.app.store.liked = [track(1), track(2)]
+        self.app.play = Mock()
+        self.assertTrue(self.app.play_tile('liked', None))
+        self.app.play.assert_called_once_with(self.app.store.liked, 0,
+                                              source='Liked Songs')
+
+    def test_playlist_tile(self):
+        self.app.create_playlist('Rock')
+        self.app.back()
+        self.app.store.playlists[0]['tracks'] = [track(3)]
+        self.app.play = Mock()
+        self.assertTrue(self.app.play_tile('playlist', 0))
+        self.app.play.assert_called_once_with([track(3)], 0, source='Rock')
+
+    def test_empty_tile_toasts(self):
+        self.app.play = Mock()
+        self.assertFalse(self.app.play_tile('liked', None))
+        self.app.play.assert_not_called()
+        self.assertIn('Nothing', self.app.toast[0])
+
+    def test_bad_index(self):
+        self.assertFalse(self.app.play_tile('playlist', 9))
+
