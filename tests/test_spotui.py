@@ -646,6 +646,13 @@ class AppTests(unittest.TestCase):
         glyphs = [c.args[3] for c in pt.call_args_list]
         self.assertIn(s.IC_HEART, glyphs)
 
+    def test_now_playing_up_next_shows_durations(self):
+        ui = self._playing_ui()
+        with patch.object(s, 'draw_art'), patch.object(s, 'put') as pt:
+            ui.v_playing(0, 34, 24, 120)
+        texts = [str(c.args[3]) for c in pt.call_args_list]
+        self.assertGreaterEqual(texts.count("2:00"), 2)  # Song 2 and Song 3
+
     def test_now_playing_shows_play_count(self):
         ui = self._playing_ui()
         self.app.play_source = "Late Night Drive"
