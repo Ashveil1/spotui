@@ -3301,3 +3301,26 @@ class ScrollWindowTests(unittest.TestCase):
     def test_width_wider_than_text(self):
         self.assertEqual(s.scroll_window(self.TXT, 20, 5), self.TXT)
 
+class FmtEndsTests(unittest.TestCase):
+    def test_empty(self):
+        self.assertEqual(s.fmt_ends([]), '')
+        self.assertEqual(s.fmt_ends([dict(dur=None)]), '')
+
+    def test_too_short(self):
+        self.assertEqual(s.fmt_ends([dict(dur=45)]), '')
+
+    def test_clock_time(self):
+        now = 1763000000
+        got = s.fmt_ends([dict(dur=600)], now=now)
+        want = 'ends ' + __import__('time').strftime('%H:%M', __import__('time').localtime(now + 600))
+        self.assertEqual(got, want)
+
+    def test_elapsed_subtracted(self):
+        now = 1763000000
+        got = s.fmt_ends([dict(dur=600), dict(dur=300)], elapsed=120, now=now)
+        want = 'ends ' + __import__('time').strftime('%H:%M', __import__('time').localtime(now + 780))
+        self.assertEqual(got, want)
+
+    def test_elapsed_past_total(self):
+        self.assertEqual(s.fmt_ends([dict(dur=90)], elapsed=200), '')
+
