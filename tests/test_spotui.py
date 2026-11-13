@@ -11,6 +11,11 @@ spec = importlib.util.spec_from_file_location('player', Path(__file__).parents[1
 s = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(s)
 
+# Hermetic tests: pretend yt-dlp is absent even when the dev box has it,
+# so playback-gated background work (lyrics prefetch) never spawns real
+# network threads mid-suite. Tests that need it patch HAVE_YTDL back on.
+s.HAVE_YTDL = False
+
 
 def track(i):
     return dict(id=str(i), title=f'Song {i}', artist='Artist', dur=120,
