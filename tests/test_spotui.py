@@ -4723,8 +4723,9 @@ class ContextMenuTests(unittest.TestCase):
     def test_ctxrow_click_executes(self):
         self.open_menu()
         self.app.copy_link = Mock()
+        idx = [l for l, _ in self.app.context_items()].index("Copy link")
         self.app.rects = [{"x0": 1, "y0": 3, "x1": 27, "y1": 4,
-                           "act": "ctxrow", "arg": 6}]
+                           "act": "ctxrow", "arg": idx}]
         with patch.object(s.curses, "getmouse",
                           return_value=(0, 5, 3, 0, s.curses.BUTTON1_CLICKED)):
             s.handle_mouse(self.app)
@@ -6547,3 +6548,72 @@ class CliImportUrlTests(unittest.TestCase):
                 s.main()
         self.assertEqual(cm.exception.code, 0)
         self.assertIn('CLI Mix (2 songs)', buf.getvalue())
+
+
+class StartRadioTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self._ytdl = patch.object(s, 'HAVE_YTDL', True)
+        self._ytdl.start()
+        self.addCleanup(self._ytdl.stop)
+
+    def _picks(self, n=5):
+        return [dict(track(100 + i), dur=200) for i in range(n)]
+
+    def test_plays_song_and_builds_radio_queue(self):
+        t = dict(track(1), dur=200)
+        with patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, '_ytdl_playlist',
+                             return_value=self._picks()):
+            self.app.start_radio(t)
+        self.assertEqual(self.app.current['id'], '1')
+        self.assertEqual(self.app.qpos, 0)
+        self.assertEqual(self.app.queue[0]['id'], '1')
+        # same-artist picks are capped at 2 by the radio worker
+        self.assertEqual(len(self.app.queue), 3)
+        # autoplay must not race the manual radio (no auto-tagged songs)
+        self.assertFalse(any(t.get('auto') for t in self.app.queue))
+        self.assertIn('Radio on', self.app.toast[0])
+
+    def test_current_song_is_not_replayed(self):
+        t = dict(track(1), dur=200)
+        self.app.play([t], 0)
+        played = []
+        orig_play = self.app.play
+        self.app.play = lambda *a, **k: played.append(a)
+        with patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, '_ytdl_playlist',
+                             return_value=self._picks()):
+            self.app.start_radio(t)
+        self.assertEqual(played, [])
+        self.assertEqual(len(self.app.queue), 3)
+
+    def test_needs_ytdlp(self):
+        with patch.object(s, 'HAVE_YTDL', False):
+            self.app.start_radio(track(1))
+        self.assertIn('yt-dlp', self.app.toast[0])
+        self.assertIsNone(self.app.current)
+
+    def test_menus_offer_start_radio(self):
+        t = track(1)
+        self.app.open_track_context(t, 'On repeat', 0, 0)
+        self.assertIn('Start radio',
+                      [l for l, _ in self.app.context_items()])
+        self.app.close_context()
+        self.app.push('liked')
+        self.app.ctx = {'track': t, 'vk': 'liked:', 'idx': 0,
+                        'x': 0, 'y': 0, 'sel': 0}
+        self.assertIn('Start radio',
+                      [l for l, _ in self.app.context_items()])
+        self.app.play([t], 0)
+        self.app.open_playback_context(0, 0)
+        self.assertIn('Start radio',
+                      [l for l, _ in self.app.context_items()])

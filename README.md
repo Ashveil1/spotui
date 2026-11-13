@@ -133,7 +133,7 @@ playlists rows, controls, toast — everything), drag the progress / volume
 bars, click a column header to sort by it (click the active column again to
 restore the original order), and the wheel scrolls the list — or the
 sidebar when the cursor is over it. Right-click a song row for a menu
-(play, queue, like, info, copy link, hide) that also works from the
+(play, play next, queue, like, info, lyrics, **start a radio** from the song - it plays and lines up similar songs from YouTube's auto-Mix, needs yt-dlp - copy link, hide) that also works from the
 keyboard with `j`/`k` and `Enter`. Queue rows get their own actions:
 play now, move up next and remove from queue. Right-click a playlist
 in the sidebar for its own menu: play, rename, duplicate, pin, like all,
