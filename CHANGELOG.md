@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Right-click a recent-search pill: search again or remove it from the list.
 - Find-in-list (F) now highlights every matching row green as you type and counts the matches in the toast, not just jumping to the first one.
 - Right-click an artist chip or row in search: open the artist page, play their saved songs, or add them all to the queue.
 - Right-click a Your mixes card on home: play the mix, add it to the queue, or open the artist behind it.
