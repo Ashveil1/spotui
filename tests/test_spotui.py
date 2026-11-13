@@ -6035,3 +6035,106 @@ class LyricsSeekTests(unittest.TestCase):
                           foot.append(str(t))):
             ui.lyrics_modal(120)
         self.assertNotIn('click to seek', foot[-1])
+
+
+class _LyricsOnlyThread:
+    """Runs only the lyrics worker synchronously; other threads never run."""
+    def __init__(self, target=None, args=(), daemon=None):
+        self._target, self._args = target, args
+
+    def start(self):
+        if getattr(self._target, '__name__', '') == '_lyrics_worker':
+            self._target(*self._args)
+
+
+class LyricsPrefetchChipTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_play_prefetches_lyrics(self):
+        with patch.object(s, 'HAVE_YTDL', True), \
+                patch.object(s.threading, 'Thread', _LyricsOnlyThread), \
+                patch.object(s, 'fetch_lyrics',
+                             return_value={'plain': 'words',
+                                           'synced': None}) as f:
+            self.app.play([dict(track(1))], 0)
+        f.assert_called_once()
+        self.assertEqual(self.app.store.lyrics['1']['text'], 'words')
+
+    def test_prefetch_uses_cache(self):
+        self.app.store.lyrics['1'] = {'text': 'kept', 'ts': 1}
+        with patch.object(s, 'HAVE_YTDL', True), \
+                patch.object(s.threading, 'Thread', _LyricsOnlyThread), \
+                patch.object(s, 'fetch_lyrics') as f:
+            self.app.play([dict(track(1))], 0)
+        f.assert_not_called()
+
+    def test_prefetch_gated_offline(self):
+        with patch.object(s, 'HAVE_YTDL', False), \
+                patch.object(s, 'fetch_lyrics') as f:
+            self.app.play([dict(track(1))], 0)
+        f.assert_not_called()
+        self.assertNotIn('1', self.app.store.lyrics)
+
+    def _render_playing(self):
+        from collections import defaultdict
+        t = track(1)
+        self.app.queue = [t]
+        self.app.qpos = 0
+        self.app.current = t
+        self.app.loading = False
+        self.app.mpv.state = {'idle': False, 'pause': False, 'pos': 10.0,
+                              'dur': 120.0, 'vol': 70}
+        self.app.cover_for = lambda *a, **k: None
+        self.app.pal = defaultdict(int)
+        self.app.rects = []
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        return ui
+
+    def test_playing_view_lyrics_chip(self):
+        self.app.store.lyrics['1'] = {'text': 'p', 'ts': 1,
+                                      'synced': [[0.0, 'a']]}
+        ui = self._render_playing()
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(str(t))), \
+                patch.object(s, 'fill'):
+            ui.v_playing(1, 38, 20, 120)
+        self.assertIn('\u266a Lyrics (synced)', texts)
+        chips = [r for r in self.app.rects
+                 if r['act'] == 'chip' and r['arg'] == 'lyrics']
+        self.assertEqual(len(chips), 1)
+
+    def test_playing_view_no_chip_without_lyrics(self):
+        ui = self._render_playing()
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(str(t))), \
+                patch.object(s, 'fill'):
+            ui.v_playing(1, 38, 20, 120)
+        self.assertNotIn('\u266a Lyrics (synced)', texts)
+        self.assertNotIn('\u266a Lyrics', texts)
+        chips = [r for r in self.app.rects
+                 if r['act'] == 'chip' and r['arg'] == 'lyrics']
+        self.assertEqual(chips, [])
+
+    def test_lyrics_chip_opens_modal(self):
+        self.app.current = track(1)
+        with patch.object(s.threading, 'Thread', _LyricsOnlyThread), \
+                patch.object(s, 'fetch_lyrics',
+                             return_value={'plain': 'hi', 'synced': None}):
+            self.app.chip_action('lyrics')
+        self.assertEqual(self.app.mode, 'lyrics')
+        self.assertEqual(self.app.lyrics_track['id'], '1')
