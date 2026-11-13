@@ -394,8 +394,8 @@ def split_artist(title, uploader):
     return art or "Unknown artist", title
 
 
-def _ytdl_playlist(url, n=40, timeout=30):
-    """List a playlist (e.g. YouTube's auto 'Mix' radio) as track dicts."""
+def _ytdl_playlist_full(url, n=40, timeout=30):
+    """(playlist title, track dicts) from a YouTube playlist or radio."""
     info, err = _yt_sub(["--flat-playlist", "--socket-timeout", "15",
                          "-J", url], timeout=timeout)
     if info is None:
@@ -414,7 +414,15 @@ def _ytdl_playlist(url, n=40, timeout=30):
             "ch": e.get("uploader") or e.get("channel") or "",
             "added": None,
         })
-    return out[:n]
+    pl_title = (info or {}).get("title")
+    if not isinstance(pl_title, str) or not pl_title.strip():
+        pl_title = None
+    return pl_title, out[:n]
+
+
+def _ytdl_playlist(url, n=40, timeout=30):
+    """List a playlist (e.g. YouTube's auto 'Mix' radio) as track dicts."""
+    return _ytdl_playlist_full(url, n, timeout)[1]
 
 
 def _radio_url(vid):
@@ -2961,15 +2969,17 @@ class App:
 
     def _import_url_worker(self, url):
         try:
-            items = _ytdl_playlist(url, n=200)
+            pl_title, items = _ytdl_playlist_full(url, n=200)
         except Exception:
-            items = []
+            pl_title, items = None, []
         with self.lock:
             tracks = Store._tracks([t for t in items if isinstance(t, dict)])
             if not tracks:
                 self.toast_now("No songs found at that link")
                 return
-            base, n = "YouTube import", 2
+            base = (pl_title or "").strip() or "YouTube import"
+            base = " ".join(base.split())[:60]
+            n = 2
             name = base
             names = {p["name"] for p in self.store.playlists}
             while name in names:

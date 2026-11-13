@@ -6161,7 +6161,8 @@ class YouTubeImportTests(unittest.TestCase):
         items = [track(1), track(2), track(3)]
         with patch.object(s, 'HAVE_YTDL', True), \
                 patch.object(s.threading, 'Thread', _InlineThread), \
-                patch.object(s, '_ytdl_playlist', return_value=items) as yp:
+                patch.object(s, '_ytdl_playlist_full',
+                             return_value=(None, items)) as yp:
             self._submit('https://www.youtube.com/playlist?list=PLabc')
         yp.assert_called_once()
         pl = self.app.store.playlists[-1]
@@ -6176,7 +6177,8 @@ class YouTubeImportTests(unittest.TestCase):
     def test_url_import_empty_result(self):
         with patch.object(s, 'HAVE_YTDL', True), \
                 patch.object(s.threading, 'Thread', _InlineThread), \
-                patch.object(s, '_ytdl_playlist', side_effect=RuntimeError('x')):
+                patch.object(s, '_ytdl_playlist_full',
+                             side_effect=RuntimeError('x')):
             self._submit('https://youtu.be/abc?list=PLabc')
         self.assertEqual(self.app.store.playlists, [])
         self.assertIn('No songs found at that link', self.app.toast[0])
@@ -6185,10 +6187,34 @@ class YouTubeImportTests(unittest.TestCase):
         self.app.create_playlist('YouTube import')
         with patch.object(s, 'HAVE_YTDL', True), \
                 patch.object(s.threading, 'Thread', _InlineThread), \
-                patch.object(s, '_ytdl_playlist', return_value=[track(1)]):
+                patch.object(s, '_ytdl_playlist_full',
+                             return_value=(None, [track(1)])):
             self._submit('https://www.youtube.com/playlist?list=PLabc')
         self.assertEqual(self.app.store.playlists[-1]['name'],
                          'YouTube import 2')
+
+    def test_url_import_uses_real_title(self):
+        items = [track(1), track(2)]
+        with patch.object(s, 'HAVE_YTDL', True), \
+                patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, '_ytdl_playlist_full',
+                             return_value=('Late Night Tunes', items)):
+            self._submit('https://www.youtube.com/playlist?list=PLabc')
+        self.assertEqual(self.app.store.playlists[-1]['name'],
+                         'Late Night Tunes')
+        self.assertIn('Imported Late Night Tunes (2 songs)',
+                      self.app.toast[0])
+
+    def test_url_import_title_messy_and_deduped(self):
+        self.app.create_playlist('Chill Mix')
+        messy = '  Chill   Mix  \n '
+        with patch.object(s, 'HAVE_YTDL', True), \
+                patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, '_ytdl_playlist_full',
+                             return_value=(messy, [track(1)])):
+            self._submit('https://www.youtube.com/playlist?list=PLabc')
+        self.assertEqual(self.app.store.playlists[-1]['name'],
+                         'Chill Mix 2')
 
     def test_url_import_needs_ytdlp(self):
         with patch.object(s, 'HAVE_YTDL', False):
