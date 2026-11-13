@@ -303,6 +303,7 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
             audioPlayer.pause()
             snapshotSession()
         }
+        viewModelScope.launch { repo.recordPlay(track) }
         navigateTo(NavDest.Video(track))
     }
 
