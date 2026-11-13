@@ -6617,3 +6617,71 @@ class StartRadioTests(unittest.TestCase):
         self.app.open_playback_context(0, 0)
         self.assertIn('Start radio',
                       [l for l, _ in self.app.context_items()])
+
+
+class RowHeartClickTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def _render_row(self, selected=False, liked=False):
+        from collections import defaultdict
+        t = track(1)
+        if liked:
+            self.app.liked_ids.add(t['id'])
+            self.app.store.liked = [t]
+        self.app.pal = defaultdict(int)
+        self.app.rects = []
+        self.app.sel['liked:'] = 0 if selected else 3
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        with patch.object(s, 'put'), patch.object(s, 'fill'):
+            ui.row(5, 20, 90, t, 0, 'liked:', 0, show_date=True)
+        return t
+
+    def _click(self, r, bstate=None):
+        b = bstate if bstate is not None \
+            else getattr(s.curses, 'BUTTON1_PRESSED', 2)
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, r['x0'] + 1, r['y0'], 0, b)):
+            s.handle_mouse(self.app)
+
+    def test_heart_hit_only_when_visible(self):
+        self._render_row(selected=False, liked=False)
+        self.assertFalse([r for r in self.app.rects
+                          if r['act'] == 'likesong'])
+        self._render_row(selected=True)
+        self.assertEqual(len([r for r in self.app.rects
+                              if r['act'] == 'likesong']), 1)
+        self._render_row(liked=True)
+        self.assertEqual(len([r for r in self.app.rects
+                              if r['act'] == 'likesong']), 1)
+
+    def test_click_heart_likes_and_unlikes(self):
+        t = self._render_row(selected=True)
+        r = next(r for r in self.app.rects if r['act'] == 'likesong')
+        self._click(r)
+        self.assertIn(t['id'], self.app.liked_ids)
+        self.assertIn('Added to Liked Songs', self.app.toast[0])
+        self._render_row(liked=True)
+        r = next(r for r in self.app.rects if r['act'] == 'likesong')
+        self._click(r)
+        self.assertNotIn(t['id'], self.app.liked_ids)
+        self.assertIn('Removed from Liked Songs', self.app.toast[0])
+
+    def test_right_click_heart_still_opens_menu(self):
+        t = self._render_row(selected=True)
+        self.app.store.liked = [t]   # the row menu needs a real view list
+        r = next(r for r in self.app.rects if r['act'] == 'likesong')
+        b3 = getattr(s.curses, 'BUTTON3_PRESSED', 2097152)
+        self._click(r, b3)
+        self.assertEqual(self.app.mode, 'context')
+        self.assertIn('track', self.app.ctx)
