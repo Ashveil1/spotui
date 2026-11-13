@@ -194,6 +194,7 @@ enum class SearchFilter(val label: String) {
 sealed interface NavDest {
     data object Home : NavDest
     data object Search : NavDest
+    data object Shorts : NavDest
     data object Library : NavDest
     data object Liked : NavDest
     data object History : NavDest

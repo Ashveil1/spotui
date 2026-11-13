@@ -44,6 +44,7 @@ import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.ViewSidebar
@@ -90,6 +91,7 @@ import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.NowPlayingScreen
 import com.example.ui.screens.QueueScreen
 import com.example.ui.screens.SearchScreen
+import com.example.ui.screens.ShortsScreen
 import com.example.ui.screens.SimilarScreen
 import com.example.ui.screens.StatsScreen
 import com.example.ui.screens.VideoScreen
@@ -232,7 +234,7 @@ private fun SpotUiRoot(
                             sleepEot = state.sleepEot,
                             privateSession = state.privateSession,
                             onNavigate = { dest ->
-                                if (dest is NavDest.Home || dest is NavDest.Search || dest is NavDest.Stats) {
+                                if (dest is NavDest.Home || dest is NavDest.Search || dest is NavDest.Stats || dest is NavDest.Shorts) {
                                     viewModel.switchTab(dest)
                                 } else {
                                     viewModel.navigateTo(dest)
@@ -260,6 +262,7 @@ private fun SpotUiRoot(
                             when (val dest = state.currentDest) {
                                 NavDest.Home -> HomeScreen(state = state, viewModel = viewModel, isWide = isWide)
                                 NavDest.Search -> SearchScreen(state = state, viewModel = viewModel)
+                                NavDest.Shorts -> ShortsScreen(viewModel, onClose = { viewModel.goBack() })
                                 NavDest.Library -> LibraryScreen(state = state, viewModel = viewModel)
                                 NavDest.Liked -> CollectionScreen("liked", null, state, viewModel)
                                 NavDest.History -> CollectionScreen("history", null, state, viewModel)
@@ -391,6 +394,7 @@ private fun SpotTopBar(
     val title = when (dest) {
         NavDest.Home -> "SpotUI"
         NavDest.Search -> "Search"
+        NavDest.Shorts -> "Shorts"
         NavDest.Library -> stringResource(R.string.your_library)
         NavDest.Liked -> stringResource(R.string.liked_songs)
         NavDest.History -> stringResource(R.string.recently_played)
@@ -494,6 +498,7 @@ private fun CompactBottomNavBar(
         val navItems = listOf(
             Triple(NavDest.Home, "Home", Icons.Rounded.Home),
             Triple(NavDest.Search, "Search", Icons.Rounded.Search),
+            Triple(NavDest.Shorts, "Shorts", Icons.Rounded.Movie),
             Triple(NavDest.Library, "Library", Icons.Rounded.LibraryMusic),
             Triple(NavDest.Stats, "Stats", Icons.Rounded.BarChart)
         )
