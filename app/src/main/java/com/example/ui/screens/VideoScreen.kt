@@ -5,9 +5,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -36,9 +40,12 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
+import com.example.data.model.NavDest
 import com.example.data.model.Track
 import com.example.data.remote.YouTubeClient
+import com.example.ui.components.TrackRow
 import com.example.ui.theme.LocalSpotColors
+import com.example.ui.viewmodel.ActiveModal
 import com.example.ui.viewmodel.SpotUiViewModel
 
 @OptIn(UnstableApi::class)
@@ -46,13 +53,18 @@ import com.example.ui.viewmodel.SpotUiViewModel
 fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
     val spot = LocalSpotColors.current
     val context = LocalContext.current
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     var stream by remember { mutableStateOf<YouTubeClient.VideoStream?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var related by remember { mutableStateOf<List<Track>?>(null) }
 
     val player = remember { ExoPlayer.Builder(context).build() }
 
     LaunchedEffect(track.id) {
         error = null
+        stream = null
+        related = null
+        player.stop()
         viewModel.resolveVideoStream(track.id)
             .onSuccess { vs ->
                 stream = vs
@@ -73,6 +85,7 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
                 player.playWhenReady = true
             }
             .onFailure { error = it.message ?: "No playable video stream found" }
+        related = viewModel.fetchRelated(track.id).getOrNull()
     }
 
     DisposableEffect(Unit) {
@@ -126,7 +139,7 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .aspectRatio(16f / 9f),
             contentAlignment = Alignment.Center
         ) {
             AndroidView(
@@ -155,6 +168,44 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
                         text = "Finding stream...",
                         color = spot.textDim,
                         style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = "Up next",
+            color = Color.White,
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+        LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            val rel = related
+            if (rel == null) {
+                item {
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth().padding(24.dp)
+                    ) {
+                        CircularProgressIndicator(color = spot.accent)
+                    }
+                }
+            } else {
+                itemsIndexed(rel, key = { idx, t -> "rel_${'$'}{t.id}_${'$'}idx" }) { idx, t ->
+                    TrackRow(
+                        track = t,
+                        index = idx,
+                        isCurrent = false,
+                        isPlaying = false,
+                        isLiked = t.id in state.likedIds,
+                        isBlocked = t.id in state.blockedIds,
+                        reducedMotion = state.prefs.reducedMotion,
+                        playCount = state.library.playCounts[t.id]?.count ?: 0,
+                        onClick = { viewModel.navigateTo(NavDest.Video(t)) },
+                        onLongClick = { viewModel.openModal(ActiveModal.SongMenu(t, "Up next")) },
+                        onArtistClick = { viewModel.navigateTo(NavDest.Artist(it)) },
+                        onToggleLike = { viewModel.toggleLike(t) },
+                        onMoreClick = { viewModel.openModal(ActiveModal.SongMenu(t, "Up next")) }
                     )
                 }
             }

@@ -261,6 +261,9 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
     suspend fun resolveVideoStream(videoId: String): Result<YouTubeClient.VideoStream> =
         repo.resolveVideoStream(videoId)
 
+    suspend fun fetchRelated(videoId: String): Result<List<Track>> =
+        repo.fetchRelated(videoId)
+
     fun switchTab(dest: NavDest) {
         _uiState.update { s ->
             s.copy(backStack = listOf(dest), findActive = false, findQuery = "")

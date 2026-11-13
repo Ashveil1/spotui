@@ -90,6 +90,53 @@ class YouTubeClient {
     }
 
 
+
+    suspend fun fetchRelated(videoId: String, limit: Int = 25): Result<List<Track>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val body = JSONObject().apply {
+                put("context", webContextJson())
+                put("videoId", videoId)
+            }
+            val root = innertubePost("next", body)
+                ?: throw RuntimeException("Could not load related videos")
+            val tracks = mutableListOf<Track>()
+            val seen = mutableSetOf<String>()
+            collectRelatedRenderersDeep(root, tracks, seen, limit)
+            if (tracks.isEmpty()) throw RuntimeException("No related videos found")
+            tracks.toList()
+        }
+    }
+
+    private fun collectRelatedRenderersDeep(
+        node: Any?,
+        out: MutableList<Track>,
+        seen: MutableSet<String>,
+        limit: Int
+    ) {
+        if (node == null || out.size >= limit) return
+        when (node) {
+            is JSONObject -> {
+                val vr = node.optJSONObject("compactVideoRenderer")
+                    ?: node.optJSONObject("videoRenderer")
+                if (vr != null) {
+                    val t = parseVideoObject(vr)
+                    if (t != null && seen.add(t.id)) out.add(t)
+                }
+                val keys = node.keys()
+                while (keys.hasNext() && out.size < limit) {
+                    collectRelatedRenderersDeep(node.opt(keys.next()), out, seen, limit)
+                }
+            }
+            is JSONArray -> {
+                var i = 0
+                while (i < node.length() && out.size < limit) {
+                    collectRelatedRenderersDeep(node.opt(i), out, seen, limit)
+                    i++
+                }
+            }
+        }
+    }
+
     suspend fun fetchHomeFeed(limit: Int = 60): Result<List<Track>> = withContext(Dispatchers.IO) {
         runCatching {
             val body = JSONObject().apply {
