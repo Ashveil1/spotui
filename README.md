@@ -142,7 +142,7 @@ Right-click the player bar for playback options: like, song info, lyrics, the
 equalizer, volume leveling, the sleep timer and Recent notices - a log of
 the last 30 toasts with their age, so a message you missed is never gone. Right-click a home tile: playlists get
 their full menu, and Liked Songs offers play, shuffle play and open.
-Right-click Liked Songs or Recently Played in the sidebar for quick menus
+Right-click a playlist, Liked Songs or Recently Played header band (the colored art strip at the top) for that collection's own menu - same as right-clicking it in the sidebar. Right-click an artist page's header for the artist menu. Right-click Liked Songs or Recently Played in the sidebar for quick menus
 (open, play, shuffle, clear history). Right-click a mix card on home to play
 it, queue it or open its artist. Right-click a song card (Made for you,
 On repeat, stats) for the full song menu.

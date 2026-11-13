@@ -5195,6 +5195,8 @@ class UI:
             if new:
                 sub += f" \u00b7 {new} new this month"
         put(scr, cy + 2, hx, sub, pal[f"g{fi}d"])
+        # right-click the header band for the collection's own menu
+        self.hit(x0, cy, W - x0, 4, "colhead", (kind, arg))
 
         by = cy + 4
         put(scr, by, x0 + 3, f" {IC_PLAY} ", pal["btn"], curses.A_BOLD)
@@ -5249,6 +5251,8 @@ class UI:
         else:
             sub = "Nothing in your library yet"
         put(scr, cy + 2, hx, sub, pal[f"g{fi}d"])
+        # right-click the header band for the artist menu
+        self.hit(x0, cy, W - x0, 4, "colhead", ("artist", name))
         by = cy + 4
         put(scr, by, x0 + 3, f" {IC_PLAY} ", pal["btn"], curses.A_BOLD)
         self.hit(x0 + 2, by - 1 if by else by, 5, 2, "playall", (vk, tracks))
@@ -6726,6 +6730,17 @@ def handle_mouse(app):
                     return
             if r["act"] == "pbzone":
                 app.open_playback_context(mx, my)
+                return
+            if r["act"] == "colhead":
+                kind2, pi2 = r["arg"]
+                if kind2 == "playlist":
+                    app.open_playlist_context(pi2, mx, my)
+                elif kind2 == "liked":
+                    app.open_liked_context(mx, my)
+                elif kind2 == "history":
+                    app.open_history_context(mx, my)
+                elif kind2 == "artist":
+                    app.open_artist_context(pi2, mx, my)
                 return
             if r["act"] == "row":
                 vk, idx = r["arg"][0], r["arg"][1]
