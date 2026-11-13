@@ -5010,3 +5010,81 @@ class PlaybackContextTests(unittest.TestCase):
             s.handle_mouse(self.app)
         self.assertEqual(self.app.mode, "context")
         self.assertTrue(self.app.ctx["pb"])
+
+
+class HomeTileContextTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+        self.app.store.liked = [track(1), track(2), track(3)]
+        self.app.liked_ids = {t["id"] for t in self.app.store.liked}
+        self.app.store.playlists = [dict(name='Gym', tracks=[track(4)])]
+
+    def labels(self):
+        return [l for l, _ in self.app.context_items()]
+
+    def test_liked_tile_items(self):
+        self.app.open_liked_context(5, 5)
+        self.assertEqual(self.app.mode, "context")
+        self.assertEqual(self.labels(),
+                         ["Play", "Shuffle play", "Open Liked Songs"])
+
+    def test_liked_exec_play(self):
+        self.app.play = Mock()
+        self.app.open_liked_context(5, 5)
+        self.app.context_exec(self.labels().index("Play"))
+        self.app.play.assert_called_once()
+        self.assertEqual(len(self.app.play.call_args[0][0]), 3)
+
+    def test_liked_exec_shuffle(self):
+        self.app.play = Mock()
+        self.app.open_liked_context(5, 5)
+        self.app.context_exec(self.labels().index("Shuffle play"))
+        self.app.play.assert_called_once()
+        played = self.app.play.call_args[0][0]
+        self.assertEqual(sorted(t["id"] for t in played),
+                         sorted(t["id"] for t in self.app.store.liked))
+        self.assertEqual(self.app.play.call_args[0][2], "Liked Songs")
+
+    def test_liked_exec_open(self):
+        self.app.open_liked_context(5, 5)
+        self.app.context_exec(self.labels().index("Open Liked Songs"))
+        self.assertEqual(self.app.stack[-1][0], "liked")
+
+    def test_liked_shuffle_empty_toasts(self):
+        self.app.store.liked = []
+        self.app.toast_now = Mock()
+        self.app.play = Mock()
+        self.app.shuffle_liked()
+        self.app.play.assert_not_called()
+        self.app.toast_now.assert_called_once()
+
+    def test_right_click_playlist_tile_opens_playlist_menu(self):
+        self.app.rects = [{"x0": 2, "y0": 10, "x1": 28, "y1": 13,
+                           "act": "tile", "arg": ("playlist", 0)}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 10, 11, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mode, "context")
+        self.assertEqual(self.app.ctx["pl"], 0)
+
+    def test_right_click_liked_tile_opens_liked_menu(self):
+        self.app.rects = [{"x0": 2, "y0": 10, "x1": 28, "y1": 13,
+                           "act": "tile", "arg": ("liked", None)}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 10, 11, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mode, "context")
+        self.assertTrue(self.app.ctx["likedctx"])

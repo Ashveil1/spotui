@@ -2687,6 +2687,18 @@ class App:
                     out.append(t)
         return out
 
+    def shuffle_liked(self):
+        """Shuffle Liked Songs into the queue (home tile menu)."""
+        pool = [t for t in self.store.liked
+                if t.get("id") not in self.blocked_ids]
+        if not pool:
+            self.toast_now("Like some songs first")
+            return
+        tracks = smart_shuffle(pool, mode=self.store.shuffle_mode,
+                               plays=self.store.plays)
+        self.play(tracks, 0, "Liked Songs")
+        self.toast_now(f"Shuffling Liked Songs - {len(tracks)} songs")
+
     def shuffle_library(self):
         """Z: shuffle the whole library into the queue."""
         pool = [t for t in self.library_tracks()
@@ -3326,6 +3338,11 @@ class App:
         self.ctx = {"pl": pi, "x": x, "y": y, "sel": 0}
         self.mode = "context"
 
+    def open_liked_context(self, x, y):
+        """Right-click menu for the Liked Songs home tile."""
+        self.ctx = {"likedctx": True, "x": x, "y": y, "sel": 0}
+        self.mode = "context"
+
     def close_context(self):
         self.ctx = None
         self.mode = "normal"
@@ -3353,6 +3370,12 @@ class App:
                 ("Sleep timer", self.cycle_sleep),
             ]
             return items
+        if "likedctx" in c:
+            return [
+                ("Play", lambda: self.play_tile("liked", None)),
+                ("Shuffle play", self.shuffle_liked),
+                ("Open Liked Songs", lambda: self.push("liked")),
+            ]
         if "pl" in c:
             pi = c["pl"]
             if not 0 <= pi < len(self.store.playlists):
@@ -5430,6 +5453,8 @@ class UI:
         box(self.scr, y, x, w, h, pal["dim"], pal["side"])
         if "pb" in app.ctx:
             title = "Playback"
+        elif "likedctx" in app.ctx:
+            title = "Liked Songs"
         elif "track" in app.ctx:
             title = app.ctx["track"].get("title") or ""
         elif 0 <= app.ctx["pl"] < len(app.store.playlists):
@@ -6081,6 +6106,13 @@ def handle_mouse(app):
         for r in reversed(app.rects):
             if not (r["x0"] <= mx < r["x1"] and r["y0"] <= my < r["y1"]):
                 continue
+            if r["act"] == "tile":
+                if r["arg"][0] == "playlist":
+                    app.open_playlist_context(r["arg"][1], mx, my)
+                    return
+                if r["arg"][0] == "liked":
+                    app.open_liked_context(mx, my)
+                    return
             if r["act"] == "libitem" and r["arg"][0] == "playlist":
                 app.open_playlist_context(r["arg"][1], mx, my)
                 return
