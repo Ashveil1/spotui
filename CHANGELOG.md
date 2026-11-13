@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-13
 
+- Now Playing's big cover art is clickable: click to pause/resume, right-click for the full song menu (radio, lyrics, queue...).
 - A row's heart is clickable: select a song (or find one already liked) and click the heart to like/unlike it with the mouse, like Spotify's hover heart. Right-clicking the heart still opens the song menu.
 - Start radio: right-click any song (or the player bar) and choose Start radio to play it and line up similar songs from YouTube's auto-Mix - the manual radio now also wins the race against autoplay instead of silently losing it.
 - `python3 spotui.py --import-url <youtube-playlist-url>` imports a YouTube playlist headless from the shell (needs yt-dlp), keeping its real YouTube title and deduping the name - handy for scripts and Termux, no TUI needed.

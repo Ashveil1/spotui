@@ -4490,6 +4490,8 @@ class UI:
         ay = y0 + 3
         draw_art(scr, ay, ax, aw, ah, track["id"], pal, icon=IC_NOTE,
                  art=app.cover_for(track["id"], aw, ah))
+        # click the cover to pause/resume; right-click for the song menu
+        self.hit(ax, ay, aw, ah, "cover", track)
         tx = ax + aw + 4 if wide else x0 + 2
         ty = ay if wide else ay + ah + 1
         tw = max(8, W - tx - 3)
@@ -6765,6 +6767,9 @@ def handle_mouse(app):
                 else:
                     app.open_track_context(arg, "Listening stats", mx, my)
                 return
+            if r["act"] == "cover":
+                app.open_track_context(r["arg"], "Now Playing", mx, my)
+                return
             if r["act"] == "qjump":
                 qi = r["arg"]
                 if 0 <= qi < len(app.queue):
@@ -6905,6 +6910,8 @@ def handle_mouse(app):
             app.next()
         elif act == "heart":
             app.like(app.current)
+        elif act == "cover":
+            app.toggle()
         elif act == "likesong":
             app.like(arg)
         elif act == "addq":
