@@ -2161,6 +2161,18 @@ class App:
         self.toast_now(f"{m['name']}: {len(tracks)} songs - "
                        f"{m['artist']} and more")
 
+    def queue_mix(self, i):
+        """Append a daily mix's songs to the queue (mix card menu)."""
+        mixes = daily_mixes(self.store)
+        if not 0 <= i < len(mixes):
+            return
+        m = mixes[i]
+        if not m["tracks"]:
+            return
+        self.queue_revision += 1
+        self.queue.extend(list(m["tracks"]))
+        self.toast_now(f"Queued {m['name']} - {len(m['tracks'])} songs")
+
     def cycle_shuffle_mode(self):
         i = SHUFFLE_MODES.index(self.store.shuffle_mode)
         self.store.shuffle_mode = SHUFFLE_MODES[(i + 1) % len(SHUFFLE_MODES)]
@@ -3348,6 +3360,15 @@ class App:
         self.ctx = {"histctx": True, "x": x, "y": y, "sel": 0}
         self.mode = "context"
 
+    def open_mix_context(self, i, x, y):
+        """Right-click menu for a Your mixes card on home."""
+        mixes = daily_mixes(self.store)
+        if not 0 <= i < len(mixes):
+            return
+        self.ctx = {"mixctx": i, "name": mixes[i]["name"],
+                    "x": x, "y": y, "sel": 0}
+        self.mode = "context"
+
     def close_context(self):
         self.ctx = None
         self.mode = "normal"
@@ -3392,6 +3413,20 @@ class App:
                     self.mode = "confirm_clearhist"
 
                 items.append(("Clear listening history", ask_clear))
+            return items
+        if "mixctx" in c:
+            i = c["mixctx"]
+            mixes = daily_mixes(self.store)
+            if not 0 <= i < len(mixes):
+                return []
+            m = mixes[i]
+            items = [
+                ("Play mix", lambda: self.play_mix(i)),
+                ("Add mix to queue", lambda: self.queue_mix(i)),
+            ]
+            if m.get("artist"):
+                items.append((f"More from {m['artist']}",
+                              lambda: self.push("artist", m["artist"])))
             return items
         if "pl" in c:
             pi = c["pl"]
@@ -5474,6 +5509,8 @@ class UI:
             title = "Liked Songs"
         elif "histctx" in app.ctx:
             title = "Recently Played"
+        elif "mixctx" in app.ctx:
+            title = app.ctx.get("name") or "Mix"
         elif "track" in app.ctx:
             title = app.ctx["track"].get("title") or ""
         elif 0 <= app.ctx["pl"] < len(app.store.playlists):
@@ -6132,6 +6169,9 @@ def handle_mouse(app):
                 if r["arg"][0] == "liked":
                     app.open_liked_context(mx, my)
                     return
+            if r["act"] == "mix":
+                app.open_mix_context(r["arg"], mx, my)
+                return
             if r["act"] == "libitem":
                 if r["arg"][0] == "playlist":
                     app.open_playlist_context(r["arg"][1], mx, my)

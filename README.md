@@ -141,7 +141,8 @@ Right-click the player bar for playback options: like, song info, the
 equalizer, volume leveling and the sleep timer. Right-click a home tile: playlists get
 their full menu, and Liked Songs offers play, shuffle play and open.
 Right-click Liked Songs or Recently Played in the sidebar for quick menus
-(open, play, shuffle, clear history). `Ctrl+Z` suspends cleanly; the screen
+(open, play, shuffle, clear history). Right-click a mix card on home to play
+it, queue it or open its artist. `Ctrl+Z` suspends cleanly; the screen
 repaints on resume.
 
 ## Where is my data?

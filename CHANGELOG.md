@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Right-click a Your mixes card on home: play the mix, add it to the queue, or open the artist behind it.
 - Right-click Recently Played or Liked Songs in the sidebar: open, play again, shuffle, or clear listening history (with confirmation).
 - Right-click the Liked Songs home tile for play, shuffle play and open; playlist tiles open the full playlist menu.
 - Right-click the player bar for a Playback menu: like, song info, equalizer, volume leveling (mpv dynaudnorm - keeps loud and quiet songs closer, saved) and the sleep timer.
