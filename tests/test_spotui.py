@@ -5691,7 +5691,8 @@ class LyricsTests(unittest.TestCase):
     def test_fetch_lyrics_parses_plain(self):
         with patch('urllib.request.urlopen',
                    return_value=_FakeResponse({'plainLyrics': 'la la\nla'})):
-            self.assertEqual(s.fetch_lyrics('Song', 'Artist'), 'la la\nla')
+            self.assertEqual(s.fetch_lyrics('Song', 'Artist'),
+                             {'plain': 'la la\nla', 'synced': None})
 
     def test_fetch_lyrics_missing_or_error(self):
         with patch('urllib.request.urlopen',
@@ -5704,7 +5705,9 @@ class LyricsTests(unittest.TestCase):
     def test_open_lyrics_fetches_and_caches(self):
         t = track(1)
         with patch.object(s.threading, 'Thread', _InlineThread), \
-                patch.object(s, 'fetch_lyrics', return_value='words here') as f:
+                patch.object(s, 'fetch_lyrics',
+                             return_value={'plain': 'words here',
+                                           'synced': None}) as f:
             self.app.open_lyrics(t)
         self.assertEqual(self.app.mode, 'lyrics')
         self.assertEqual(self.app.lyrics_track['id'], '1')
@@ -5744,7 +5747,9 @@ class LyricsTests(unittest.TestCase):
         t = track(1)
         with patch.object(s.threading, 'Thread', _InlineThread), \
                 patch.object(s, 'fetch_lyrics',
-                             return_value='\n'.join(f'line {i}' for i in range(50))):
+                             return_value={'plain': '\n'.join(
+                                 f'line {i}' for i in range(50)),
+                                 'synced': None}):
             self.app.open_lyrics(t)
         self.app.lyrics_max_off = 30
         s.handle_key(self.app, 'j')
@@ -5762,7 +5767,9 @@ class LyricsTests(unittest.TestCase):
     def test_lyrics_modal_y_copies(self):
         t = track(1)
         with patch.object(s.threading, 'Thread', _InlineThread), \
-                patch.object(s, 'fetch_lyrics', return_value='some words'):
+                patch.object(s, 'fetch_lyrics',
+                             return_value={'plain': 'some words',
+                                           'synced': None}):
             self.app.open_lyrics(t)
         seen = []
         self.app.copy_text = lambda text, what='Text': seen.append((text, what)) or True
@@ -5774,7 +5781,8 @@ class LyricsTests(unittest.TestCase):
         t = track(1)
         self.app.current = t
         with patch.object(s.threading, 'Thread', _InlineThread), \
-                patch.object(s, 'fetch_lyrics', return_value='hi'):
+                patch.object(s, 'fetch_lyrics',
+                             return_value={'plain': 'hi', 'synced': None}):
             s.handle_key(self.app, '\t')
         self.assertEqual(self.app.mode, 'lyrics')
         self.assertEqual(self.app.lyrics_track['id'], '1')
@@ -5786,7 +5794,8 @@ class LyricsTests(unittest.TestCase):
         labels = [l for l, _ in self.app.context_items()]
         self.assertIn('Lyrics', labels)
         with patch.object(s.threading, 'Thread', _InlineThread), \
-                patch.object(s, 'fetch_lyrics', return_value='hi'):
+                patch.object(s, 'fetch_lyrics',
+                             return_value={'plain': 'hi', 'synced': None}):
             self.app.context_exec(labels.index('Lyrics'))
         self.assertEqual(self.app.mode, 'lyrics')
 
@@ -5807,3 +5816,144 @@ class LyricsTests(unittest.TestCase):
         self.app.store.save()
         fresh = s.Store()
         self.assertNotIn('9', fresh.lyrics)
+
+
+class SyncedLyricsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_parse_lrc(self):
+        self.assertEqual(
+            s.parse_lrc('[01:10.50] hi\n junk\n[00:05.00] first'),
+            [(5.0, 'first'), (70.5, 'hi')])
+        self.assertEqual(s.parse_lrc('no stamps here'), [])
+        self.assertEqual(s.parse_lrc(None), [])
+
+    def test_fetch_lyrics_parses_synced(self):
+        payload = {'plainLyrics': 'x',
+                   'syncedLyrics': '[00:10.00] hi\n[00:05.00] first'}
+        with patch('urllib.request.urlopen',
+                   return_value=_FakeResponse(payload)):
+            self.assertEqual(
+                s.fetch_lyrics('Song', 'Artist'),
+                {'plain': 'x', 'synced': [(5.0, 'first'), (10.0, 'hi')]})
+
+    def test_fetch_lyrics_synced_only(self):
+        payload = {'plainLyrics': None,
+                   'syncedLyrics': '[00:05.00] only'}
+        with patch('urllib.request.urlopen',
+                   return_value=_FakeResponse(payload)):
+            self.assertEqual(s.fetch_lyrics('Song', 'Artist'),
+                             {'plain': None, 'synced': [(5.0, 'only')]})
+
+    def test_worker_stores_synced(self):
+        t = track(1)
+        res = {'plain': 'p', 'synced': [(5.0, 'first'), (10.0, 'hi')]}
+        with patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, 'fetch_lyrics', return_value=res):
+            self.app.open_lyrics(t)
+        entry = self.app.store.lyrics['1']
+        self.assertEqual(entry['text'], 'p')
+        self.assertEqual(entry['synced'], [(5.0, 'first'), (10.0, 'hi')])
+
+    def test_lyrics_active(self):
+        synced = [(0.0, 'a'), (10.0, 'b'), (20.0, 'c')]
+        self.app.mpv.state = {'pos': 15.0}
+        self.assertEqual(self.app.lyrics_active(synced), 1)
+        self.app.mpv.state = {'pos': 0.0}
+        self.assertEqual(self.app.lyrics_active(synced), 0)
+        self.app.mpv.state = {'pos': 3.0}
+        self.assertEqual(self.app.lyrics_active(synced), 0)
+        synced2 = [(10.0, 'b')]
+        self.app.mpv.state = {'pos': 3.0}
+        self.assertEqual(self.app.lyrics_active(synced2), -1)
+        self.app.mpv.state = {}
+        self.assertIsNone(self.app.lyrics_active(synced))
+
+    def _seed_synced(self, pos=15.0):
+        t = track(1)
+        synced = [[float(i * 10), f'line {i}'] for i in range(6)]
+        self.app.store.lyrics['1'] = {'text': 'p', 'ts': 1, 'synced': synced}
+        self.app.current = t
+        self.app.lyrics_track = dict(t)
+        self.app.mode = 'lyrics'
+        self.app.mpv.state = {'pos': pos}
+        return t
+
+    def test_modal_highlights_active_line(self):
+        from collections import defaultdict
+        self._seed_synced(pos=15.0)
+        self.app.pal = defaultdict(int, {'green': 7, 'side': 3,
+                                         'sfaint': 2, 'dim': 1})
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        seen = []
+
+        def fake_put(sc, y, x, text, pair=None, *a, **k):
+            seen.append((str(text), pair, a))
+
+        with patch.object(s, 'put', side_effect=fake_put):
+            ui.lyrics_modal(120)
+        by_text = {txt: (pair, a) for txt, pair, a in seen}
+        self.assertEqual(by_text['line 1'][0], 7)     # active = green
+        self.assertTrue(by_text['line 1'][1])          # and bold
+        self.assertEqual(by_text['line 0'][0], 3)     # others = side
+        self.assertIn('G follow', seen[-1][0])
+
+    def test_modal_no_highlight_for_other_song(self):
+        from collections import defaultdict
+        self._seed_synced(pos=15.0)
+        self.app.current = track(2)     # lyrics open for a different song
+        self.app.pal = defaultdict(int, {'green': 7, 'side': 3,
+                                         'sfaint': 2, 'dim': 1})
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        seen = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, text, pair=None, *a, **k:
+                          seen.append((str(text), pair))):
+            ui.lyrics_modal(120)
+        by_text = {txt: pair for txt, pair in seen}
+        self.assertEqual(by_text['line 1'], 3)        # no green highlight
+
+    def test_follow_centers_active_line(self):
+        from collections import defaultdict
+        t = self._seed_synced(pos=255.0)               # active = line 25
+        synced = [[float(i * 10), f'line {i}'] for i in range(40)]
+        self.app.store.lyrics['1']['synced'] = synced
+        self.app.pal = defaultdict(int)
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        with patch.object(s, 'put'):
+            ui.lyrics_modal(120)
+        self.assertGreater(self.app.lyrics_off, 0)     # followed down
+        s.handle_key(self.app, 'j')
+        self.assertFalse(self.app.lyrics_follow)       # manual scroll wins
+        s.handle_key(self.app, 'G')
+        self.assertTrue(self.app.lyrics_follow)        # G re-engages
+
+    def test_synced_survives_save_load(self):
+        self.app.store.lyrics['9'] = {'text': 'p', 'ts': 1,
+                                      'synced': [[5.0, 'a'], [10.0, 'b']]}
+        self.app.store.save()
+        fresh = s.Store()
+        self.assertEqual(fresh.lyrics['9']['synced'],
+                         [[5.0, 'a'], [10.0, 'b']])
+
+    def test_synced_load_ignores_junk(self):
+        self.app.store.lyrics['9'] = {'text': 'p', 'ts': 1,
+                                      'synced': [['x', 'a'], [10.0, 5], 'no']}
+        self.app.store.save()
+        fresh = s.Store()
+        self.assertNotIn('synced', fresh.lyrics['9'])
