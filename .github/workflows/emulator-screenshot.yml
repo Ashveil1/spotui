@@ -30,18 +30,21 @@ jobs:
           script: |
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb shell am start -n com.aistudio.spotui.kxmzpq/com.example.MainActivity
-            sleep 25
-            adb shell dumpsys activity activities | grep -iE 'ResumedActivity' > foreground.txt || true
+            sleep 40
             adb exec-out screencap -p > shot1.png
             adb shell input tap 360 800
-            sleep 10
+            sleep 6
             adb exec-out screencap -p > shot2.png
-            adb shell dumpsys activity activities | grep -iE 'ResumedActivity' >> foreground.txt || true
+            adb shell input tap 360 800
+            sleep 6
+            adb exec-out screencap -p > shot3.png
+            adb shell dumpsys activity activities | grep -iE 'ResumedActivity' > foreground.txt || true
       - uses: actions/upload-artifact@v4
         with:
           name: emulator-screenshot
           path: |
             shot1.png
             shot2.png
+            shot3.png
             foreground.txt
           if-no-files-found: error
