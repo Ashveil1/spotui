@@ -91,6 +91,7 @@ import com.example.ui.screens.QueueScreen
 import com.example.ui.screens.SearchScreen
 import com.example.ui.screens.SimilarScreen
 import com.example.ui.screens.StatsScreen
+import com.example.ui.screens.VideoScreen
 import com.example.ui.theme.LocalSpotColors
 import com.example.ui.theme.SpotUiTheme
 import com.example.ui.viewmodel.ActiveModal
@@ -270,6 +271,7 @@ private fun SpotUiRoot(
                                 NavDest.NowPlaying -> NowPlayingScreen(state, viewModel)
                                 NavDest.Stats -> StatsScreen(state, viewModel)
                                 NavDest.Similar -> SimilarScreen(state, viewModel)
+                                is NavDest.Video -> VideoScreen(dest.track, viewModel, onClose = { viewModel.goBack() })
                             }
                         }
                     }
@@ -396,6 +398,7 @@ private fun SpotTopBar(
         NavDest.NowPlaying -> "Now Playing"
         NavDest.Stats -> stringResource(R.string.stats_title)
         NavDest.Similar -> stringResource(R.string.made_for_you)
+        is NavDest.Video -> dest.track.title
     }
 
     Row(

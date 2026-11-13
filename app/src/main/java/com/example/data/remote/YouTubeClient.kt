@@ -123,19 +123,98 @@ class YouTubeClient {
 
     suspend fun resolveAudioStreamUrl(videoId: String): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            val clientConfigs = listOf(
-                ClientSpec("ANDROID_VR", "1.60.19", "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip", 32, "12L"),
-                ClientSpec("IOS", "20.10.4", "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)", null, null),
-                ClientSpec("ANDROID", "20.10.38", "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip", 34, "14")
-            )
-
-            for (spec in clientConfigs) {
+            for (spec in CLIENT_SPECS) {
                 val url = tryPlayerClient(videoId, spec)
                 if (!url.isNullOrBlank()) return@runCatching url
             }
 
             throw RuntimeException("No playable audio stream found")
         }
+    }
+
+
+    data class VideoStream(
+        val videoUrl: String,
+        val audioUrl: String?,
+        val qualityLabel: String,
+        val muxed: Boolean
+    )
+
+    suspend fun resolveVideoStream(videoId: String): Result<VideoStream> = withContext(Dispatchers.IO) {
+        runCatching {
+            for (spec in CLIENT_SPECS) {
+                val vs = tryPlayerVideoClient(videoId, spec)
+                if (vs != null) return@runCatching vs
+            }
+            throw RuntimeException("No playable video stream found")
+        }
+    }
+
+    private fun tryPlayerVideoClient(videoId: String, spec: ClientSpec): VideoStream? {
+        return runCatching {
+            val clientObj = JSONObject().apply {
+                put("clientName", spec.name)
+                put("clientVersion", spec.version)
+                put("hl", "en")
+                put("gl", "US")
+                if (spec.androidSdk != null) put("androidSdkVersion", spec.androidSdk)
+                if (spec.osVersion != null) put("osVersion", spec.osVersion)
+            }
+            val body = JSONObject().apply {
+                put("context", JSONObject().put("client", clientObj))
+                put("videoId", videoId)
+                put("contentCheckOk", true)
+                put("racyCheckOk", true)
+            }
+            val root = innertubePost("player", body, userAgent = spec.userAgent) ?: return null
+            val status = root.optJSONObject("playabilityStatus")?.optString("status")
+            if (status != null && status != "OK") return null
+            val streaming = root.optJSONObject("streamingData") ?: return null
+            selectVideoStream(streaming)
+        }.getOrNull()
+    }
+
+    private fun selectVideoStream(streaming: JSONObject): VideoStream? {
+        val adaptive = streaming.optJSONArray("adaptiveFormats")
+        // Prefer a high-quality video-only stream paired with the best audio.
+        val videoOnly = pickBestVideo(adaptive, maxHeight = 1080, requireAudio = false)
+        val audio = pickBestAudioUrl(adaptive)
+        if (videoOnly != null && audio != null) {
+            return VideoStream(videoOnly.first, audio, videoOnly.second, muxed = false)
+        }
+        // Otherwise the best muxed (audio+video) stream, usually 360p/720p.
+        val mux = pickBestVideo(streaming.optJSONArray("formats"), maxHeight = 720, requireAudio = true)
+            ?: pickBestVideo(adaptive, maxHeight = 720, requireAudio = true)
+        if (mux != null) return VideoStream(mux.first, null, mux.second, muxed = true)
+        return null
+    }
+
+    private fun pickBestVideo(arr: JSONArray?, maxHeight: Int, requireAudio: Boolean): Pair<String, String>? {
+        if (arr == null) return null
+        var anyUrl: String? = null
+        var anyLabel = ""
+        var anyH = -1
+        var mp4Url: String? = null
+        var mp4Label = ""
+        var mp4H = -1
+        for (i in 0 until arr.length()) {
+            val f = arr.optJSONObject(i) ?: continue
+            val mime = f.optString("mimeType")
+            if (!mime.startsWith("video/")) continue
+            if (requireAudio && f.optString("audioQuality").isEmpty()) continue
+            if (!requireAudio && f.optString("audioQuality").isNotEmpty()) continue
+            val h = f.optInt("height", 0)
+            if (h <= 0 || h > maxHeight) continue
+            val url = f.optString("url")
+            if (url.isEmpty()) continue
+            val label = f.optString("qualityLabel").ifEmpty { "${h}p" }
+            if (mime.startsWith("video/mp4")) {
+                if (h > mp4H) { mp4H = h; mp4Url = url; mp4Label = label }
+            } else if (h > anyH) {
+                anyH = h; anyUrl = url; anyLabel = label
+            }
+        }
+        return if (mp4Url != null) mp4Url to mp4Label else anyUrl?.let { it to anyLabel }
     }
 
     private fun tryPlayerClient(videoId: String, spec: ClientSpec): String? {
@@ -361,6 +440,14 @@ class YouTubeClient {
                 }
             }
         }
+    }
+
+    companion object {
+        private val CLIENT_SPECS = listOf(
+            ClientSpec("ANDROID_VR", "1.60.19", "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip", 32, "12L"),
+            ClientSpec("IOS", "20.10.4", "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)", null, null),
+            ClientSpec("ANDROID", "20.10.38", "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip", 34, "14")
+        )
     }
 
     private data class ClientSpec(

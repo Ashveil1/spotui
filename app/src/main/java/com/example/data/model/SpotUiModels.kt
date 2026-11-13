@@ -203,6 +203,7 @@ sealed interface NavDest {
     data object NowPlaying : NavDest
     data object Stats : NavDest
     data object Similar : NavDest
+    data class Video(val track: Track) : NavDest
 }
 
 data class StatsDay(val label: String, val plays: Int, val minutes: Int)

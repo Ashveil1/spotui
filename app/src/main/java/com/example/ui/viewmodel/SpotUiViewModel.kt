@@ -14,6 +14,7 @@ import com.example.data.model.DailyMix
 import com.example.data.model.EqPreset
 import com.example.data.model.LyricsData
 import com.example.data.model.NavDest
+import com.example.data.remote.YouTubeClient
 import com.example.data.model.NoticeItem
 import com.example.data.model.PlayCount
 import com.example.data.model.PlaybackSession
@@ -226,6 +227,17 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
             maybeFetchArtistRemote(dest.name)
         }
     }
+
+    fun watchVideo(track: Track) {
+        if (_uiState.value.currentTrack != null) {
+            audioPlayer.pause()
+            snapshotSession()
+        }
+        navigateTo(NavDest.Video(track))
+    }
+
+    suspend fun resolveVideoStream(videoId: String): Result<YouTubeClient.VideoStream> =
+        repo.resolveVideoStream(videoId)
 
     fun switchTab(dest: NavDest) {
         _uiState.update { s ->
