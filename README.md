@@ -133,7 +133,8 @@ bars, click a column header to sort by it (click the active column again to
 restore the original order), and the wheel scrolls the list — or the
 sidebar when the cursor is over it. Right-click a song row for a menu
 (play, queue, like, info, copy link, hide) that also works from the
-keyboard with `j`/`k` and `Enter`. `Ctrl+Z` suspends cleanly; the screen
+keyboard with `j`/`k` and `Enter`. Queue rows get their own actions:
+play now, move up next and remove from queue. `Ctrl+Z` suspends cleanly; the screen
 repaints on resume.
 
 ## Where is my data?

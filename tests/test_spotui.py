@@ -4722,3 +4722,73 @@ class ContextMenuTests(unittest.TestCase):
                           return_value=(0, 5, 3, 0, s.curses.BUTTON1_CLICKED)):
             s.handle_mouse(self.app)
         self.app.copy_link.assert_called_once()
+
+
+class QueueContextTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+        self.app.play([dict(track(i)) for i in range(1, 6)], 1)
+        self.app.toast_now = Mock()
+
+    def open_queue_menu(self, idx):
+        self.app.open_context(self.app.queue[idx], "queue:", idx, 10, 5)
+
+    def labels(self):
+        return [l for l, _ in self.app.context_items()]
+
+    def test_upcoming_row_actions(self):
+        self.open_queue_menu(3)
+        self.assertEqual(self.labels()[:3],
+                         ["Play now", "Move up next", "Remove from queue"])
+
+    def test_playing_row_hides_move_actions(self):
+        self.open_queue_menu(1)
+        self.assertNotIn("Play now", self.labels())
+        self.assertNotIn("Move up next", self.labels())
+        self.assertNotIn("Remove from queue", self.labels())
+        self.assertIn("Song info", self.labels())
+
+    def test_remove_queue_at(self):
+        self.app.remove_queue_at(3)
+        self.assertEqual([t["id"] for t in self.app.queue],
+                         ["1", "2", "3", "5"])
+        self.assertEqual(self.app.qpos, 1)
+
+    def test_remove_before_playing_shifts_qpos(self):
+        self.app.remove_queue_at(0)
+        self.assertEqual(self.app.qpos, 0)
+        self.assertEqual(len(self.app.queue), 4)
+
+    def test_queue_to_next_from_upcoming(self):
+        self.app.queue_to_next(4)
+        self.assertEqual([t["id"] for t in self.app.queue],
+                         ["1", "2", "5", "3", "4"])
+        self.assertEqual(self.app.qpos, 1)
+
+    def test_queue_to_next_from_past(self):
+        self.app.queue_to_next(0)
+        self.assertEqual([t["id"] for t in self.app.queue],
+                         ["2", "1", "3", "4", "5"])
+        self.assertEqual(self.app.qpos, 0)
+
+    def test_queue_to_next_noop_on_playing(self):
+        q = list(self.app.queue)
+        self.app.queue_to_next(1)
+        self.assertEqual(self.app.queue, q)
+
+    def test_exec_remove_via_menu(self):
+        self.open_queue_menu(3)
+        self.app.context_exec(2)
+        self.assertEqual(len(self.app.queue), 4)
+        self.assertEqual(self.app.mode, "normal")
