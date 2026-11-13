@@ -5784,6 +5784,7 @@ class UI:
                                             active - view_h // 2))
             off = max(0, min(app.lyrics_off, app.lyrics_max_off))
             app.lyrics_off = off
+            can_seek = active is not None
             for i, ln in enumerate(lines[off:off + view_h]):
                 if off + i == active:
                     put(self.scr, y + 4 + i, x + 2, wcut(ln, w - 4),
@@ -5791,12 +5792,18 @@ class UI:
                 else:
                     put(self.scr, y + 4 + i, x + 2, wcut(ln, w - 4),
                         pal["side"])
+                if can_seek:
+                    self.hit(x + 2, y + 4 + i, w - 4, 1, "lyrseek",
+                             synced[off + i][0])
             if app.lyrics_max_off:
                 put(self.scr, y + h - 2, x + w - 12,
                     f"{off + 1}-{min(off + view_h, len(lines))}/{len(lines)}",
                     pal["sfaint"])
-            put(self.scr, y + h - 2, x + 2,
-                "j/k scroll \u00b7 G follow \u00b7 Y copy \u00b7 Esc close",
+            foot = ("j/k scroll \u00b7 G follow \u00b7 Y copy \u00b7 "
+                    "Esc close")
+            if can_seek:
+                foot = ("click to seek \u00b7 " + foot)
+            put(self.scr, y + h - 2, x + 2, wcut(foot, w - 4),
                 pal["sfaint"])
             return
         lines = app.lyrics_lines(w - 4)
@@ -6769,6 +6776,9 @@ def handle_mouse(app):
             handle_key(app, "\n")
         elif act == "ctxrow":
             app.context_exec(arg)
+        elif act == "lyrseek":
+            app.mpv.seek_abs(arg)
+            app.lyrics_follow = True
         return
 
 def mouse_tracking(on):
