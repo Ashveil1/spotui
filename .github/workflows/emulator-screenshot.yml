@@ -32,15 +32,7 @@ jobs:
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb shell am start -n com.aistudio.spotui.kxmzpq/com.example.MainActivity
             sleep 35
-            for i in 1 2 3; do
-              if adb shell dumpsys window windows | grep -qi 'not responding'; then
-                adb shell input keyevent KEYCODE_BACK
-                sleep 3
-              fi
-              adb exec-out screencap -p > shot$i.png
-              adb shell input tap 360 800
-              sleep 6
-            done
+            for i in 1 2 3; do if adb shell dumpsys window windows | grep -qi 'not responding'; then adb shell input keyevent KEYCODE_BACK; sleep 3; fi; adb exec-out screencap -p > shot$i.png; adb shell input tap 360 800; sleep 6; done
             adb shell dumpsys activity activities | grep -iE 'ResumedActivity' > foreground.txt || true
       - uses: actions/upload-artifact@v4
         with:
