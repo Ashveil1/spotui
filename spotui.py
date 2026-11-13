@@ -2950,6 +2950,36 @@ class App:
         self.push("playlist", len(self.store.playlists) - 1)
         self.toast_now(f"Created playlist: {name}")
 
+    def import_playlist_url(self, url):
+        """Import a YouTube playlist link as a SpotUI playlist (background)."""
+        if not HAVE_YTDL:
+            self.toast_now("Importing from YouTube needs yt-dlp")
+            return
+        self.toast_now("Importing playlist from YouTube\u2026")
+        threading.Thread(target=self._import_url_worker,
+                         args=(url,), daemon=True).start()
+
+    def _import_url_worker(self, url):
+        try:
+            items = _ytdl_playlist(url, n=200)
+        except Exception:
+            items = []
+        with self.lock:
+            tracks = Store._tracks([t for t in items if isinstance(t, dict)])
+            if not tracks:
+                self.toast_now("No songs found at that link")
+                return
+            base, n = "YouTube import", 2
+            name = base
+            names = {p["name"] for p in self.store.playlists}
+            while name in names:
+                name = f"{base} {n}"
+                n += 1
+            self.store.playlists.append({"name": name, "tracks": tracks})
+            self.store.save()
+            self.push("playlist", len(self.store.playlists) - 1)
+            self.toast_now(f"Imported {name} ({len(tracks)} songs)")
+
     def import_playlist_file(self, path):
         """Import a playlist JSON written by X into the live store."""
         p = Path(path).expanduser()
@@ -5856,10 +5886,13 @@ class UI:
             curses.A_BOLD)
         app.name_xy = (x + 3 + min(dlen(app.name_buf), w - 9), y + 3)
         if app.rename_index is None:
-            if app.name_buf.strip().lower().endswith(".json"):
+            buf = app.name_buf.strip().lower()
+            if buf.endswith(".json"):
                 foot = "Enter: import playlist · Esc: cancel"
+            elif buf.startswith(("http://", "https://")) and "list=" in buf:
+                foot = "Enter: import from YouTube · Esc: cancel"
             else:
-                foot = "Enter: save · .json path imports · Esc"
+                foot = "Enter: save · .json path or YouTube link imports · Esc"
         else:
             foot = "Enter: save · Esc: cancel"
         put(self.scr, y + h - 2, x + 2, foot, pal["sfaint"])
@@ -6166,6 +6199,12 @@ def handle_key(app, k):
                 if (buf.lower().endswith(".json")
                         and Path(buf).expanduser().is_file()):
                     app.import_playlist_file(buf)
+                    app.name_buf = ""
+                    app.mode = "normal"
+                    return
+                if (buf.lower().startswith(("http://", "https://"))
+                        and "list=" in buf.lower()):
+                    app.import_playlist_url(buf)
                     app.name_buf = ""
                     app.mode = "normal"
                     return
