@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SpotUI</string>
+    <string name="search_placeholder">What do you want to play?</string>
+    <string name="your_library">Your Library</string>
+    <string name="liked_songs">Liked Songs</string>
+    <string name="recently_played">Recently Played</string>
+    <string name="made_for_you">Made for you</string>
+    <string name="your_mixes">Your mixes</string>
+    <string name="on_repeat">On repeat</string>
+    <string name="continue_listening">CONTINUE LISTENING</string>
+    <string name="songs_you_like">Songs you like</string>
+    <string name="recent_searches">Recent searches</string>
+    <string name="jump_back_in">Jump back in</string>
+    <string name="now_playing">NOW PLAYING</string>
+    <string name="queue_title">Queue</string>
+    <string name="stats_title">Your listening</string>
+    <string name="notif_channel_name">Playback</string>
+    <string name="notif_channel_desc">Controls for active music playback</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_play">Play</string>
+    <string name="cd_pause">Pause</string>
+    <string name="cd_next">Next track</string>
+    <string name="cd_prev">Previous track</string>
+    <string name="cd_shuffle">Toggle shuffle</string>
+    <string name="cd_repeat">Cycle repeat mode</string>
+    <string name="cd_like">Like or unlike song</string>
+    <string name="cd_more">More options</string>
+    <string name="cd_add_playlist">Create or import playlist</string>
+    <string name="cd_cover_art">Album cover art</string>
+    <string name="cd_queue">Open queue</string>
+    <string name="cd_mute">Mute or unmute volume</string>
+    <string name="cd_zen">Toggle sidebar</string>
+    <string name="cd_help">Help and shortcuts</string>
+</resources>

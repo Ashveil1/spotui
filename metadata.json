@@ -1,0 +1,8 @@
+{
+  "name": "SpotUI",
+  "description": "Spotify-style music player for Android that searches and streams YouTube audio with playlists, listening stats, synced lyrics, radio autoplay, and themes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
