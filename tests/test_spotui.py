@@ -4839,3 +4839,74 @@ class CopyListViewTests(unittest.TestCase):
         self.app.stack = [("liked", None)]
         s.handle_key(self.app, 'V')
         self.app.copy_text.assert_called_once()
+
+
+class PlaylistContextTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+        self.app.store.playlists = [
+            {"name": "Gym", "tracks": [dict(track(1)), dict(track(2))]}]
+        self.app.open_playlist_context(0, 10, 5)
+
+    def labels(self):
+        return [l for l, _ in self.app.context_items()]
+
+    def test_items(self):
+        self.assertEqual(self.labels(), [
+            "Play", "Rename", "Duplicate", "Pin to the top",
+            "Like every song", "Copy tracklist", "Export JSON",
+            "Delete playlist"])
+        self.assertEqual(self.app.mode, "context")
+
+    def test_pinned_playlist_offers_unpin(self):
+        self.app.store.playlists[0]["pinned"] = True
+        self.assertIn("Unpin", self.labels())
+
+    def test_rename_flow(self):
+        self.app.context_exec(1)
+        self.assertEqual(self.app.mode, "name")
+        self.assertEqual(self.app.rename_index, 0)
+        self.assertEqual(self.app.name_buf, "Gym")
+
+    def test_delete_flow_asks_first(self):
+        self.app.context_exec(7)
+        self.assertEqual(self.app.mode, "confirm_delete")
+        self.assertEqual(self.app.delete_index, 0)
+        self.assertEqual(len(self.app.store.playlists), 1)
+
+    def test_play_flow(self):
+        self.app.context_exec(0)
+        self.assertEqual(len(self.app.queue), 2)
+        self.assertEqual(self.app.play_source, "Gym")
+
+    def test_duplicate_flow(self):
+        self.app.store.save = Mock()
+        self.app.context_exec(2)
+        self.assertEqual(self.app.store.playlists[1]["name"], "Gym (copy)")
+
+    def test_right_click_sidebar_playlist_opens_menu(self):
+        self.app.mode = "normal"
+        self.app.ctx = None
+        self.app.rects = [{"x0": 0, "y0": 0, "x1": 20, "y1": 1,
+                           "act": "libitem", "arg": ("playlist", 0)}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 5, 0, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mode, "context")
+        self.assertEqual(self.app.ctx["pl"], 0)
+
+    def test_gone_playlist_gives_no_items(self):
+        self.app.store.playlists = []
+        self.assertEqual(self.app.context_items(), [])
