@@ -344,6 +344,74 @@ class YouTubeClient {
         return ""
     }
 
+    data class YtPlaylistRef(
+        val id: String,
+        val title: String,
+        val videoCount: String
+    )
+
+    suspend fun fetchChannelPlaylists(channelId: String, limit: Int = 15): Result<List<YtPlaylistRef>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val body = JSONObject().apply {
+                put("context", webContextJson())
+                put("browseId", channelId)
+                put("params", "EgZwbGF5bGlzdHM%3D") // playlists tab
+            }
+            val root = innertubePost("browse", body)
+                ?: throw RuntimeException("Channel playlists unavailable")
+            val out = mutableListOf<YtPlaylistRef>()
+            val seen = mutableSetOf<String>()
+            collectPlaylistRefs(root, out, seen, limit)
+            out.toList()
+        }
+    }
+
+    private fun collectPlaylistRefs(
+        node: Any?,
+        out: MutableList<YtPlaylistRef>,
+        seen: MutableSet<String>,
+        limit: Int
+    ) {
+        if (node == null || out.size >= limit) return
+        when (node) {
+            is JSONObject -> {
+                node.optJSONObject("playlistRenderer")?.let { pr ->
+                    val id = pr.optString("playlistId", "")
+                    val title = pr.optJSONObject("title")?.optString("simpleText", "")
+                        ?: readRunsText(pr.optJSONObject("title"))
+                    val count = readRunsText(pr.optJSONObject("videoCountText"))
+                    if (id.isNotBlank() && seen.add(id)) {
+                        out.add(YtPlaylistRef(id, title.ifBlank { "Playlist" }, count))
+                    }
+                }
+                node.optJSONObject("lockupViewModel")?.let { lv ->
+                    val id = lv.optString("contentId", "")
+                    if (id.startsWith("PL") || id.startsWith("UU") || id.startsWith("VL")) {
+                        val cleanId = id.removePrefix("VL")
+                        val title = lv.optJSONObject("metadata")
+                            ?.optJSONObject("lockupMetadataViewModel")
+                            ?.optJSONObject("title")
+                            ?.optString("content", "") ?: ""
+                        val count = findTextNodeDeep(lv, "contentText")
+                        if (cleanId.isNotBlank() && seen.add(cleanId)) {
+                            out.add(YtPlaylistRef(cleanId, title.ifBlank { "Playlist" }, count))
+                        }
+                    }
+                }
+                val keys = node.keys()
+                while (keys.hasNext() && out.size < limit) {
+                    collectPlaylistRefs(node.opt(keys.next()), out, seen, limit)
+                }
+            }
+            is JSONArray -> {
+                for (i in 0 until node.length()) {
+                    if (out.size >= limit) break
+                    collectPlaylistRefs(node.opt(i), out, seen, limit)
+                }
+            }
+        }
+    }
+
     suspend fun fetchShorts(query: String = "#shorts", limit: Int = 20): Result<List<Track>> = withContext(Dispatchers.IO) {
         runCatching {
             val body = JSONObject().apply {
