@@ -6,6 +6,7 @@ day they landed on `main`.
 ## 2026-11-13
 
 - Mouse wheel over the player bar's volume bar raises or lowers the volume by 3 - no need to aim for the speaker icon or drag.
+- Wheel-down now also registers on curses builds whose Python module lacks the BUTTON5_PRESSED constant (seen on some older/Termux ncurses builds), falling back to the standard ncurses value - list/sidebar scroll and the volume wheel keep working there.
 - Right-click the player bar's shuffle icon to cycle the shuffle mode (spread, discovery, mood) - it also turns shuffle on, same as pressing S. The rest of the bar still opens the playback menu.
 - Now Playing's big cover art is clickable: click to pause/resume, right-click for the full song menu (radio, lyrics, queue...).
 - A row's heart is clickable: select a song (or find one already liked) and click the heart to like/unlike it with the mouse, like Spotify's hover heart. Right-clicking the heart still opens the song menu.

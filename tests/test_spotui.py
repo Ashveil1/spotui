@@ -6814,12 +6814,24 @@ class WheelVolumeTests(unittest.TestCase):
         self.assertIn('Volume 73', self.app.toast[0])
 
     def test_wheel_down_over_vol_bar_lowers_volume(self):
-        self._wheel(105, 38, getattr(s.curses, 'BUTTON5_PRESSED', 0x10000000))
+        self._wheel(105, 38, s._B5P)
         self.assertEqual(self.app.mpv.state["vol"], 67)
+
+    def test_wheel_down_works_when_curses_lacks_button5(self):
+        self.assertNotEqual(s._B5P, 0)
+        saved = getattr(s.curses, 'BUTTON5_PRESSED', None)
+        if saved is not None:
+            del s.curses.BUTTON5_PRESSED
+        try:
+            self._wheel(105, 38, s._B5P)
+            self.assertEqual(self.app.mpv.state["vol"], 67)
+        finally:
+            if saved is not None:
+                s.curses.BUTTON5_PRESSED = saved
 
     def test_wheel_elsewhere_scrolls_list(self):
         self.app.store.liked = [track(i) for i in range(1, 30)]
         self.app.push('liked')
-        self._wheel(60, 10, getattr(s.curses, 'BUTTON5_PRESSED', 0x10000000))
+        self._wheel(60, 10, s._B5P)
         self.assertEqual(self.app.mpv.state["vol"], 70)
         self.assertGreater(self.app.sel.get('liked:', 0), 0)

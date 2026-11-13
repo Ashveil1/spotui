@@ -9,6 +9,9 @@ Layout mimics Spotify desktop: top bar with search pill, black sidebar,
 import base64
 import curses
 import json
+
+_B5P = getattr(curses, 'BUTTON5_PRESSED', 0x10000000)  # some curses builds omit it
+
 import locale
 import math
 import os
@@ -6680,7 +6683,7 @@ def handle_mouse(app):
     if modal:
         app.drag_rect = None
         app.drag_row = None
-        if bstate & (curses.BUTTON4_PRESSED | getattr(curses, "BUTTON5_PRESSED", 0)):
+        if bstate & (curses.BUTTON4_PRESSED | _B5P):
             if app.mode == "pick":
                 step = -1 if bstate & curses.BUTTON4_PRESSED else 1
                 app.pick_idx = max(0, min(len(app.pick_rows) - 1, app.pick_idx + step))
@@ -6735,7 +6738,7 @@ def handle_mouse(app):
         else:
             app.move_sel(-3, len(app.view_tracks()))
         return
-    if bstate & getattr(curses, "BUTTON5_PRESSED", 0):
+    if bstate & _B5P:
         if _over_vol():
             app.vol(-3)
         elif app.sw_bounds and mx < app.sw_bounds[0]:
@@ -7001,7 +7004,7 @@ def run(scr):
             | curses.BUTTON1_CLICKED | curses.BUTTON1_DOUBLE_CLICKED
             | getattr(curses, "BUTTON3_PRESSED", 0)
             | getattr(curses, "BUTTON3_CLICKED", 0)
-            | curses.BUTTON4_PRESSED | getattr(curses, "BUTTON5_PRESSED", 0)
+            | curses.BUTTON4_PRESSED | _B5P
             | curses.REPORT_MOUSE_POSITION)
     except curses.error:
         pass
