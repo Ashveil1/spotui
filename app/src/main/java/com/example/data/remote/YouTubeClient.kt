@@ -654,6 +654,44 @@ class YouTubeClient {
         return if (mp4Url != null) mp4Url to mp4Label else anyUrl?.let { it to anyLabel }
     }
 
+    data class YtVideoDetails(
+        val viewCount: String,
+        val uploadDate: String,
+        val description: String
+    )
+
+    suspend fun fetchVideoDetails(videoId: String): YtVideoDetails? = withContext(Dispatchers.IO) {
+        for (spec in CLIENT_SPECS) {
+            val details = runCatching {
+                val clientObj = JSONObject().apply {
+                    put("clientName", spec.name)
+                    put("clientVersion", spec.version)
+                    put("hl", "en")
+                    put("gl", "US")
+                    if (spec.androidSdk != null) put("androidSdkVersion", spec.androidSdk)
+                    if (spec.osVersion != null) put("osVersion", spec.osVersion)
+                }
+                val body = JSONObject().apply {
+                    put("context", JSONObject().put("client", clientObj))
+                    put("videoId", videoId)
+                }
+                val root = innertubePost("player", body, userAgent = spec.userAgent) ?: return@runCatching null
+                val status = root.optJSONObject("playabilityStatus")?.optString("status")
+                if (status != null && status != "OK") return@runCatching null
+                val vd = root.optJSONObject("videoDetails") ?: return@runCatching null
+                val micro = root.optJSONObject("microformat")?.optJSONObject("playerMicroformatRenderer")
+                YtVideoDetails(
+                    viewCount = vd.optString("viewCount", ""),
+                    uploadDate = micro?.optString("uploadDate", "")
+                        ?: micro?.optString("publishDate", "") ?: "",
+                    description = vd.optString("shortDescription", "")
+                )
+            }.getOrNull()
+            if (details != null) return@withContext details
+        }
+        null
+    }
+
     private fun tryPlayerClient(videoId: String, spec: ClientSpec): String? {
         return runCatching {
             val clientObj = JSONObject().apply {
