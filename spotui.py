@@ -5599,6 +5599,9 @@ class UI:
         self.hit(x0, y, w, 1, "row", (vk, real_idx, False))
         if chan_w and t.get("artist"):
             self.hit(cx, y, chan_w, 1, "artist", t["artist"])
+        if liked or selected:
+            # the visible heart is clickable, like Spotify's hover heart
+            self.hit(lx - 1, y, heart_w + 2, 1, "likesong", t)
 
     def hint(self, y, x0, kind):
         """Context key hints on a view's bottom row."""
