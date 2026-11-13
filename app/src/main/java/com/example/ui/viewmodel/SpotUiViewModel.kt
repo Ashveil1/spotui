@@ -325,6 +325,9 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
     suspend fun fetchShorts(): Result<List<Track>> =
         repo.fetchShorts()
 
+    suspend fun fetchVideoDetails(videoId: String): YouTubeClient.YtVideoDetails? =
+        repo.fetchVideoDetails(videoId)
+
     fun toggleFollowChannel(channelId: String, name: String) {
         viewModelScope.launch {
             val isFollowed = _uiState.value.followedChannels.any { it.id == channelId }

@@ -66,6 +66,8 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var related by remember { mutableStateOf<List<Track>?>(null) }
     var comments by remember { mutableStateOf<List<YouTubeClient.YtComment>?>(null) }
+    var details by remember { mutableStateOf<YouTubeClient.YtVideoDetails?>(null) }
+    var descExpanded by remember { mutableStateOf(false) }
     var maxQuality by remember { mutableStateOf(1080) }
 
     val player = remember { ExoPlayer.Builder(context).build() }
@@ -99,6 +101,9 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
     LaunchedEffect(track.id) {
         related = null
         comments = null
+        details = null
+        descExpanded = false
+        details = viewModel.fetchVideoDetails(track.id)
         comments = viewModel.fetchComments(track.id).getOrNull()
         related = viewModel.fetchRelated(track.id).getOrNull()
     }
@@ -229,6 +234,39 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
         LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
             val rel = related
             val com = comments
+            val det = details
+            if (det != null) {
+                item {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                    ) {
+                        val views = det.viewCount.toLongOrNull()?.let { "%,d".format(it) }
+                        val meta = listOfNotNull(
+                            views?.let { "$it views" },
+                            det.uploadDate.takeIf { d -> d.isNotBlank() }
+                        ).joinToString("  ·  ")
+                        if (meta.isNotBlank()) {
+                            Text(
+                                text = meta,
+                                color = spot.textDim,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        if (det.description.isNotBlank()) {
+                            Text(
+                                text = det.description,
+                                color = Color(0xFFE0E0E0),
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = if (descExpanded) Int.MAX_VALUE else 3,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .padding(top = 4.dp)
+                                    .clickable { descExpanded = !descExpanded }
+                            )
+                        }
+                    }
+                }
+            }
             if (!com.isNullOrEmpty()) {
                 item {
                     Text(
