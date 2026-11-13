@@ -344,6 +344,80 @@ class YouTubeClient {
         return ""
     }
 
+    suspend fun fetchShorts(query: String = "#shorts", limit: Int = 20): Result<List<Track>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val body = JSONObject().apply {
+                put("context", webContextJson())
+                put("query", query)
+                put("params", "EgIYAQ%3D%3D") // shorts filter
+            }
+            val root = innertubePost("search", body)
+                ?: throw RuntimeException("Shorts search failed")
+            val tracks = mutableListOf<Track>()
+            val seen = mutableSetOf<String>()
+            collectShortsLockups(root, tracks, seen, limit)
+            if (tracks.isEmpty()) {
+                // fallback: short regular videos from the same response
+                val all = mutableListOf<Track>()
+                collectVideoRenderers(root, all, seen, limit * 3)
+                for (t in all) {
+                    if (tracks.size >= limit) break
+                    val d = t.durSec
+                    if (d != null && d in 1..75) tracks.add(t)
+                }
+            }
+            if (tracks.isEmpty()) throw RuntimeException("No shorts found")
+            tracks.toList()
+        }
+    }
+
+    private fun collectShortsLockups(
+        node: Any?,
+        out: MutableList<Track>,
+        seen: MutableSet<String>,
+        limit: Int
+    ) {
+        if (node == null || out.size >= limit) return
+        when (node) {
+            is JSONObject -> {
+                node.optJSONObject("shortsLockupViewModel")?.let { sl ->
+                    var vid = sl.optJSONObject("onTap")
+                        ?.optJSONObject("innertubeCommand")
+                        ?.optJSONObject("reelWatchEndpoint")
+                        ?.optString("videoId", "") ?: ""
+                    if (vid.isBlank()) {
+                        val entityId = sl.optString("entityId", "")
+                        val m = Regex("shorts-shelf-item-([A-Za-z0-9_-]{11})").find(entityId)
+                        vid = m?.groupValues?.get(1) ?: ""
+                    }
+                    val title = sl.optJSONObject("overlayMetadata")
+                        ?.optJSONObject("primaryText")
+                        ?.optString("content", "") ?: vid
+                    if (vid.matches(SpotUiTextUtils.VALID_ID_REGEX) && seen.add(vid)) {
+                        out.add(
+                            Track(
+                                id = vid,
+                                title = title.ifBlank { vid },
+                                artist = "",
+                                url = "https://www.youtube.com/shorts/$vid"
+                            )
+                        )
+                    }
+                }
+                val keys = node.keys()
+                while (keys.hasNext() && out.size < limit) {
+                    collectShortsLockups(node.opt(keys.next()), out, seen, limit)
+                }
+            }
+            is JSONArray -> {
+                for (i in 0 until node.length()) {
+                    if (out.size >= limit) break
+                    collectShortsLockups(node.opt(i), out, seen, limit)
+                }
+            }
+        }
+    }
+
     data class HomeFeedPage(
         val tracks: List<Track>,
         val continuation: String?

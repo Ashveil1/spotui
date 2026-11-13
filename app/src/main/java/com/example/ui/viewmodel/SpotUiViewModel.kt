@@ -305,6 +305,9 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
     suspend fun resolveChannelId(channelName: String): String? =
         repo.resolveChannelId(channelName)
 
+    suspend fun fetchShorts(): Result<List<Track>> =
+        repo.fetchShorts()
+
     fun switchTab(dest: NavDest) {
         _uiState.update { s ->
             s.copy(backStack = listOf(dest), findActive = false, findQuery = "")
