@@ -57,6 +57,7 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
     var stream by remember { mutableStateOf<YouTubeClient.VideoStream?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var related by remember { mutableStateOf<List<Track>?>(null) }
+    var comments by remember { mutableStateOf<List<YouTubeClient.YtComment>?>(null) }
 
     val player = remember { ExoPlayer.Builder(context).build() }
 
@@ -64,6 +65,7 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
         error = null
         stream = null
         related = null
+        comments = null
         player.stop()
         viewModel.resolveVideoStream(track.id)
             .onSuccess { vs ->
@@ -85,6 +87,7 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
                 player.playWhenReady = true
             }
             .onFailure { error = it.message ?: "No playable video stream found" }
+        comments = viewModel.fetchComments(track.id).getOrNull()
         related = viewModel.fetchRelated(track.id).getOrNull()
     }
 
@@ -173,14 +176,30 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
             }
         }
 
-        Text(
-            text = "Up next",
-            color = Color.White,
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
         LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
             val rel = related
+            val com = comments
+            if (!com.isNullOrEmpty()) {
+                item {
+                    Text(
+                        text = "Comments",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                itemsIndexed(com, key = { idx, _ -> "comment_${'$'}idx" }) { _, c ->
+                    CommentRow(c)
+                }
+            }
+            item {
+                Text(
+                    text = "Up next",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
             if (rel == null) {
                 item {
                     Row(
@@ -209,6 +228,57 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
                     )
                 }
             }
+        }
+    }
+}
+
+
+@Composable
+private fun CommentRow(comment: YouTubeClient.YtComment) {
+    val spot = LocalSpotColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = comment.author,
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            if (comment.timeLabel.isNotBlank()) {
+                Text(
+                    text = "  " + comment.timeLabel,
+                    color = spot.textFaint,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1
+                )
+            }
+        }
+        Text(
+            text = comment.text,
+            color = Color(0xFFE0E0E0),
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 2.dp)
+        )
+        val meta = buildString {
+            if (comment.likes > 0) append(comment.likes).append(" likes")
+            if (comment.replyCount > 0) {
+                if (isNotEmpty()) append("  ·  ")
+                append(comment.replyCount).append(" replies")
+            }
+        }
+        if (meta.isNotEmpty()) {
+            Text(
+                text = meta,
+                color = spot.textFaint,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(top = 2.dp)
+            )
         }
     }
 }

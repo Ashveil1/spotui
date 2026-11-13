@@ -264,6 +264,9 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
     suspend fun fetchRelated(videoId: String): Result<List<Track>> =
         repo.fetchRelated(videoId)
 
+    suspend fun fetchComments(videoId: String): Result<List<YouTubeClient.YtComment>> =
+        repo.fetchComments(videoId)
+
     fun switchTab(dest: NavDest) {
         _uiState.update { s ->
             s.copy(backStack = listOf(dest), findActive = false, findQuery = "")
