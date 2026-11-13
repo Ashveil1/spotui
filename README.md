@@ -155,7 +155,9 @@ repaints on resume.
 
 Liked songs, playlists, recent searches, your play history, the lyrics cache
 and the cached
-"Made for you" shelf live in `~/.config/spotui/library.json`.
+"Made for you" shelf live in `~/.config/spotui/library.json`. Cover thumbnails
+cache in `~/.cache/spotui/covers/`, pruned to the newest 500 images at
+startup; delete the folder any time to reclaim it.
 
 The home greeting shows your listening streak when you have played something on consecutive days.
 

@@ -1,5 +1,7 @@
 import json
 import importlib.util
+import os
+import time
 from pathlib import Path
 import tempfile
 import unittest
@@ -6231,3 +6233,55 @@ class YouTubeImportTests(unittest.TestCase):
         self._submit('https://youtu.be/dQw4w9WgXcQ')
         self.assertEqual(self.app.store.playlists[-1]['name'],
                          'https://youtu.be/dQw4w9WgXcQ')
+
+
+class CoverPruneTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.cover_dir = str(root / 'covers')
+        os.makedirs(self.app.cover_dir)
+
+    def _mk(self, name, age_s):
+        import os as _os
+        p = _os.path.join(self.app.cover_dir, name)
+        with open(p, 'wb') as f:
+            f.write(b'x' * 600)
+        t = time.time() - age_s
+        _os.utime(p, (t, t))
+        return p
+
+    def test_prune_keeps_newest(self):
+        import os as _os
+        for i in range(6):
+            self._mk(f'vid{i}.jpg', age_s=i * 100)
+        self.app._prune_covers(keep=3)
+        left = sorted(_os.listdir(self.app.cover_dir))
+        self.assertEqual(left, ['vid0.jpg', 'vid1.jpg', 'vid2.jpg'])
+
+    def test_prune_under_limit_touches_nothing(self):
+        import os as _os
+        for i in range(3):
+            self._mk(f'vid{i}.jpg', age_s=i * 100)
+        self.app._prune_covers(keep=500)
+        self.assertEqual(len(_os.listdir(self.app.cover_dir)), 3)
+
+    def test_prune_sweeps_stale_part_files(self):
+        import os as _os
+        self._mk('keep.jpg', age_s=10)
+        self._mk('stale.part.jpg', age_s=90000)
+        self._mk('fresh.part.jpg', age_s=60)
+        self.app._prune_covers(keep=500)
+        left = sorted(_os.listdir(self.app.cover_dir))
+        self.assertEqual(left, ['fresh.part.jpg', 'keep.jpg'])
+
+    def test_prune_missing_dir_is_quiet(self):
+        self.app.cover_dir = str(Path(self.tmp.name) / 'nope')
+        self.app._prune_covers()      # must not raise

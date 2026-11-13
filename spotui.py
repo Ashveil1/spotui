@@ -1785,12 +1785,50 @@ class App:
                 (buf[i * 3], buf[i * 3 + 1], buf[i * 3 + 2]))
         return bytes(idx), pw, ph
 
+    def _prune_covers(self, keep=500):
+        """Bound the on-disk cover cache: newest `keep` images survive.
+
+        One small jpg is cached per song and nothing ever removed them,
+        so a long-lived library grew the cache without end. Also sweeps
+        .part files left by interrupted fetches once they are a day old.
+        """
+        try:
+            names = os.listdir(self.cover_dir)
+        except OSError:
+            return
+        now = time.time()
+        jpgs = []
+        for name in names:
+            p = os.path.join(self.cover_dir, name)
+            try:
+                st = os.stat(p)
+            except OSError:
+                continue
+            if not os.path.isfile(p):
+                continue
+            if name.endswith(".part.jpg"):
+                if now - st.st_mtime > 86400:
+                    try:
+                        os.unlink(p)
+                    except OSError:
+                        pass
+                continue
+            if name.endswith(".jpg"):
+                jpgs.append((st.st_mtime, p))
+        jpgs.sort(reverse=True)
+        for _, p in jpgs[keep:]:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
     def _cover_worker(self):
         try:
             os.makedirs(self.cover_dir, exist_ok=True)
         except Exception:
             self.cover_ok = False             # unwritable $HOME → no covers
             return
+        self._prune_covers()
         while True:
             uid, w, h = self.coverq.get()
             try:
