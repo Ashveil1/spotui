@@ -442,14 +442,6 @@ class YouTubeClient {
         }
     }
 
-    companion object {
-        private val CLIENT_SPECS = listOf(
-            ClientSpec("ANDROID_VR", "1.60.19", "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip", 32, "12L"),
-            ClientSpec("IOS", "20.10.4", "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)", null, null),
-            ClientSpec("ANDROID", "20.10.38", "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip", 34, "14")
-        )
-    }
-
     private data class ClientSpec(
         val name: String,
         val version: String,
@@ -459,6 +451,11 @@ class YouTubeClient {
     )
 
     companion object {
+        private val CLIENT_SPECS = listOf(
+            ClientSpec("ANDROID_VR", "1.60.19", "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip", 32, "12L"),
+            ClientSpec("IOS", "20.10.4", "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)", null, null),
+            ClientSpec("ANDROID", "20.10.38", "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip", 34, "14")
+        )
         private const val WEB_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     }
