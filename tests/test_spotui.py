@@ -6685,3 +6685,58 @@ class RowHeartClickTests(unittest.TestCase):
         self._click(r, b3)
         self.assertEqual(self.app.mode, 'context')
         self.assertIn('track', self.app.ctx)
+
+
+class CoverClickTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def _render(self):
+        from collections import defaultdict
+        self.app.play([track(1), track(2)], 0)
+        self.app.cover_for = lambda *a, **k: None
+        self.app.pal = defaultdict(int)
+        self.app.rects = []
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        with patch.object(s, 'put'), patch.object(s, 'fill'), \
+                patch.object(s, 'draw_art'):
+            ui.v_playing(1, 38, 20, 120)
+
+    def test_cover_hit_present(self):
+        self._render()
+        hits = [r for r in self.app.rects if r['act'] == 'cover']
+        self.assertEqual(len(hits), 1)
+        self.assertGreater(hits[0]['x1'] - hits[0]['x0'], 5)
+        self.assertEqual(hits[0]['arg']['id'], '1')
+
+    def test_click_cover_toggles_pause(self):
+        self._render()
+        self.app.toggle = Mock()
+        r = next(r for r in self.app.rects if r['act'] == 'cover')
+        b1 = getattr(s.curses, 'BUTTON1_PRESSED', 2)
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, r['x0'] + 1, r['y0'] + 1, 0, b1)):
+            s.handle_mouse(self.app)
+        self.app.toggle.assert_called_once()
+
+    def test_right_click_cover_opens_song_menu(self):
+        self._render()
+        r = next(r for r in self.app.rects if r['act'] == 'cover')
+        b3 = getattr(s.curses, 'BUTTON3_PRESSED', 2097152)
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, r['x0'] + 1, r['y0'] + 1, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mode, 'context')
+        self.assertEqual(self.app.ctx['oneoff']['id'], '1')
+        labels = [l for l, _ in self.app.context_items()]
+        self.assertIn('Start radio', labels)
