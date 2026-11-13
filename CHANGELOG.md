@@ -3,6 +3,10 @@
 SpotUI has no versioned releases yet; this log lists notable changes by the
 day they landed on `main`.
 
+## 2026-11-13
+
+- Lyrics: `Tab` (or Lyrics in the right-click menus) opens a scrollable lyrics card for the current or selected song. Plain lyrics come from LRCLIB (free, no API key), are cached in the library file, and `Y` copies them.
+
 ## 2026-11-12
 
 - Right-click an Up Next row in Now Playing for the queue menu (play now, move up next, remove, info, copy link, hide).
