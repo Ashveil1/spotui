@@ -151,6 +151,41 @@ fun SearchScreen(
             }
         }
 
+        // Live suggestions while typing (before results arrive)
+        if (trimmed.isNotEmpty() && state.searchResults.isEmpty() && !state.isSearching && state.searchSuggestions.isNotEmpty()) {
+            itemsIndexed(
+                state.searchSuggestions,
+                key = { idx, sug -> "suggest_${'$'}idx" }
+            ) { _, suggestion ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable {
+                            keyboard?.hide()
+                            viewModel.rerunSearch(suggestion)
+                        }
+                        .padding(horizontal = 8.dp, vertical = 12.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = spot.textFaint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = suggestion,
+                        color = spot.textPrimary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
         // Empty query state
         if (trimmed.isEmpty()) {
             if (state.library.recentSearches.isNotEmpty()) {

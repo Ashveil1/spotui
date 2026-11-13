@@ -72,6 +72,7 @@ data class SpotUiState(
     val searchQuery: String = "",
     val searchFilter: SearchFilter = SearchFilter.ALL,
     val searchResults: List<Track> = emptyList(),
+    val searchSuggestions: List<String> = emptyList(),
     val isSearching: Boolean = false,
     val artistRemoteTracks: Map<String, List<Track>> = emptyMap(),
     val artistBusy: Set<String> = emptySet(),
@@ -155,6 +156,7 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
     private var loadToken: Long = 0L
     private var searchJob: Job? = null
     private var liveSearchJob: Job? = null
+    private var suggestJob: Job? = null
     private var toastJob: Job? = null
     private var sleepJob: Job? = null
     private var sleepDeadlineMs: Long? = null
@@ -413,10 +415,20 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
     fun onSearchQueryChanged(q: String) {
         _uiState.update { it.copy(searchQuery = q) }
         liveSearchJob?.cancel()
+        suggestJob?.cancel()
         val trimmed = q.trim()
         if (trimmed.isEmpty()) {
-            _uiState.update { it.copy(searchResults = emptyList(), isSearching = false) }
+            _uiState.update {
+                it.copy(searchResults = emptyList(), isSearching = false, searchSuggestions = emptyList())
+            }
             return
+        }
+        suggestJob = viewModelScope.launch {
+            delay(250L)
+            val suggestions = repo.fetchSuggestions(trimmed)
+            _uiState.update {
+                if (it.searchQuery.trim() == trimmed) it.copy(searchSuggestions = suggestions) else it
+            }
         }
         liveSearchJob = viewModelScope.launch {
             delay(600L)
@@ -452,7 +464,7 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun performSearch(query: String, record: Boolean) {
         searchJob?.cancel()
-        _uiState.update { it.copy(isSearching = true) }
+        _uiState.update { it.copy(isSearching = true, searchSuggestions = emptyList()) }
         searchJob = viewModelScope.launch {
             val result = repo.searchYouTube(query)
             result.onSuccess { tracks ->
