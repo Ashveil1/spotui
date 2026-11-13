@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-13
 
+- Mouse wheel over the player bar's volume bar raises or lowers the volume by 3 - no need to aim for the speaker icon or drag.
 - Right-click the player bar's shuffle icon to cycle the shuffle mode (spread, discovery, mood) - it also turns shuffle on, same as pressing S. The rest of the bar still opens the playback menu.
 - Now Playing's big cover art is clickable: click to pause/resume, right-click for the full song menu (radio, lyrics, queue...).
 - A row's heart is clickable: select a song (or find one already liked) and click the heart to like/unlike it with the mouse, like Spotify's hover heart. Right-clicking the heart still opens the song menu.

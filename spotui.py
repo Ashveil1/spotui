@@ -6722,15 +6722,23 @@ def handle_mouse(app):
         if bstate & curses.BUTTON1_RELEASED:
             app.drag_rect = None
         return
+    def _over_vol():
+        return any(r["act"] == "vol"
+                   and r["x0"] <= mx < r["x1"] and r["y0"] <= my < r["y1"]
+                   for r in app.rects)
     if bstate & curses.BUTTON4_PRESSED:
-        if app.sw_bounds and mx < app.sw_bounds[0]:
+        if _over_vol():                # wheel over the volume bar: volume
+            app.vol(3)
+        elif app.sw_bounds and mx < app.sw_bounds[0]:
             app.soff = max(0, min(getattr(app, "soff_max", 0),
                                   app.soff - 2))
         else:
             app.move_sel(-3, len(app.view_tracks()))
         return
     if bstate & getattr(curses, "BUTTON5_PRESSED", 0):
-        if app.sw_bounds and mx < app.sw_bounds[0]:
+        if _over_vol():
+            app.vol(-3)
+        elif app.sw_bounds and mx < app.sw_bounds[0]:
             app.soff = max(0, min(getattr(app, "soff_max", 0),
                                   app.soff + 2))
         else:

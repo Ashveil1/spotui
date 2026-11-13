@@ -6786,3 +6786,40 @@ class ShuffleModeMouseTests(unittest.TestCase):
             s.handle_mouse(self.app)
         self.assertEqual(self.app.mode, 'context')
         self.assertIn('pb', self.app.ctx)
+
+
+class WheelVolumeTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.app.rects = [{"x0": 100, "y0": 38, "x1": 110, "y1": 39,
+                           "act": "vol", "arg": (100, 10)}]
+        self.app.mpv.state["vol"] = 70
+
+    def _wheel(self, x, y, bstate):
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, x, y, 0, bstate)):
+            s.handle_mouse(self.app)
+
+    def test_wheel_up_over_vol_bar_raises_volume(self):
+        self._wheel(105, 38, s.curses.BUTTON4_PRESSED)
+        self.assertEqual(self.app.mpv.state["vol"], 73)
+        self.assertIn('Volume 73', self.app.toast[0])
+
+    def test_wheel_down_over_vol_bar_lowers_volume(self):
+        self._wheel(105, 38, getattr(s.curses, 'BUTTON5_PRESSED', 0x10000000))
+        self.assertEqual(self.app.mpv.state["vol"], 67)
+
+    def test_wheel_elsewhere_scrolls_list(self):
+        self.app.store.liked = [track(i) for i in range(1, 30)]
+        self.app.push('liked')
+        self._wheel(60, 10, getattr(s.curses, 'BUTTON5_PRESSED', 0x10000000))
+        self.assertEqual(self.app.mpv.state["vol"], 70)
+        self.assertGreater(self.app.sel.get('liked:', 0), 0)
