@@ -6361,3 +6361,47 @@ class CollectionHeaderMenuTests(unittest.TestCase):
         self._right_click_header()
         self.assertEqual(self.app.mode, 'context')
         self.assertEqual(self.app.ctx['artistctx'], 'Artist')
+
+
+class InfoLyricsRowTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+        self.t = track(1)
+        self.app.open_info(self.t)
+
+    def _lyrics_row(self):
+        return dict(self.app.info_rows())['Lyrics']
+
+    def test_not_fetched(self):
+        self.assertEqual(self._lyrics_row(), 'not fetched \u00b7 Tab fetches')
+
+    def test_synced_cached(self):
+        self.app.store.lyrics['1'] = {'text': 'words', 'ts': 1,
+                                      'synced': [[0.0, 'words']]}
+        self.assertEqual(self._lyrics_row(), 'synced \u00b7 Tab opens')
+
+    def test_plain_cached(self):
+        self.app.store.lyrics['1'] = {'text': 'words', 'ts': 1}
+        self.assertEqual(self._lyrics_row(), 'saved \u00b7 Tab opens')
+
+    def test_negative_cached(self):
+        self.app.store.lyrics['1'] = {'text': None, 'ts': 1}
+        self.assertEqual(self._lyrics_row(), 'none on LRCLIB (cached)')
+
+    def test_tab_opens_lyrics_for_same_song(self):
+        self.app.store.lyrics['1'] = {'text': 'words', 'ts': 1}
+        s.handle_key(self.app, '\t')
+        self.assertEqual(self.app.mode, 'lyrics')
+        self.assertEqual(self.app.lyrics_track['id'], self.t['id'])
+        self.assertIsNone(self.app.info_track)
+        # closing lyrics returns to a clean normal mode
+        s.handle_key(self.app, '\x1b')
+        self.assertEqual(self.app.mode, 'normal')

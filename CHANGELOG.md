@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-13
 
+- The song info card (`I`) now shows a Lyrics row - synced, saved, none-on-LRCLIB or not-fetched - and Tab jumps straight from the card into that song's lyrics (fetching them if needed).
 - Right-click the colored header band on a playlist, Liked Songs, Recently Played or artist page for that collection's own context menu (rename, shuffle, clear history, queue the artist...) - no need to go back to the sidebar.
 - The cover cache on disk (~/.cache/spotui/covers) is now pruned to the newest 500 images at startup instead of growing forever, and interrupted .part downloads older than a day are swept.
 - Import a YouTube playlist straight into your library: paste its link (anything with list=) into the new-playlist box; songs are fetched in the background, the playlist keeps its real YouTube title, and it opens when it is ready.
