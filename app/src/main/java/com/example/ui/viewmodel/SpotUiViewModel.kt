@@ -267,6 +267,12 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
     suspend fun fetchComments(videoId: String): Result<List<YouTubeClient.YtComment>> =
         repo.fetchComments(videoId)
 
+    suspend fun fetchChannel(channelId: String): Result<YouTubeClient.YtChannelInfo> =
+        repo.fetchChannel(channelId)
+
+    suspend fun resolveChannelId(channelName: String): String? =
+        repo.resolveChannelId(channelName)
+
     fun switchTab(dest: NavDest) {
         _uiState.update { s ->
             s.copy(backStack = listOf(dest), findActive = false, findQuery = "")
