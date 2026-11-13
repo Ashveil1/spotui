@@ -68,6 +68,7 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
     var related by remember { mutableStateOf<List<Track>?>(null) }
     var comments by remember { mutableStateOf<List<YouTubeClient.YtComment>?>(null) }
     var details by remember { mutableStateOf<YouTubeClient.YtVideoDetails?>(null) }
+    var likeCount by remember { mutableStateOf<String?>(null) }
     var descExpanded by remember { mutableStateOf(false) }
     var maxQuality by remember { mutableStateOf(1080) }
 
@@ -104,7 +105,9 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
         comments = null
         details = null
         descExpanded = false
+        likeCount = null
         details = viewModel.fetchVideoDetails(track.id)
+        likeCount = viewModel.fetchLikeCount(track.id)
         comments = viewModel.fetchComments(track.id).getOrNull()
         related = viewModel.fetchRelated(track.id).getOrNull()
     }
@@ -262,6 +265,7 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
                         val views = det.viewCount.toLongOrNull()?.let { "%,d".format(it) }
                         val meta = listOfNotNull(
                             views?.let { "$it views" },
+                            likeCount,
                             det.uploadDate.takeIf { d -> d.isNotBlank() }
                         ).joinToString("  ·  ")
                         if (meta.isNotBlank()) {
