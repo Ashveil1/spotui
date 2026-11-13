@@ -207,9 +207,9 @@ def fmt_added(v):
 
 VIEW_HINTS = {
     "search": "Enter plays \u00b7 a queues \u00b7 Q queues all \u00b7 o opens artist \u00b7 Tab switches All/Songs/Artists",
-    "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist",
+    "liked": "Enter plays \u00b7 a queues \u00b7 l likes \u00b7 m sorts \u00b7 F finds \u00b7 o opens artist \u00b7 V copies list",
     "playlist": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 J/K reorders \u00b7 e renames \u00b7 N duplicates \u00b7 B merges \u00b7 w pins \u00b7 h enhances \u00b7 L likes all \u00b7 V copies tracklist \u00b7 H dedupes",
-    "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 X clears",
+    "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 V copies list \u00b7 X clears",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
     "playing": "Space pause \u00b7 l like \u00b7 0-9 seeks \u00b7 v queue \u00b7 chips and Up Next are clickable",
@@ -2600,6 +2600,25 @@ class App:
             pass
         return False
 
+    def _tracklist_text(self, name, tracks):
+        lines = [name]
+        for i, t in enumerate(tracks, 1):
+            line = (f"{i}. {t.get('title') or '?'} - "
+                    f"{t.get('artist') or 'Unknown'}")
+            if t.get("dur"):
+                line += f" ({fmt_t(t['dur'])})"
+            lines.append(line)
+        return "\n".join(lines)
+
+    def _share_tracklist(self, name, tracks):
+        text = self._tracklist_text(name, tracks)
+        if self.copy_text(text, "Tracklist"):
+            return text
+        preview = " \u00b7 ".join(
+            f"{t.get('title') or '?'}" for t in tracks[:3])
+        self.toast_now(f"Tracklist: {preview} \u2026")
+        return text
+
     def copy_tracklist(self, pi):
         """Copy a playlist's tracklist as shareable numbered text."""
         if not 0 <= pi < len(self.store.playlists):
@@ -2608,20 +2627,18 @@ class App:
         if not pl["tracks"]:
             self.toast_now("This playlist is empty")
             return None
-        lines = [pl["name"]]
-        for i, t in enumerate(pl["tracks"], 1):
-            line = (f"{i}. {t.get('title') or '?'} - "
-                    f"{t.get('artist') or 'Unknown'}")
-            if t.get("dur"):
-                line += f" ({fmt_t(t['dur'])})"
-            lines.append(line)
-        text = "\n".join(lines)
-        if self.copy_text(text, "Tracklist"):
-            return text
-        preview = " \u00b7 ".join(
-            f"{t.get('title') or '?'}" for t in pl["tracks"][:3])
-        self.toast_now(f"Tracklist: {preview} \u2026")
-        return text
+        return self._share_tracklist(pl["name"], pl["tracks"])
+
+    def copy_list_view(self, kind, arg):
+        """V: copy the visible list of songs as numbered text."""
+        if kind == "playlist":
+            return self.copy_tracklist(arg)
+        vk = kind + ":"
+        tracks = self.view_tracks(vk)
+        if not tracks:
+            self.toast_now("Nothing to copy")
+            return None
+        return self._share_tracklist(self._source_for_vk(vk) or "Songs", tracks)
 
     def stats_share_text(self):
         """Wrapped-style stats summary as shareable text."""
@@ -5208,7 +5225,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link / stats summary"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("V", "playlist: copy tracklist"), ("H", "playlist: remove duplicates"), ("[ / ]", "speed down / up"), ("0-9", "now playing: seek to 0-90%"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("Z", "shuffle whole library"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link / stats summary"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("V", "copy list as text"), ("H", "playlist: remove duplicates"), ("[ / ]", "speed down / up"), ("0-9", "now playing: seek to 0-90%"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("Z", "shuffle whole library"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -5842,8 +5859,8 @@ def handle_key(app, k):
             app.toggle_enhance(arg)
         elif k == "L" and kind == "playlist":
             app.like_all(arg)
-        elif k == "V" and kind == "playlist":
-            app.copy_tracklist(arg)
+        elif k == "V" and kind in ("playlist", "liked", "history"):
+            app.copy_list_view(kind, arg)
         elif k == "H" and kind == "playlist":
             app.dedupe_playlist(arg)
         elif k == "e" and kind == "playlist":

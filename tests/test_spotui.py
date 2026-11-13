@@ -4792,3 +4792,50 @@ class QueueContextTests(unittest.TestCase):
         self.app.context_exec(2)
         self.assertEqual(len(self.app.queue), 4)
         self.assertEqual(self.app.mode, "normal")
+
+
+class CopyListViewTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.copy_text = Mock(return_value=True)
+        self.app.store.liked = [dict(track(1), title='One', artist='A'),
+                                dict(track(2), title='Two', artist='B')]
+        self.app.store.history = [dict(track(3), title='Old', artist='C')]
+
+    def test_liked_copy_uses_liked_heading(self):
+        text = self.app.copy_list_view("liked", None)
+        self.assertTrue(text.startswith("Liked Songs\n1. One - A"))
+        self.assertIn("2. Two - B", text)
+
+    def test_history_copy(self):
+        text = self.app.copy_list_view("history", None)
+        self.assertTrue(text.startswith("Recently Played\n1. Old - C"))
+
+    def test_playlist_delegates(self):
+        self.app.create_playlist('Mix')
+        self.app.back()
+        self.app.store.playlists[0]['tracks'] = [dict(track(1), title='One')]
+        text = self.app.copy_list_view("playlist", 0)
+        self.assertTrue(text.startswith("Mix\n1. One"))
+
+    def test_empty_list_toasts(self):
+        self.app.store.liked = []
+        self.app.toast_now = Mock()
+        self.assertIsNone(self.app.copy_list_view("liked", None))
+        self.app.toast_now.assert_called_once()
+
+    def test_v_key_in_liked_view(self):
+        self.app.mode = "normal"
+        self.app.stack = [("liked", None)]
+        s.handle_key(self.app, 'V')
+        self.app.copy_text.assert_called_once()
