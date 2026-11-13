@@ -143,7 +143,8 @@ the last 30 toasts with their age, so a message you missed is never gone. Right-
 their full menu, and Liked Songs offers play, shuffle play and open.
 Right-click Liked Songs or Recently Played in the sidebar for quick menus
 (open, play, shuffle, clear history). Right-click a mix card on home to play
-it, queue it or open its artist.
+it, queue it or open its artist. Right-click a song card (Made for you,
+On repeat, stats) for the full song menu.
 Right-click an artist in search results to open their page, play their saved
 songs or queue them all. Right-click a recent-search
 pill to run it again or forget it. The `?` overlay lists them too. `Ctrl+Z` suspends cleanly; the screen
