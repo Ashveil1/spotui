@@ -100,7 +100,10 @@ data class SpotUiState(
     val homeFeedLoading: Boolean = false,
     val homeFeedError: String? = null,
     val homeFeedContinuation: String? = null,
-    val homeFeedMoreLoading: Boolean = false
+    val homeFeedMoreLoading: Boolean = false,
+    val followedChannels: List<com.example.data.model.FollowedChannel> = emptyList(),
+    val followingFeed: List<Track> = emptyList(),
+    val followingFeedLoading: Boolean = false
 ) {
     val currentDest: NavDest get() = backStack.lastOrNull() ?: NavDest.Home
     val effectiveTheme: SpotTheme get() = previewTheme ?: library.prefs.theme
@@ -189,6 +192,17 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
                     }
                     refreshSimilar(force = false)
                     maybeLoadHomeFeed()
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            var feedLoadedOnce = false
+            repo.followedChannelsFlow.collect { channels ->
+                _uiState.update { it.copy(followedChannels = channels) }
+                if (channels.isNotEmpty() && !feedLoadedOnce) {
+                    feedLoadedOnce = true
+                    loadFollowingFeed()
                 }
             }
         }
@@ -307,6 +321,40 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun fetchShorts(): Result<List<Track>> =
         repo.fetchShorts()
+
+    fun toggleFollowChannel(channelId: String, name: String) {
+        viewModelScope.launch {
+            val isFollowed = _uiState.value.followedChannels.any { it.id == channelId }
+            if (isFollowed) {
+                repo.unfollowChannel(channelId)
+            } else {
+                repo.followChannel(channelId, name)
+            }
+        }
+    }
+
+    fun loadFollowingFeed() {
+        val channels = _uiState.value.followedChannels
+        if (channels.isEmpty() || _uiState.value.followingFeedLoading) return
+        _uiState.update { it.copy(followingFeedLoading = true) }
+        viewModelScope.launch {
+            val merged = mutableListOf<Track>()
+            val seen = mutableSetOf<String>()
+            for (ch in channels.take(8)) {
+                repo.fetchChannel(ch.id)
+                    .onSuccess { info ->
+                        for (t in info.videos.take(4)) {
+                            if (merged.size >= 30) break
+                            if (seen.add(t.id)) merged.add(t)
+                        }
+                    }
+                if (merged.size >= 30) break
+            }
+            _uiState.update {
+                it.copy(followingFeed = merged, followingFeedLoading = false)
+            }
+        }
+    }
 
     fun switchTab(dest: NavDest) {
         _uiState.update { s ->

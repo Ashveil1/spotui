@@ -93,6 +93,13 @@ data class BlockedTrackEntity(
     @PrimaryKey val trackId: String
 )
 
+@Entity(tableName = "followed_channels")
+data class FollowedChannelEntity(
+    @PrimaryKey val channelId: String,
+    val name: String,
+    val followedAtMs: Long
+)
+
 @Entity(tableName = "lyrics_cache")
 data class LyricsCacheEntity(
     @PrimaryKey val trackId: String,
@@ -230,6 +237,18 @@ interface LyricsDao {
     suspend fun trimTo400()
 }
 
+@Dao
+interface FollowedChannelDao {
+    @Query("SELECT * FROM followed_channels ORDER BY followedAtMs DESC")
+    fun observeAll(): Flow<List<FollowedChannelEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: FollowedChannelEntity)
+
+    @Query("DELETE FROM followed_channels WHERE channelId = :channelId")
+    suspend fun deleteById(channelId: String)
+}
+
 @Database(
     entities = [
         LikedTrackEntity::class,
@@ -239,9 +258,10 @@ interface LyricsDao {
         PlayCountEntity::class,
         RecentSearchEntity::class,
         BlockedTrackEntity::class,
-        LyricsCacheEntity::class
+        LyricsCacheEntity::class,
+        FollowedChannelEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class SpotUiDatabase : RoomDatabase() {
@@ -252,6 +272,7 @@ abstract class SpotUiDatabase : RoomDatabase() {
     abstract fun recentSearchDao(): RecentSearchDao
     abstract fun blockedDao(): BlockedDao
     abstract fun lyricsDao(): LyricsDao
+    abstract fun followedChannelDao(): FollowedChannelDao
 
     companion object {
         fun build(context: Context): SpotUiDatabase =

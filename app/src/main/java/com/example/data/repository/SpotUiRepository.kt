@@ -1,6 +1,7 @@
 package com.example.data.repository
 
 import com.example.data.local.BlockedTrackEntity
+import com.example.data.local.FollowedChannelEntity
 import com.example.data.local.HistoryEntryEntity
 import com.example.data.local.LikedTrackEntity
 import com.example.data.local.LyricsCacheEntity
@@ -12,6 +13,7 @@ import com.example.data.local.RecentSearchEntity
 import com.example.data.local.SpotUiDatabase
 import com.example.data.local.SpotUiPreferences
 import com.example.data.model.EqPreset
+import com.example.data.model.FollowedChannel
 import com.example.data.model.LyricsData
 import com.example.data.model.PlayCount
 import com.example.data.model.PlaybackSession
@@ -53,6 +55,22 @@ class SpotUiRepository(
     private val recentDao = db.recentSearchDao()
     private val blockedDao = db.blockedDao()
     private val lyricsDao = db.lyricsDao()
+    private val followedChannelDao = db.followedChannelDao()
+
+    val followedChannelsFlow: Flow<List<FollowedChannel>> =
+        followedChannelDao.observeAll().map { list ->
+            list.map { FollowedChannel(it.channelId, it.name) }
+        }
+
+    suspend fun followChannel(channelId: String, name: String) {
+        followedChannelDao.upsert(
+            FollowedChannelEntity(channelId, name, System.currentTimeMillis())
+        )
+    }
+
+    suspend fun unfollowChannel(channelId: String) {
+        followedChannelDao.deleteById(channelId)
+    }
 
     private val playlistsFlow: Flow<List<Playlist>> = combine(
         playlistDao.observePlaylists(),
