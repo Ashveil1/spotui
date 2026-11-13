@@ -3293,6 +3293,13 @@ class App:
         self.sel[vk] = idx
         self.mode = "context"
 
+    def open_playlist_context(self, pi, x, y):
+        """Right-click menu for a playlist row in the sidebar."""
+        if not 0 <= pi < len(self.store.playlists):
+            return
+        self.ctx = {"pl": pi, "x": x, "y": y, "sel": 0}
+        self.mode = "context"
+
     def close_context(self):
         self.ctx = None
         self.mode = "normal"
@@ -3302,6 +3309,33 @@ class App:
         c = self.ctx
         if not c:
             return []
+        if "pl" in c:
+            pi = c["pl"]
+            if not 0 <= pi < len(self.store.playlists):
+                return []
+            pl = self.store.playlists[pi]
+
+            def rename():
+                self.rename_index = pi
+                self.name_buf = pl["name"]
+                self.mode = "name"
+
+            def ask_delete():
+                self.delete_index = pi
+                self.mode = "confirm_delete"
+
+            return [
+                ("Play", lambda: self.play(list(pl["tracks"]), 0,
+                                           pl["name"])),
+                ("Rename", rename),
+                ("Duplicate", lambda: self.duplicate_playlist(pi)),
+                ("Unpin" if pl.get("pinned") else "Pin to the top",
+                 lambda: self.toggle_pin(pi)),
+                ("Like every song", lambda: self.like_all(pi)),
+                ("Copy tracklist", lambda: self.copy_tracklist(pi)),
+                ("Export JSON", lambda: self.export_playlist(pi)),
+                ("Delete playlist", ask_delete),
+            ]
         t, vk, idx = c["track"], c["vk"], c["idx"]
         liked = t.get("id") in self.liked_ids
         blocked = t.get("id") in self.blocked_ids
@@ -5349,8 +5383,13 @@ class UI:
         x = min(max(1, app.ctx["x"]), max(1, W - w - 1))
         y = min(max(1, app.ctx["y"]), max(1, H - h - 2))
         box(self.scr, y, x, w, h, pal["dim"], pal["side"])
-        put(self.scr, y + 1, x + 2,
-            wcut(app.ctx["track"].get("title") or "", w - 4), pal["side"],
+        if "track" in app.ctx:
+            title = app.ctx["track"].get("title") or ""
+        elif 0 <= app.ctx["pl"] < len(app.store.playlists):
+            title = app.store.playlists[app.ctx["pl"]]["name"]
+        else:
+            title = ""
+        put(self.scr, y + 1, x + 2, wcut(title, w - 4), pal["side"],
             curses.A_BOLD)
         for i, (label, _) in enumerate(items):
             yy = y + 3 + i
@@ -5993,8 +6032,12 @@ def handle_mouse(app):
             app.close_context()
             return
         for r in reversed(app.rects):
-            if (r["act"] == "row" and r["x0"] <= mx < r["x1"]
-                    and r["y0"] <= my < r["y1"]):
+            if not (r["x0"] <= mx < r["x1"] and r["y0"] <= my < r["y1"]):
+                continue
+            if r["act"] == "libitem" and r["arg"][0] == "playlist":
+                app.open_playlist_context(r["arg"][1], mx, my)
+                return
+            if r["act"] == "row":
                 vk, idx = r["arg"][0], r["arg"][1]
                 tracks = app.view_tracks(vk)
                 if 0 <= idx < len(tracks):
