@@ -3343,6 +3343,11 @@ class App:
         self.ctx = {"likedctx": True, "x": x, "y": y, "sel": 0}
         self.mode = "context"
 
+    def open_history_context(self, x, y):
+        """Right-click menu for Recently Played in the sidebar."""
+        self.ctx = {"histctx": True, "x": x, "y": y, "sel": 0}
+        self.mode = "context"
+
     def close_context(self):
         self.ctx = None
         self.mode = "normal"
@@ -3376,6 +3381,18 @@ class App:
                 ("Shuffle play", self.shuffle_liked),
                 ("Open Liked Songs", lambda: self.push("liked")),
             ]
+        if "histctx" in c:
+            items = [("Open Recently Played", lambda: self.push("history"))]
+            if self.store.history:
+                items.append(
+                    ("Play again", lambda: self.play(
+                        list(self.store.history), 0, "Recently Played")))
+
+                def ask_clear():
+                    self.mode = "confirm_clearhist"
+
+                items.append(("Clear listening history", ask_clear))
+            return items
         if "pl" in c:
             pi = c["pl"]
             if not 0 <= pi < len(self.store.playlists):
@@ -5455,6 +5472,8 @@ class UI:
             title = "Playback"
         elif "likedctx" in app.ctx:
             title = "Liked Songs"
+        elif "histctx" in app.ctx:
+            title = "Recently Played"
         elif "track" in app.ctx:
             title = app.ctx["track"].get("title") or ""
         elif 0 <= app.ctx["pl"] < len(app.store.playlists):
@@ -6113,9 +6132,16 @@ def handle_mouse(app):
                 if r["arg"][0] == "liked":
                     app.open_liked_context(mx, my)
                     return
-            if r["act"] == "libitem" and r["arg"][0] == "playlist":
-                app.open_playlist_context(r["arg"][1], mx, my)
-                return
+            if r["act"] == "libitem":
+                if r["arg"][0] == "playlist":
+                    app.open_playlist_context(r["arg"][1], mx, my)
+                    return
+                if r["arg"][0] == "liked":
+                    app.open_liked_context(mx, my)
+                    return
+                if r["arg"][0] == "history":
+                    app.open_history_context(mx, my)
+                    return
             if r["act"] == "pbzone":
                 app.open_playback_context(mx, my)
                 return

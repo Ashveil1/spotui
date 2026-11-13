@@ -5088,3 +5088,71 @@ class HomeTileContextTests(unittest.TestCase):
             s.handle_mouse(self.app)
         self.assertEqual(self.app.mode, "context")
         self.assertTrue(self.app.ctx["likedctx"])
+
+
+class SidebarContextTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+        self.app.store.history = [track(1), track(2)]
+
+    def labels(self):
+        return [l for l, _ in self.app.context_items()]
+
+    def right_click(self, act, arg):
+        self.app.rects = [{"x0": 1, "y0": 10, "x1": 24, "y1": 11,
+                           "act": act, "arg": arg}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 5, 10, 0, b3)):
+            s.handle_mouse(self.app)
+
+    def test_history_items_with_history(self):
+        self.app.open_history_context(5, 10)
+        self.assertEqual(self.labels(), ["Open Recently Played",
+                                         "Play again",
+                                         "Clear listening history"])
+
+    def test_history_items_empty(self):
+        self.app.store.history = []
+        self.app.open_history_context(5, 10)
+        self.assertEqual(self.labels(), ["Open Recently Played"])
+
+    def test_history_exec_open(self):
+        self.app.open_history_context(5, 10)
+        self.app.context_exec(self.labels().index("Open Recently Played"))
+        self.assertEqual(self.app.stack[-1][0], "history")
+
+    def test_history_exec_play_again(self):
+        self.app.play = Mock()
+        self.app.open_history_context(5, 10)
+        self.app.context_exec(self.labels().index("Play again"))
+        self.app.play.assert_called_once()
+        self.assertEqual(len(self.app.play.call_args[0][0]), 2)
+        self.assertEqual(self.app.play.call_args[0][2], "Recently Played")
+
+    def test_history_exec_clear_asks(self):
+        self.app.open_history_context(5, 10)
+        self.app.context_exec(self.labels().index("Clear listening history"))
+        self.assertEqual(self.app.mode, "confirm_clearhist")
+        self.assertEqual(len(self.app.store.history), 2)
+
+    def test_right_click_sidebar_history(self):
+        self.right_click("libitem", ("history", None))
+        self.assertEqual(self.app.mode, "context")
+        self.assertTrue(self.app.ctx["histctx"])
+
+    def test_right_click_sidebar_liked(self):
+        self.right_click("libitem", ("liked", None))
+        self.assertEqual(self.app.mode, "context")
+        self.assertTrue(self.app.ctx["likedctx"])
