@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-13
 
+- Synced lyrics: when LRCLIB has timestamps, the lyrics card highlights the current line as the song plays and follows it (`j`/`k` scroll by hand, `G` jumps back to the playing line). Works with cached lyrics too.
 - Lyrics: `Tab` (or Lyrics in the right-click menus) opens a scrollable lyrics card for the current or selected song. Plain lyrics come from LRCLIB (free, no API key), are cached in the library file, and `Y` copies them.
 
 ## 2026-11-12

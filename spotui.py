@@ -317,11 +317,24 @@ _SPLIT_RE = re.compile(r"\s+[-–—]\s+")
 LYRICS_URL = "https://lrclib.net/api/get"
 
 
-def fetch_lyrics(title, artist, timeout=8):
-    """Plain lyrics for one song from LRCLIB (free, no API key).
+def parse_lrc(text):
+    """[(seconds, line)] parsed from LRC text, sorted by time."""
+    out = []
+    for raw in (text or "").splitlines():
+        m = re.match(r"\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)", raw)
+        if m:
+            out.append((int(m.group(1)) * 60 + float(m.group(2)),
+                        m.group(3)))
+    out.sort(key=lambda x: x[0])
+    return out
 
-    Returns the lyrics text, or None when LRCLIB has no match or the
-    request fails. Never raises: lyrics are a nicety, not a dependency.
+
+def fetch_lyrics(title, artist, timeout=8):
+    """Lyrics for one song from LRCLIB (free, no API key).
+
+    Returns {"plain": str|None, "synced": [(sec, line)]|None}, or None
+    when LRCLIB has no match or the request fails. Never raises:
+    lyrics are a nicety, not a dependency.
     """
     if not title or not artist:
         return None
@@ -335,10 +348,13 @@ def fetch_lyrics(title, artist, timeout=8):
             data = json.loads(r.read().decode("utf-8", "replace"))
         if not isinstance(data, dict):
             return None
-        text = data.get("plainLyrics")
-        if isinstance(text, str) and text.strip():
-            return text.strip()
-        return None
+        plain = data.get("plainLyrics")
+        plain = plain.strip() if isinstance(plain, str) and plain.strip() \
+            else None
+        synced = parse_lrc(data.get("syncedLyrics")) or None
+        if plain is None and not synced:
+            return None
+        return {"plain": plain, "synced": synced}
     except Exception:
         return None
 
@@ -547,7 +563,20 @@ class Store:
                     ts = int(v.get("ts") or 0)
                 except (ValueError, TypeError):
                     ts = 0
-                self.lyrics[k] = {"text": text, "ts": ts}
+                entry = {"text": text, "ts": ts}
+                sy = v.get("synced")
+                if isinstance(sy, list):
+                    clean = []
+                    for it in sy[:2000]:
+                        if (isinstance(it, (list, tuple)) and len(it) == 2
+                                and isinstance(it[0], (int, float))
+                                and not isinstance(it[0], bool)
+                                and math.isfinite(it[0])
+                                and isinstance(it[1], str)):
+                            clean.append([float(it[0]), it[1]])
+                    if clean:
+                        entry["synced"] = clean
+                self.lyrics[k] = entry
         if d.get("theme") in THEMES:
             self.theme = d["theme"]
         try:
@@ -1523,6 +1552,7 @@ class App:
         self.lyrics_off = 0            # lyrics modal scroll offset
         self.lyrics_max_off = 0        # set by the lyrics modal each render
         self._lyrics_pending = set()   # lyrics fetches in flight
+        self.lyrics_follow = True      # synced lyrics follow the playback
         self.theme_orig = None         # theme to revert to (picker)
         self.theme_idx = 0             # highlighted theme in the picker
         self._trash = None             # last deleted playlist/song (undo)
@@ -3255,6 +3285,7 @@ class App:
             return
         self.lyrics_track = dict(t)
         self.lyrics_off = 0
+        self.lyrics_follow = True
         self.mode = "lyrics"
         self.ensure_lyrics(t)
 
@@ -3276,10 +3307,17 @@ class App:
                          args=(vid, title, artist), daemon=True).start()
 
     def _lyrics_worker(self, vid, title, artist):
-        text = fetch_lyrics(title, artist)
+        res = fetch_lyrics(title, artist)
+        if isinstance(res, dict):
+            text, synced = res.get("plain"), res.get("synced")
+        else:                        # tolerate a bare-string result
+            text, synced = res, None
+        entry = {"text": text, "ts": int(time.time())}
+        if synced:
+            entry["synced"] = synced
         with self.lock:
             self._lyrics_pending.discard(vid)
-            self.store.lyrics[vid] = {"text": text, "ts": int(time.time())}
+            self.store.lyrics[vid] = entry
             # cap the cache so the library file does not grow forever
             if len(self.store.lyrics) > 400:
                 oldest = sorted(self.store.lyrics,
@@ -3302,11 +3340,26 @@ class App:
             out.extend(textwrap.wrap(raw, width=max(10, width)) or [""])
         return out
 
+    def lyrics_active(self, synced):
+        """Index of the synced line at the playback position, or None."""
+        pos = (self.mpv.state or {}).get("pos")
+        if pos is None:
+            return None
+        idx = -1
+        for i, (t, _) in enumerate(synced):
+            if t <= pos:
+                idx = i
+            else:
+                break
+        return idx
+
     def copy_lyrics(self):
         """Copy the shown lyrics to the clipboard (Y in the modal)."""
         t = self.lyrics_track or {}
-        entry = self.store.lyrics.get(str(t.get("id") or ""))
-        text = (entry or {}).get("text")
+        entry = self.store.lyrics.get(str(t.get("id") or "")) or {}
+        text = entry.get("text")
+        if not text and entry.get("synced"):
+            text = "\n".join(ln for _, ln in entry["synced"])
         if not text:
             self.toast_now("No lyrics to copy")
             return
@@ -5717,6 +5770,35 @@ class UI:
         put(self.scr, y + 2, x + 2,
             wcut(t.get("artist") or "", w - 4), pal["sfaint"])
         view_h = h - 6
+        entry = app.store.lyrics.get(str(t.get("id") or "")) or {}
+        synced = entry.get("synced")
+        if synced:
+            lines = [ln for _, ln in synced]
+            cur = app.current or {}
+            active = None
+            if str(t.get("id") or "") == str(cur.get("id") or ""):
+                active = app.lyrics_active(synced)
+            app.lyrics_max_off = max(0, len(lines) - view_h)
+            if app.lyrics_follow and active is not None and active >= 0:
+                app.lyrics_off = max(0, min(app.lyrics_max_off,
+                                            active - view_h // 2))
+            off = max(0, min(app.lyrics_off, app.lyrics_max_off))
+            app.lyrics_off = off
+            for i, ln in enumerate(lines[off:off + view_h]):
+                if off + i == active:
+                    put(self.scr, y + 4 + i, x + 2, wcut(ln, w - 4),
+                        pal["green"], curses.A_BOLD)
+                else:
+                    put(self.scr, y + 4 + i, x + 2, wcut(ln, w - 4),
+                        pal["side"])
+            if app.lyrics_max_off:
+                put(self.scr, y + h - 2, x + w - 12,
+                    f"{off + 1}-{min(off + view_h, len(lines))}/{len(lines)}",
+                    pal["sfaint"])
+            put(self.scr, y + h - 2, x + 2,
+                "j/k scroll \u00b7 G follow \u00b7 Y copy \u00b7 Esc close",
+                pal["sfaint"])
+            return
         lines = app.lyrics_lines(w - 4)
         if lines is None:
             put(self.scr, y + 4, x + 2, "Finding lyrics\u2026", pal["sfaint"])
@@ -6118,12 +6200,16 @@ def handle_key(app, k):
             app.mode = "normal"
             app.lyrics_track = None
         elif k in ("j", curses.KEY_DOWN):
+            app.lyrics_follow = False
             app.lyrics_off = min(app.lyrics_max_off, app.lyrics_off + 1)
         elif k in ("k", curses.KEY_UP):
+            app.lyrics_follow = False
             app.lyrics_off = max(0, app.lyrics_off - 1)
         elif k == "g":
+            app.lyrics_follow = False
             app.lyrics_off = 0
         elif k == "G":
+            app.lyrics_follow = True
             app.lyrics_off = app.lyrics_max_off
         elif k == "Y":
             app.copy_lyrics()
@@ -6436,6 +6522,7 @@ def handle_mouse(app):
                 app.pick_idx = max(0, min(len(app.pick_rows) - 1, app.pick_idx + step))
             elif app.mode == "lyrics":
                 step = -3 if bstate & curses.BUTTON4_PRESSED else 3
+                app.lyrics_follow = False
                 app.lyrics_off = max(0, min(app.lyrics_max_off,
                                             app.lyrics_off + step))
             return
