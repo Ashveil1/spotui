@@ -91,6 +91,122 @@ class YouTubeClient {
 
 
 
+
+    data class YtComment(
+        val author: String,
+        val text: String,
+        val timeLabel: String,
+        val likes: Int,
+        val replyCount: Int
+    )
+
+    suspend fun fetchComments(videoId: String, limit: Int = 30): Result<List<YtComment>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val nextBody = JSONObject().apply {
+                put("context", webContextJson())
+                put("videoId", videoId)
+            }
+            val root = innertubePost("next", nextBody)
+                ?: throw RuntimeException("Could not load the video page")
+            val section = findNodeWithString(root, "sectionIdentifier", "comment-item-section")
+                ?: findNodeWithString(root, "targetId", "comment-item-section")
+                ?: findNodeWithString(root, "sectionIdentifier", "comments-entry-point")
+                ?: throw RuntimeException("Comments are turned off for this video")
+            val token = findFirstContinuationToken(section)
+                ?: throw RuntimeException("Comments are turned off for this video")
+            val contBody = JSONObject().apply {
+                put("context", webContextJson())
+                put("continuation", token)
+            }
+            val contRoot = innertubePost("next", contBody)
+                ?: throw RuntimeException("Could not load comments")
+            val comments = mutableListOf<YtComment>()
+            collectCommentsDeep(contRoot, comments, limit)
+            if (comments.isEmpty()) throw RuntimeException("No comments found")
+            comments.toList()
+        }
+    }
+
+    private fun findNodeWithString(node: Any?, key: String, value: String): JSONObject? {
+        when (node) {
+            is JSONObject -> {
+                if (node.optString(key) == value) return node
+                val keys = node.keys()
+                while (keys.hasNext()) {
+                    val r = findNodeWithString(node.opt(keys.next()), key, value)
+                    if (r != null) return r
+                }
+            }
+            is JSONArray -> {
+                for (i in 0 until node.length()) {
+                    val r = findNodeWithString(node.opt(i), key, value)
+                    if (r != null) return r
+                }
+            }
+        }
+        return null
+    }
+
+    private fun findFirstContinuationToken(node: Any?): String? {
+        when (node) {
+            is JSONObject -> {
+                val cont = node.optJSONObject("continuationCommand")
+                if (cont != null) {
+                    val t = cont.optString("token")
+                    if (t.isNotEmpty()) return t
+                }
+                val keys = node.keys()
+                while (keys.hasNext()) {
+                    val r = findFirstContinuationToken(node.opt(keys.next()))
+                    if (r != null) return r
+                }
+            }
+            is JSONArray -> {
+                for (i in 0 until node.length()) {
+                    val r = findFirstContinuationToken(node.opt(i))
+                    if (r != null) return r
+                }
+            }
+        }
+        return null
+    }
+
+    private fun collectCommentsDeep(node: Any?, out: MutableList<YtComment>, limit: Int) {
+        if (node == null || out.size >= limit) return
+        when (node) {
+            is JSONObject -> {
+                val cr = node.optJSONObject("commentRenderer")
+                if (cr != null) {
+                    val text = readRunsText(cr.optJSONObject("contentText")).trim()
+                    if (text.isNotEmpty()) {
+                        out.add(
+                            YtComment(
+                                author = readRunsText(cr.optJSONObject("authorText")).ifBlank { "Unknown" },
+                                text = text,
+                                timeLabel = readRunsText(cr.optJSONObject("publishedTimeText")),
+                                likes = cr.optJSONObject("voteCount")?.optString("simpleText")
+                                    ?.filter { it.isDigit() }?.toIntOrNull() ?: 0,
+                                replyCount = cr.optInt("replyCount", 0)
+                            )
+                        )
+                    }
+                    return
+                }
+                val keys = node.keys()
+                while (keys.hasNext() && out.size < limit) {
+                    collectCommentsDeep(node.opt(keys.next()), out, limit)
+                }
+            }
+            is JSONArray -> {
+                var i = 0
+                while (i < node.length() && out.size < limit) {
+                    collectCommentsDeep(node.opt(i), out, limit)
+                    i++
+                }
+            }
+        }
+    }
+
     suspend fun fetchRelated(videoId: String, limit: Int = 25): Result<List<Track>> = withContext(Dispatchers.IO) {
         runCatching {
             val body = JSONObject().apply {
