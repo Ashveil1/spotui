@@ -3413,6 +3413,13 @@ class App:
         self.ctx = {"recentctx": q, "x": x, "y": y, "sel": 0}
         self.mode = "context"
 
+    def open_track_context(self, t, src, x, y):
+        """Right-click menu for a standalone song (home/stat cards)."""
+        if not t:
+            return
+        self.ctx = {"oneoff": t, "src": src, "x": x, "y": y, "sel": 0}
+        self.mode = "context"
+
     def rerun_search(self, q):
         """Re-run a recent search (chip click or its menu)."""
         self.query = q
@@ -3497,6 +3504,21 @@ class App:
                 ("Search again", lambda: self.rerun_search(q)),
                 ("Remove from recent searches",
                  lambda: self.remove_recent(q)),
+            ]
+        if "oneoff" in c:
+            t = c["oneoff"]
+            liked = t.get("id") in self.liked_ids
+            blocked = t.get("id") in self.blocked_ids
+            return [
+                ("Play", lambda: self.play([t], 0, c["src"])),
+                ("Play next", lambda: self.play_next(t)),
+                ("Add to queue", lambda: self.add_queue(t)),
+                ("Unlike" if liked else "Like", lambda: self.like(t)),
+                ("Song info", lambda: self.open_info(t)),
+                ("Copy link", lambda: self.copy_link(t)),
+                ("Unhide from suggestions" if blocked
+                 else "Hide from suggestions",
+                 lambda: self.toggle_block(t)),
             ]
         if "pl" in c:
             pi = c["pl"]
@@ -5623,6 +5645,8 @@ class UI:
             title = app.ctx["artistctx"]
         elif "recentctx" in app.ctx:
             title = app.ctx["recentctx"]
+        elif "oneoff" in app.ctx:
+            title = app.ctx["oneoff"].get("title") or ""
         elif "track" in app.ctx:
             title = app.ctx["track"].get("title") or ""
         elif 0 <= app.ctx["pl"] < len(app.store.playlists):
@@ -6301,6 +6325,13 @@ def handle_mouse(app):
                 return
             if r["act"] == "recent":
                 app.open_recent_context(r["arg"], mx, my)
+                return
+            if r["act"] == "playtrack":
+                arg = r["arg"]
+                if isinstance(arg, tuple):
+                    app.open_track_context(arg[0], arg[1], mx, my)
+                else:
+                    app.open_track_context(arg, "Listening stats", mx, my)
                 return
             if r["act"] == "libitem":
                 if r["arg"][0] == "playlist":

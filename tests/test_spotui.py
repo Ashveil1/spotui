@@ -5545,3 +5545,67 @@ class HelpMouseSectionTests(unittest.TestCase):
         self.assertIn("menus: songs, tiles, artists, bar", joined)
         self.assertIn("wheel", joined)
         self.assertIn("drag", joined)
+
+
+class OneoffContextTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+
+    def labels(self):
+        return [l for l, _ in self.app.context_items()]
+
+    def test_items(self):
+        self.app.open_track_context(track(1), "On repeat", 30, 20)
+        self.assertEqual(self.app.mode, "context")
+        labels = self.labels()
+        self.assertEqual(labels[:4], ["Play", "Play next", "Add to queue",
+                                      "Like"])
+        self.assertIn("Song info", labels)
+        self.assertIn("Hide from suggestions", labels)
+
+    def test_unlike_when_liked(self):
+        self.app.store.liked = [track(1)]
+        self.app.liked_ids = {"1"}
+        self.app.open_track_context(track(1), "On repeat", 30, 20)
+        self.assertIn("Unlike", self.labels())
+
+    def test_exec_play(self):
+        self.app.play = Mock()
+        t = track(1)
+        self.app.open_track_context(t, "On repeat", 30, 20)
+        self.app.context_exec(self.labels().index("Play"))
+        self.app.play.assert_called_once_with([t], 0, "On repeat")
+
+    def test_right_click_playtrack_tuple(self):
+        t = track(1)
+        self.app.rects = [{"x0": 30, "y0": 30, "x1": 50, "y1": 35,
+                           "act": "playtrack", "arg": (t, "On repeat")}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 40, 32, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mode, "context")
+        self.assertEqual(self.app.ctx["oneoff"]["id"], "1")
+        self.assertEqual(self.app.ctx["src"], "On repeat")
+
+    def test_right_click_playtrack_bare(self):
+        t = track(2)
+        self.app.rects = [{"x0": 30, "y0": 30, "x1": 50, "y1": 35,
+                           "act": "playtrack", "arg": t}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 40, 32, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.ctx["oneoff"]["id"], "2")
+        self.assertEqual(self.app.ctx["src"], "Listening stats")
