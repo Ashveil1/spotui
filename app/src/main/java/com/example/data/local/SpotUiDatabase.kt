@@ -12,6 +12,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
@@ -275,9 +277,21 @@ abstract class SpotUiDatabase : RoomDatabase() {
     abstract fun followedChannelDao(): FollowedChannelDao
 
     companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `followed_channels` (" +
+                        "`channelId` TEXT NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`followedAtMs` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`channelId`))"
+                )
+            }
+        }
+
         fun build(context: Context): SpotUiDatabase =
             Room.databaseBuilder(context, SpotUiDatabase::class.java, "spotui_library.db")
-                .fallbackToDestructiveMigration(true)
+                .addMigrations(MIGRATION_1_2)
                 .build()
     }
 }

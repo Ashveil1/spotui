@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -140,6 +141,21 @@ fun ShortsScreen(viewModel: SpotUiViewModel, onClose: () -> Unit) {
                             player.playWhenReady = true
                         }
                         .onFailure { pageError = it.message }
+                }
+
+                DisposableEffect(pagerState.settledPage) {
+                    val listener = object : Player.Listener {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            if (playbackState == Player.STATE_ENDED) {
+                                val next = pagerState.settledPage + 1
+                                if (next < list.size) {
+                                    pagerState.requestScrollToPage(next)
+                                }
+                            }
+                        }
+                    }
+                    player.addListener(listener)
+                    onDispose { player.removeListener(listener) }
                 }
 
                 VerticalPager(
