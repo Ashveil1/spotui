@@ -732,7 +732,7 @@ class YouTubeClient {
             client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@runCatching null
                 val html = resp.body?.string() ?: return@runCatching null
-                val m = Regex("\"sentimentFactoidA11yTextIfLiked\":\{\"content\":\"([^\"]+)\"")
+                val m = Regex("\"sentimentFactoidA11yTextIfLiked\":\\{\"content\":\"([^\"]+)\"")
                     .find(html)
                 m?.groupValues?.get(1)
             }
