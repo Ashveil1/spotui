@@ -3032,14 +3032,7 @@ class App:
             if not tracks:
                 self.toast_now("No songs found at that link")
                 return
-            base = (pl_title or "").strip() or "YouTube import"
-            base = " ".join(base.split())[:60]
-            n = 2
-            name = base
-            names = {p["name"] for p in self.store.playlists}
-            while name in names:
-                name = f"{base} {n}"
-                n += 1
+            name = _unique_pl_name(self.store, pl_title)
             self.store.playlists.append({"name": name, "tracks": tracks})
             self.store.save()
             self.push("playlist", len(self.store.playlists) - 1)
@@ -7077,10 +7070,46 @@ def import_playlist(path):
     return True, f"Imported {d['name']} ({len(tracks)} songs)"
 
 
+def _unique_pl_name(store, base):
+    """Dedupe a playlist title against the store ("Mix", "Mix 2", ...)."""
+    base = " ".join((base or "").split())[:60].strip() or "YouTube import"
+    names = {p["name"] for p in store.playlists}
+    name, n = base, 2
+    while name in names:
+        name = f"{base} {n}"
+        n += 1
+    return name
+
+
+def import_playlist_url(url, timeout=30):
+    """Import a YouTube playlist link headless. Returns (ok, message)."""
+    if not HAVE_YTDL:
+        return False, "Importing from YouTube needs yt-dlp"
+    try:
+        pl_title, items = _ytdl_playlist_full(url, n=200, timeout=timeout)
+    except Exception as e:
+        return False, f"Could not read that playlist: {e}"
+    tracks = Store._tracks([t for t in items if isinstance(t, dict)])
+    if not tracks:
+        return False, "No songs found at that link"
+    store = Store()
+    if store._corrupt:
+        return False, store.error
+    name = _unique_pl_name(store, pl_title)
+    store.playlists.append({"name": name, "tracks": tracks})
+    if not store.save():
+        return False, store.error
+    return True, f"Imported {name} ({len(tracks)} songs)"
+
+
 def main():
     locale.setlocale(locale.LC_ALL, "")
     if len(sys.argv) == 3 and sys.argv[1] == "--import":
         ok, msg = import_playlist(sys.argv[2])
+        print(msg, file=sys.stdout if ok else sys.stderr)
+        sys.exit(0 if ok else 1)
+    if len(sys.argv) == 3 and sys.argv[1] == "--import-url":
+        ok, msg = import_playlist_url(sys.argv[2])
         print(msg, file=sys.stdout if ok else sys.stderr)
         sys.exit(0 if ok else 1)
     if not sys.stdout.isatty():
