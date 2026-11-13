@@ -1582,17 +1582,28 @@ class App:
                     if t.get("id") not in self.blocked_ids]
         return []
 
+    def find_matches(self, tracks=None):
+        """Row indices in the current view matching the find buffer."""
+        q = self.find_buf.casefold().strip()
+        if not q:
+            return []
+        tracks = self.view_tracks() if tracks is None else tracks
+        return [i for i, t in enumerate(tracks)
+                if q in f"{t.get('title', '')} {t.get('artist', '')}".casefold()]
+
     def find_jump(self):
         q = self.find_buf.casefold().strip()
         tracks = self.view_tracks()
         if not q:
             self.toast_now("Find: type to jump, Enter to stay")
             return
-        for i, t in enumerate(tracks):
-            if q in f"{t.get('title', '')} {t.get('artist', '')}".casefold():
-                self.sel[self.key()] = i
-                self.toast_now(f"Find: {self.find_buf}")
-                return
+        hits = self.find_matches(tracks)
+        if hits:
+            self.sel[self.key()] = hits[0]
+            n = len(hits)
+            self.toast_now(f"Find: {self.find_buf} \u00b7 {n} match"
+                           + ("es" if n != 1 else ""))
+            return
         self.toast_now(f"Find: {self.find_buf} (no match)")
 
     def sel_row(self):
@@ -5164,10 +5175,14 @@ class UI:
                 str(idx + 1).rjust(2) if not compact else "·",
                 pal["faint"] if not compact else pal["dim"])
 
+        find_hit = (not playing and app.mode == "find"
+                    and app.find_buf.strip()
+                    and app.find_buf.casefold().strip()
+                    in f"{t.get('title', '')} {t.get('artist', '')}".casefold())
         tx = x0 + num_w
         put(scr, y, tx, wcut(t["title"], title_w),
-            pal["green"] if playing else cp(pal["text"]),
-            curses.A_BOLD if (playing or selected) else 0)
+            pal["green"] if (playing or find_hit) else cp(pal["text"]),
+            curses.A_BOLD if (playing or selected or find_hit) else 0)
         if t.get("auto") or t.get("enhanced"):
             ax = tx + min(dlen(t["title"]), title_w) + 1
             if ax < cx_safe - 1:

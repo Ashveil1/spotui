@@ -5285,3 +5285,91 @@ class ArtistContextTests(unittest.TestCase):
             s.handle_mouse(self.app)
         self.assertEqual(self.app.mode, "context")
         self.assertEqual(self.app.ctx["artistctx"], "Alpha")
+
+
+class FindHighlightTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+        self.app.store.liked = [dict(track(1), title='Rainy Day'),
+                                dict(track(2), title='Sunny'),
+                                dict(track(3), title='Rain Again')]
+        self.app.liked_ids = {t["id"] for t in self.app.store.liked}
+        self.app.push("liked")
+        self.app.mode = "find"
+
+    def test_find_matches(self):
+        self.app.find_buf = "rain"
+        self.assertEqual(self.app.find_matches(), [0, 2])
+
+    def test_find_matches_empty_buf(self):
+        self.app.find_buf = "  "
+        self.assertEqual(self.app.find_matches(), [])
+
+    def test_find_jump_count_toast(self):
+        self.app.toast_now = Mock()
+        self.app.find_buf = "rain"
+        self.app.find_jump()
+        self.assertEqual(self.app.sel["liked:"], 0)
+        msg = self.app.toast_now.call_args[0][0]
+        self.assertIn("2 matches", msg)
+
+    def test_find_jump_single_match(self):
+        self.app.toast_now = Mock()
+        self.app.find_buf = "sunny"
+        self.app.find_jump()
+        self.assertEqual(self.app.sel["liked:"], 1)
+        msg = self.app.toast_now.call_args[0][0]
+        self.assertIn("1 match", msg)
+        self.assertNotIn("matches", msg)
+
+    def test_find_jump_no_match(self):
+        self.app.toast_now = Mock()
+        self.app.find_buf = "zzz"
+        self.app.find_jump()
+        self.assertIn("no match", self.app.toast_now.call_args[0][0])
+
+    def test_row_highlights_find_match(self):
+        from collections import defaultdict
+        self.app.pal = defaultdict(int, {"accent": 77, "green": 55})
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 140)
+        ui = s.UI(self.app, scr)
+        self.app.rects = []
+        self.app.find_buf = "rain"
+        calls = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, pair, *a, **k:
+                          calls.append((str(t), pair))):
+            ui.row(3, 24, 86, dict(track(9), title="Rainy Day"), 1,
+                   "liked:", 1, show_date=False)
+        title_calls = [p for txt, p in calls if txt == "Rainy Day"]
+        self.assertEqual(title_calls, [55])
+
+    def test_row_no_highlight_outside_find(self):
+        from collections import defaultdict
+        self.app.pal = defaultdict(int, {"accent": 77, "green": 55})
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 140)
+        ui = s.UI(self.app, scr)
+        self.app.rects = []
+        self.app.mode = "normal"
+        self.app.find_buf = "rain"
+        calls = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, pair, *a, **k:
+                          calls.append((str(t), pair))):
+            ui.row(3, 24, 86, dict(track(9), title="Rainy Day"), 1,
+                   "liked:", 1, show_date=False)
+        title_calls = [p for txt, p in calls if txt == "Rainy Day"]
+        self.assertNotIn(77, title_calls)
