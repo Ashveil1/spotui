@@ -5957,3 +5957,81 @@ class SyncedLyricsTests(unittest.TestCase):
         self.app.store.save()
         fresh = s.Store()
         self.assertNotIn('synced', fresh.lyrics['9'])
+
+
+class LyricsSeekTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def _render(self, other_song=False):
+        from collections import defaultdict
+        t = track(1)
+        synced = [[float(i * 10), f'line {i}'] for i in range(6)]
+        self.app.store.lyrics['1'] = {'text': 'p', 'ts': 1, 'synced': synced}
+        self.app.current = track(2) if other_song else t
+        self.app.lyrics_track = dict(t)
+        self.app.mode = 'lyrics'
+        self.app.mpv.state = {'pos': 15.0}
+        self.app.pal = defaultdict(int)
+        self.app.rects = []
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        with patch.object(s, 'put'):
+            ui.lyrics_modal(120)
+        return ui
+
+    def test_synced_lines_register_seek_hits(self):
+        self._render()
+        hits = [r for r in self.app.rects if r['act'] == 'lyrseek']
+        self.assertEqual(len(hits), 6)
+        self.assertEqual(hits[0]['arg'], 0.0)
+        self.assertEqual(hits[1]['arg'], 10.0)
+
+    def test_no_seek_hits_for_other_song(self):
+        self._render(other_song=True)
+        hits = [r for r in self.app.rects if r['act'] == 'lyrseek']
+        self.assertEqual(hits, [])
+
+    def test_click_line_seeks(self):
+        self._render()
+        r = next(r for r in self.app.rects if r['act'] == 'lyrseek'
+                 and r['arg'] == 10.0)
+        self.app.mpv = Mock()
+        self.app.lyrics_follow = False
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, r['x0'] + 1, r['y0'], 0,
+                                        s.curses.BUTTON1_CLICKED)):
+            s.handle_mouse(self.app)
+        self.app.mpv.seek_abs.assert_called_once_with(10.0)
+        self.assertTrue(self.app.lyrics_follow)   # follow resumes after seek
+
+    def test_seek_hint_only_when_playing(self):
+        from collections import defaultdict
+        # playing song: footer advertises click-to-seek
+        self._render()
+        foot = []
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          foot.append(str(t))):
+            ui.lyrics_modal(120)
+        self.assertIn('click to seek', foot[-1])
+        # another song's card: no seek hint, no hits
+        self._render(other_song=True)
+        foot = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          foot.append(str(t))):
+            ui.lyrics_modal(120)
+        self.assertNotIn('click to seek', foot[-1])
