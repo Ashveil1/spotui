@@ -722,6 +722,23 @@ class YouTubeClient {
         return if (mp4Url != null) mp4Url to mp4Label else anyUrl?.let { it to anyLabel }
     }
 
+    suspend fun fetchLikeCount(videoId: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val req = Request.Builder()
+                .url("https://www.youtube.com/watch?v=$videoId")
+                .header("User-Agent", WEB_UA)
+                .header("Accept-Language", "en-US,en;q=0.9")
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@runCatching null
+                val html = resp.body?.string() ?: return@runCatching null
+                val m = Regex("\"sentimentFactoidA11yTextIfLiked\":\{\"content\":\"([^\"]+)\"")
+                    .find(html)
+                m?.groupValues?.get(1)
+            }
+        }.getOrNull()
+    }
+
     data class YtVideoDetails(
         val viewCount: String,
         val uploadDate: String,
