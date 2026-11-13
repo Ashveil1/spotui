@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Right-click the Liked Songs home tile for play, shuffle play and open; playlist tiles open the full playlist menu.
 - Right-click the player bar for a Playback menu: like, song info, equalizer, volume leveling (mpv dynaudnorm - keeps loud and quiet songs closer, saved) and the sleep timer.
 - Right-click a playlist in the sidebar for a menu of everything you can do with it: play, rename, duplicate, pin, like all, copy tracklist, export JSON, delete.
 - `V` now works in Liked Songs and Recently Played too, copying the visible list (with the current sort) as numbered shareable text.
