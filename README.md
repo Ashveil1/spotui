@@ -94,7 +94,7 @@ Tips that make it nicer on a phone:
 | `h` (playlist) | Enhance: weave suggested songs (✦) from your library into the playlist; toggle again to remove them | |
 | `C` | clear upcoming queue | `X` | export playlist JSON |
 | `Y` | copy song link (or, in Stats, a shareable listening summary) to the clipboard (Termux, Wayland, X11, macOS, or OSC 52; shows the text when none work) | |
-| `I` | song info card: plays, last played, liked, playlists it sits in, link | |
+| `I` | song info card: plays, last played, liked, playlists it sits in, lyrics status (Tab opens/fetches them there), link | |
 | `Tab` | lyrics for the current or selected song (from [LRCLIB](https://lrclib.net), cached locally; synced lines highlight as the song plays; `j`/`k` scroll, `G` follows, `Y` copies) | |
 | `O` | open the song's link in the browser (termux-open-url / xdg-open / open / wslview) | |
 | `U` | undo the last deleted playlist or song | |

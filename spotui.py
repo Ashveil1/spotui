@@ -3480,6 +3480,15 @@ class App:
         in_pls = [pl["name"] for pl in self.store.playlists
                   if any(str(x.get("id")) == tid for x in pl["tracks"])]
         rows.append(("In playlists", ", ".join(in_pls) if in_pls else "-"))
+        lyr = self.store.lyrics.get(tid) or {}
+        if lyr.get("synced"):
+            rows.append(("Lyrics", "synced \u00b7 Tab opens"))
+        elif lyr.get("text"):
+            rows.append(("Lyrics", "saved \u00b7 Tab opens"))
+        elif "text" in lyr:
+            rows.append(("Lyrics", "none on LRCLIB (cached)"))
+        else:
+            rows.append(("Lyrics", "not fetched \u00b7 Tab fetches"))
         if t.get("added"):
             rows.append(("Added", fmt_added(t.get("added"))))
         if t.get("url"):
@@ -5816,7 +5825,7 @@ class UI:
             put(self.scr, y + 3 + i, x + 4 + lw,
                 wcut(str(value), w - lw - 7), pal["side"])
         put(self.scr, y + h - 2, x + 2,
-            "Y: copy link \u00b7 O: open in browser \u00b7 Esc: close",
+            "Tab: lyrics \u00b7 Y: copy link \u00b7 O: browser \u00b7 Esc: close",
             pal["sfaint"])
 
     def notices_modal(self, W):
@@ -6334,6 +6343,9 @@ def handle_key(app, k):
             app.copy_link(app.info_track)
         elif k == "O":
             app.open_in_browser(app.info_track)
+        elif k == "\t":
+            app.open_lyrics(app.info_track)
+            app.info_track = None
         return
 
     if app.mode == "pick":
