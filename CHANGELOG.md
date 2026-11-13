@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-13
 
+- Lyrics prefetch: playing a song fetches its lyrics in the background, and Now Playing shows a clickable ♪ Lyrics chip (marked "synced" when timestamps exist) once they are cached, so the lyrics card opens instantly.
 - Click a line in a synced lyrics card to seek the song straight to it.
 - Synced lyrics: when LRCLIB has timestamps, the lyrics card highlights the current line as the song plays and follows it (`j`/`k` scroll by hand, `G` jumps back to the playing line). Works with cached lyrics too.
 - Lyrics: `Tab` (or Lyrics in the right-click menus) opens a scrollable lyrics card for the current or selected song. Plain lyrics come from LRCLIB (free, no API key), are cached in the library file, and `Y` copies them.

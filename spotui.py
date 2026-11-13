@@ -1847,6 +1847,11 @@ class App:
         self.loading = True
         threading.Thread(target=self._resolve_load, args=(t, token),
                          daemon=True).start()
+        if HAVE_YTDL:
+            # prefetch lyrics so Tab / the Lyrics chip opens instantly;
+            # gated on a real playback environment so offline test runs
+            # never touch the network
+            self.ensure_lyrics(t)
         self._maybe_autoplay()
 
     def _note_history(self, t):
@@ -2365,6 +2370,9 @@ class App:
             self.speed = 1.0
             self.mpv.set_speed(1.0)
             self.toast_now("Speed 1x")
+            return
+        if tag == "lyrics":
+            self.open_lyrics(self.current)
             return
         {"playpause": self.toggle, "shuffle": self.toggle_shuffle,
          "repeat": self.cycle_repeat, "eq": self.cycle_eq,
@@ -4414,6 +4422,10 @@ class UI:
             chips.append((f"Sleep {fmt_t(left)}", "sleep"))
         elif app.sleep_eot:
             chips.append(("Sleep: end of track", "sleep"))
+        lyr = app.store.lyrics.get(str(track.get("id") or ""))
+        if lyr and (lyr.get("text") or lyr.get("synced")):
+            chips.append(("\u266a Lyrics" + (" (synced)" if lyr.get("synced")
+                                              else ""), "lyrics"))
         cx, cy = tx, ty + 3
         for label, tag in chips:
             w = dlen(label) + 2
