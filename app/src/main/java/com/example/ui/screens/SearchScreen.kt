@@ -497,6 +497,7 @@ fun SearchScreen(
                             reducedMotion = state.prefs.reducedMotion,
                             playCount = state.library.playCounts[track.id]?.count ?: 0,
                             onClick = { viewModel.play(results, idx, "Search", startRadioAfter = true) },
+                            onWatch = { viewModel.watchVideo(track) },
                             onLongClick = { viewModel.openModal(ActiveModal.SongMenu(track, "Search")) },
                             onArtistClick = { viewModel.navigateTo(NavDest.Artist(it)) },
                             onToggleLike = { viewModel.toggleLike(track) },

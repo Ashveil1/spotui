@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Favorite
@@ -286,6 +287,7 @@ fun TrackRow(
     canReorder: Boolean = false,
     onMoveUp: (() -> Unit)? = null,
     onMoveDown: (() -> Unit)? = null,
+    onWatch: (() -> Unit)? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onArtistClick: (String) -> Unit,
@@ -425,6 +427,20 @@ fun TrackRow(
                         tint = spot.textDim
                     )
                 }
+            }
+        }
+
+        if (onWatch != null) {
+            IconButton(
+                onClick = onWatch,
+                modifier = Modifier.minimumInteractiveComponentSize().testTag("watch_btn_${'$'}{track.id}")
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.PlayCircle,
+                    contentDescription = "Watch video",
+                    tint = spot.textDim,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
 
