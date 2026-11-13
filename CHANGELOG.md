@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-13
 
+- `python3 spotui.py --import-url <youtube-playlist-url>` imports a YouTube playlist headless from the shell (needs yt-dlp), keeping its real YouTube title and deduping the name - handy for scripts and Termux, no TUI needed.
 - Play next chip on playlist, Liked, Recently Played and artist headers: one click lines the whole list up right after the current song, in order (with nothing playing it just plays the list).
 - The song info card (`I`) now shows a Lyrics row - synced, saved, none-on-LRCLIB or not-fetched - and Tab jumps straight from the card into that song's lyrics (fetching them if needed).
 - Right-click the colored header band on a playlist, Liked Songs, Recently Played or artist page for that collection's own context menu (rename, shuffle, clear history, queue the artist...) - no need to go back to the sidebar.

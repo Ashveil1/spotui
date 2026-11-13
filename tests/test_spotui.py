@@ -6478,3 +6478,72 @@ class PlayNextAllTests(unittest.TestCase):
             s.handle_mouse(self.app)
         ids = [t['id'] for t in self.app.queue]
         self.assertEqual(ids[:3], ['1', '1', '2'])
+
+
+class CliImportUrlTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        self._ytdl = patch.object(s, 'HAVE_YTDL', True)
+        self._ytdl.start()
+        self.addCleanup(self._ytdl.stop)
+
+    def _fake_full(self, title='Lo-fi Mix', n=3):
+        items = [dict(track(i + 1)) for i in range(n)]
+        return lambda url, n=200, timeout=30: (title, items)
+
+    def test_success_keeps_youtube_title(self):
+        with patch.object(s, '_ytdl_playlist_full', self._fake_full()):
+            ok, msg = s.import_playlist_url('https://youtu.be/x?list=PL1')
+        self.assertTrue(ok, msg)
+        self.assertIn('Lo-fi Mix (3 songs)', msg)
+        st = s.Store()
+        self.assertEqual(st.playlists[-1]['name'], 'Lo-fi Mix')
+        self.assertEqual(len(st.playlists[-1]['tracks']), 3)
+
+    def test_name_dedupes(self):
+        with patch.object(s, '_ytdl_playlist_full', self._fake_full()):
+            s.import_playlist_url('u1')
+            s.import_playlist_url('u2')
+        st = s.Store()
+        self.assertEqual([p['name'] for p in st.playlists],
+                         ['Lo-fi Mix', 'Lo-fi Mix 2'])
+
+    def test_no_ytdlp(self):
+        with patch.object(s, 'HAVE_YTDL', False):
+            ok, msg = s.import_playlist_url('u')
+        self.assertFalse(ok)
+        self.assertIn('yt-dlp', msg)
+
+    def test_fetch_failure(self):
+        def boom(url, n=200, timeout=30):
+            raise RuntimeError('network down')
+        with patch.object(s, '_ytdl_playlist_full', boom):
+            ok, msg = s.import_playlist_url('u')
+        self.assertFalse(ok)
+        self.assertIn('network down', msg)
+
+    def test_empty_playlist(self):
+        with patch.object(s, '_ytdl_playlist_full',
+                          self._fake_full(n=0)):
+            ok, msg = s.import_playlist_url('u')
+        self.assertFalse(ok)
+        self.assertIn('No songs', msg)
+
+    def test_cli_wiring(self):
+        import io as _io
+        import contextlib
+        buf = _io.StringIO()
+        with patch.object(s, '_ytdl_playlist_full',
+                          self._fake_full(title='CLI Mix', n=2)), \
+                patch.object(s.sys, 'argv', ['spotui', '--import-url', 'u']), \
+                contextlib.redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as cm:
+                s.main()
+        self.assertEqual(cm.exception.code, 0)
+        self.assertIn('CLI Mix (2 songs)', buf.getvalue())
