@@ -5422,3 +5422,84 @@ class RecentChipContextTests(unittest.TestCase):
             s.handle_mouse(self.app)
         self.assertEqual(self.app.mode, "context")
         self.assertEqual(self.app.ctx["recentctx"], "luna waves")
+
+
+class NoticesTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+
+    def test_toast_records_notice(self):
+        self.app.toast_now("Hello there")
+        self.assertEqual(len(self.app.notices), 1)
+        self.assertEqual(self.app.notices[0][0], "Hello there")
+
+    def test_notices_ring_keeps_30(self):
+        for i in range(40):
+            self.app.toast_now(f"notice {i}")
+        self.assertEqual(len(self.app.notices), 30)
+        self.assertEqual(self.app.notices[-1][0], "notice 39")
+        self.assertEqual(self.app.notices[0][0], "notice 10")
+
+    def test_playback_menu_has_notices_item(self):
+        self.app.play([dict(track(1))], 0)
+        self.app.current = self.app.queue[0]
+        self.app.open_playback_context(5, 37)
+        labels = [l for l, _ in self.app.context_items()]
+        self.assertIn("Recent notices", labels)
+        self.app.context_exec(labels.index("Recent notices"))
+        self.assertEqual(self.app.mode, "notices")
+
+    def test_notices_modal_keys(self):
+        for i in range(20):
+            self.app.toast_now(f"n{i}")
+        self.app.open_notices()
+        s.handle_key(self.app, "j")
+        self.assertEqual(self.app.notices_off, 1)
+        s.handle_key(self.app, "k")
+        self.assertEqual(self.app.notices_off, 0)
+        s.handle_key(self.app, "k")
+        self.assertEqual(self.app.notices_off, 0)
+        s.handle_key(self.app, "q")
+        self.assertEqual(self.app.mode, "normal")
+
+    def test_notices_modal_renders(self):
+        from collections import defaultdict
+        self.app.pal = defaultdict(int)
+        self.app.toast_now("Shuffling your library - 12 songs")
+        self.app.open_notices()
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        self.app.rects = []
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(str(t))):
+            ui.notices_modal(120)
+        self.assertIn("Recent notices", texts)
+        self.assertIn("Shuffling your library - 12 songs", texts)
+
+    def test_notices_modal_empty(self):
+        from collections import defaultdict
+        self.app.pal = defaultdict(int)
+        self.app.open_notices()
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(str(t))):
+            ui.notices_modal(120)
+        self.assertIn("Nothing yet - notices show up here", texts)

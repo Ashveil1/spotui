@@ -1424,6 +1424,8 @@ class App:
         self._artist_remote = {}
         self._artist_busy = set()
         self.find_buf = ""
+        self.notices = []
+        self.notices_off = 0
         self.mode = "normal"          # normal | search | name | pick | find
         self.name_buf = ""
         self.rename_index = None
@@ -1497,6 +1499,13 @@ class App:
     # ---------------------------------------------------------- helpers ---
     def toast_now(self, msg):
         self.toast = (msg, time.time() + 2.6)
+        self.notices.append((msg, time.time()))
+        del self.notices[:-30]
+
+    def open_notices(self):
+        """Recent notices panel (from the player-bar Playback menu)."""
+        self.notices_off = 0
+        self.mode = "notices"
 
     def key(self):
         k, a = self.stack[-1]
@@ -3435,6 +3444,7 @@ class App:
                  ("on" if self.store.leveling else "off"),
                  self.toggle_leveling),
                 ("Sleep timer", self.cycle_sleep),
+                ("Recent notices", self.open_notices),
             ]
             return items
         if "likedctx" in c:
@@ -5517,6 +5527,36 @@ class UI:
             "Y: copy link \u00b7 O: open in browser \u00b7 Esc: close",
             pal["sfaint"])
 
+    def notices_modal(self, W):
+        app, pal = self.app, self.pal
+        w = 56
+        shown = 12
+        rows = list(reversed(app.notices))
+        h = min(max(6, len(rows) + 4), shown + 4)
+        H = self.scr.getmaxyx()[0]
+        y = max(1, (H - h) // 2)
+        x = (W - w) // 2
+        box(self.scr, y, x, w, h, pal["dim"], pal["side"])
+        put(self.scr, y + 1, x + 2, "Recent notices", pal["side"],
+            curses.A_BOLD)
+        if not rows:
+            put(self.scr, y + 3, x + 2, "Nothing yet - notices show up here", pal["sfaint"])
+        else:
+            off = max(0, min(app.notices_off, max(0, len(rows) - (h - 4))))
+            for i, (msg, ts) in enumerate(rows[off:off + h - 4]):
+                ago = fmt_ago(ts)
+                put(self.scr, y + 3 + i, x + 2,
+                    wcut(msg, w - 12), pal["side"])
+                if ago:
+                    put(self.scr, y + 3 + i, x + w - 7,
+                        ago.rjust(4), pal["sfaint"])
+            if len(rows) > h - 4:
+                put(self.scr, y + h - 2, x + w - 12,
+                    f"{off + 1}-{min(off + h - 4, len(rows))}/{len(rows)}",
+                    pal["sfaint"])
+        put(self.scr, y + h - 2, x + 2, "j/k scroll \u00b7 Esc: close",
+            pal["sfaint"])
+
     def name_modal(self, y0, W):
         app, pal = self.app, self.pal
         w, h = 50, 7
@@ -5702,6 +5742,8 @@ class UI:
             self.context_modal(W)
         if app.mode == "info":
             self.info_modal(W)
+        if app.mode == "notices":
+            self.notices_modal(W)
         if app.mode == "theme":
             self.theme_modal(W)
         if app.mode == "confirm_delete":
@@ -5709,7 +5751,7 @@ class UI:
         if app.mode == "confirm_clearhist":
             self.clearhist_modal(W)
         if not app.show_help and app.mode not in ("name", "pick", "confirm_delete", "confirm_clearhist", "sleep", "info",
-                          "theme", "context"):
+                          "notices", "theme", "context"):
             self.toast(y1 - 1, W)
         # cursor for text input
         if app.mode == "search" and hasattr(app, "search_xy"):
@@ -5870,6 +5912,16 @@ def handle_key(app, k):
             app.theme_apply()
         elif k in ("\x1b", 27, "q"):
             app.theme_cancel()
+        return
+
+    if app.mode == "notices":
+        if k in ("\x1b", 27, "q", "\n", "\r", curses.KEY_ENTER, 10, 13):
+            app.mode = "normal"
+        elif k in ("j", curses.KEY_DOWN):
+            app.notices_off = min(max(0, len(app.notices) - 1),
+                                  app.notices_off + 1)
+        elif k in ("k", curses.KEY_UP):
+            app.notices_off = max(0, app.notices_off - 1)
         return
 
     if app.mode == "info":
