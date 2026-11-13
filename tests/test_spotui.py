@@ -5503,3 +5503,45 @@ class NoticesTests(unittest.TestCase):
                           texts.append(str(t))):
             ui.notices_modal(120)
         self.assertIn("Nothing yet - notices show up here", texts)
+
+
+class HelpMouseSectionTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+
+    def help_texts(self, page):
+        from collections import defaultdict
+        self.app.pal = defaultdict(int)
+        self.app.help_page = page
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        self.app.rects = []
+        texts = []
+        with patch.object(s, 'put',
+                          side_effect=lambda sc, y, x, t, *a, **k:
+                          texts.append(str(t))):
+            ui.help(5, 120)
+        return texts
+
+    def test_help_mentions_mouse(self):
+        texts = []
+        for page in range(3):
+            texts += self.help_texts(page)
+        joined = " ".join(texts)
+        self.assertIn("left-click", joined)
+        self.assertIn("right-cli", joined)
+        self.assertIn("menus: songs, tiles, artists, bar", joined)
+        self.assertIn("wheel", joined)
+        self.assertIn("drag", joined)

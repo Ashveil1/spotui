@@ -5460,6 +5460,10 @@ class UI:
             ("c", "create playlist"), ("P", "add to playlist"),
             ("d", "delete from list"), ("e / D", "playlist: rename / delete"),
             ("Backspace", "back"),
+            ("left-click", "open / select \u00b7 double-click plays"),
+            ("right-click", "menus: songs, tiles, artists, bar"),
+            ("wheel", "scroll list / sidebar"),
+            ("drag", "seek \u00b7 volume \u00b7 reorder rows"),
             ("?", "this help"), ("q", "quit"),
         ]
         w = min(100, W - 4)
@@ -5469,7 +5473,7 @@ class UI:
         self.app.help_pages = max(1, (len(rows) + page_size - 1) // page_size)
         self.app.help_page = min(self.app.help_page, self.app.help_pages - 1)
         rows = rows[self.app.help_page * page_size:(self.app.help_page + 1) * page_size]
-        h = min(capacity, (len(rows) + columns - 1) // columns) + 5
+        h = min(capacity, len(rows)) + 5
         y = max(1, (self.scr.getmaxyx()[0] - h) // 2)
         x = (W - w) // 2
         box(self.scr, y, x, w, h, pal["dim"], pal["side"])
