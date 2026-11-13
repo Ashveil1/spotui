@@ -6785,6 +6785,10 @@ def handle_mouse(app):
                 if r["arg"][0] == "history":
                     app.open_history_context(mx, my)
                     return
+            if r["act"] == "shuffle":
+                # right-click the shuffle icon cycles spread/discovery/mood
+                app.cycle_shuffle_mode()
+                return
             if r["act"] == "pbzone":
                 app.open_playback_context(mx, my)
                 return
