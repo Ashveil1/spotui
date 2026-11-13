@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -19,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,17 +33,34 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.example.data.model.NavDest
 import com.example.data.model.Track
 import com.example.ui.theme.LocalSpotColors
 import com.example.ui.viewmodel.SpotUiViewModel
 
+@androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun ShortsScreen(viewModel: SpotUiViewModel, onClose: () -> Unit) {
     val spot = LocalSpotColors.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     var shorts by remember { mutableStateOf<List<Track>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val player = remember { ExoPlayer.Builder(context).build() }
+    var playingId by remember { mutableStateOf<String?>(null) }
+    var pageError by remember { mutableStateOf<String?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose { player.release() }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.fetchShorts()
@@ -94,22 +113,88 @@ fun ShortsScreen(viewModel: SpotUiViewModel, onClose: () -> Unit) {
             )
             else -> {
                 val pagerState = rememberPagerState(pageCount = { list.size })
+
+                LaunchedEffect(pagerState.settledPage, list) {
+                    val t = list.getOrNull(pagerState.settledPage) ?: return@LaunchedEffect
+                    player.stop()
+                    playingId = null
+                    pageError = null
+                    viewModel.resolveVideoStream(t.id, 720)
+                        .onSuccess { vs ->
+                            if (list.getOrNull(pagerState.settledPage)?.id != t.id) return@onSuccess
+                            val ds = DefaultHttpDataSource.Factory().setUserAgent("SpotUI/1.0 (Android)")
+                            val videoSource = ProgressiveMediaSource.Factory(ds)
+                                .createMediaSource(MediaItem.fromUri(vs.videoUrl))
+                            val source = if (vs.audioUrl != null) {
+                                MergingMediaSource(
+                                    videoSource,
+                                    ProgressiveMediaSource.Factory(ds)
+                                        .createMediaSource(MediaItem.fromUri(vs.audioUrl))
+                                )
+                            } else {
+                                videoSource
+                            }
+                            playingId = t.id
+                            player.setMediaSource(source)
+                            player.prepare()
+                            player.playWhenReady = true
+                        }
+                        .onFailure { pageError = it.message }
+                }
+
                 VerticalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
                     val track = list[page]
+                    val isActive = track.id == playingId
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .clickable { viewModel.navigateTo(NavDest.Video(track)) }
+                            .clickable {
+                                if (isActive) {
+                                    player.playWhenReady = !player.isPlaying
+                                }
+                            }
                     ) {
-                        AsyncImage(
-                            model = track.thumbnailUrl,
-                            contentDescription = track.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        if (isActive) {
+                            AndroidView(
+                                factory = { ctx ->
+                                    PlayerView(ctx).apply {
+                                        this.player = player
+                                        useController = false
+                                        keepScreenOn = true
+                                    }
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            AsyncImage(
+                                model = track.thumbnailUrl,
+                                contentDescription = track.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            if (page == pagerState.settledPage) {
+                                if (pageError != null) {
+                                    Text(
+                                        text = pageError ?: "",
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier
+                                            .align(Alignment.Center)
+                                            .padding(24.dp)
+                                    )
+                                } else {
+                                    CircularProgressIndicator(
+                                        color = spot.accent,
+                                        modifier = Modifier
+                                            .align(Alignment.Center)
+                                            .size(36.dp)
+                                    )
+                                }
+                            }
+                        }
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -130,10 +215,15 @@ fun ShortsScreen(viewModel: SpotUiViewModel, onClose: () -> Unit) {
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "Tap to watch",
+                                    text = if (isActive) "Tap to pause - comments and up next in the player" else "Swipe for more",
                                     color = spot.textDim,
                                     style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.padding(top = 4.dp)
+                                    modifier = Modifier
+                                        .padding(top = 4.dp)
+                                        .clickable {
+                                            player.pause()
+                                            viewModel.navigateTo(NavDest.Video(track))
+                                        }
                                 )
                             }
                         }
