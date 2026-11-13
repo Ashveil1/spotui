@@ -418,6 +418,34 @@ class YouTubeClient {
         }
     }
 
+    suspend fun fetchSuggestions(query: String, limit: Int = 8): List<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val trimmed = query.trim()
+            if (trimmed.isEmpty()) return@runCatching emptyList()
+            val url = "https://suggestqueries-clients6.youtube.com/complete/search?client=youtube&ds=yt&hl=en&gl=us&q=" +
+                URLEncoder.encode(trimmed, "UTF-8")
+            val req = Request.Builder().url(url).header("User-Agent", WEB_UA).build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@runCatching emptyList()
+                val raw = resp.body?.string() ?: return@runCatching emptyList()
+                val root = JSONArray(raw)
+                val items = root.optJSONArray(1) ?: return@runCatching emptyList()
+                val out = mutableListOf<String>()
+                for (i in 0 until items.length()) {
+                    val item = items.opt(i)
+                    val text = when (item) {
+                        is JSONArray -> item.optString(0, "")
+                        is String -> item
+                        else -> ""
+                    }
+                    if (text.isNotBlank() && !out.contains(text)) out.add(text)
+                    if (out.size >= limit) break
+                }
+                out
+            }
+        }.getOrDefault(emptyList())
+    }
+
     data class HomeFeedPage(
         val tracks: List<Track>,
         val continuation: String?

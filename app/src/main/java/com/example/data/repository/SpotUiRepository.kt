@@ -169,6 +169,7 @@ class SpotUiRepository(
     suspend fun fetchChannel(channelId: String): Result<YouTubeClient.YtChannelInfo> = yt.fetchChannel(channelId)
     suspend fun resolveChannelId(channelName: String): String? = yt.resolveChannelId(channelName)
     suspend fun fetchShorts(): Result<List<Track>> = yt.fetchShorts()
+    suspend fun fetchSuggestions(query: String): List<String> = yt.fetchSuggestions(query)
 
     suspend fun toggleLike(track: Track, currentlyLiked: Boolean) {
         if (currentlyLiked) {
