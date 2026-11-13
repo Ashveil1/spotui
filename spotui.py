@@ -6333,6 +6333,11 @@ def handle_mouse(app):
                 else:
                     app.open_track_context(arg, "Listening stats", mx, my)
                 return
+            if r["act"] == "qjump":
+                qi = r["arg"]
+                if 0 <= qi < len(app.queue):
+                    app.open_context(app.queue[qi], "queue:", qi, mx, my)
+                return
             if r["act"] == "libitem":
                 if r["arg"][0] == "playlist":
                     app.open_playlist_context(r["arg"][1], mx, my)
