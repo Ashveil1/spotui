@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The right-click menu on queue rows offers queue actions: play now, move up next (works on already-played rows too, to hear a song again) and remove from queue.
 - Right-click any song row for a context menu: play now, play next, add to queue, like/unlike, song info, copy link, hide from suggestions. `j`/`k` and `Enter` work in it too.
 - `m` sort gains a Most played first order, using your local play counts.
 - Import a playlist without leaving the app: type the exported `.json` path into the new-playlist box instead of a name. Also fixes a test that flaked when it ran across local midnight.

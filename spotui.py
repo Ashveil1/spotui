@@ -2513,6 +2513,35 @@ class App:
         self.sel["queue:"] = j
         return True
 
+    def remove_queue_at(self, idx):
+        """Remove queue[idx]; a playing song keeps playing."""
+        if not 0 <= idx < len(self.queue):
+            return
+        self.queue_revision += 1
+        removed = self.queue[idx]
+        if self.orig_queue is not None:
+            for oi, item in enumerate(self.orig_queue):
+                if item == removed:
+                    del self.orig_queue[oi]
+                    break
+        del self.queue[idx]
+        if idx <= self.qpos:
+            self.qpos -= 1
+        self.toast_now(f"Removed from queue: "
+                       f"{(removed.get('title') or '')[:30]}")
+
+    def queue_to_next(self, idx):
+        """Move queue[idx] to right after the playing song."""
+        if not 0 <= idx < len(self.queue) or idx == self.qpos:
+            return
+        self.queue_revision += 1
+        t = self.queue.pop(idx)
+        if idx < self.qpos:
+            self.qpos -= 1
+        self.queue.insert(self.qpos + 1, t)
+        self.sel["queue:"] = self.qpos + 1
+        self.toast_now(f"Playing soon: {(t.get('title') or '')[:30]}")
+
     def move_in_playlist(self, pi, idx, d):
         try:
             tracks = self.store.playlists[pi]["tracks"]
@@ -3259,6 +3288,22 @@ class App:
         t, vk, idx = c["track"], c["vk"], c["idx"]
         liked = t.get("id") in self.liked_ids
         blocked = t.get("id") in self.blocked_ids
+        if vk.split(":", 1)[0] == "queue":
+            items = []
+            if idx != self.qpos:
+                items += [
+                    ("Play now", lambda: self.play_row(vk, idx)),
+                    ("Move up next", lambda: self.queue_to_next(idx)),
+                    ("Remove from queue", lambda: self.remove_queue_at(idx)),
+                ]
+            items += [
+                ("Song info", lambda: self.open_info(t)),
+                ("Copy link", lambda: self.copy_link(t)),
+                ("Unhide from suggestions" if blocked
+                 else "Hide from suggestions",
+                 lambda: self.toggle_block(t)),
+            ]
+            return items
         return [
             ("Play now", lambda: self.play_row(vk, idx)),
             ("Play next", lambda: self.play_next(t)),
