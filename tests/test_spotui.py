@@ -6138,3 +6138,70 @@ class LyricsPrefetchChipTests(unittest.TestCase):
             self.app.chip_action('lyrics')
         self.assertEqual(self.app.mode, 'lyrics')
         self.assertEqual(self.app.lyrics_track['id'], '1')
+
+
+class YouTubeImportTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def _submit(self, buf):
+        self.app.mode = 'name'
+        self.app.name_buf = buf
+        s.handle_key(self.app, '\n')
+
+    def test_url_import_creates_playlist(self):
+        items = [track(1), track(2), track(3)]
+        with patch.object(s, 'HAVE_YTDL', True), \
+                patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, '_ytdl_playlist', return_value=items) as yp:
+            self._submit('https://www.youtube.com/playlist?list=PLabc')
+        yp.assert_called_once()
+        pl = self.app.store.playlists[-1]
+        self.assertEqual(pl['name'], 'YouTube import')
+        self.assertEqual(len(pl['tracks']), 3)
+        self.assertEqual(self.app.mode, 'normal')
+        self.assertIn('Imported YouTube import (3 songs)', self.app.toast[0])
+        # the new playlist opens
+        self.assertEqual(self.app.key(), 'playlist:%d' %
+                         (len(self.app.store.playlists) - 1))
+
+    def test_url_import_empty_result(self):
+        with patch.object(s, 'HAVE_YTDL', True), \
+                patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, '_ytdl_playlist', side_effect=RuntimeError('x')):
+            self._submit('https://youtu.be/abc?list=PLabc')
+        self.assertEqual(self.app.store.playlists, [])
+        self.assertIn('No songs found at that link', self.app.toast[0])
+
+    def test_url_import_dedupes_name(self):
+        self.app.create_playlist('YouTube import')
+        with patch.object(s, 'HAVE_YTDL', True), \
+                patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, '_ytdl_playlist', return_value=[track(1)]):
+            self._submit('https://www.youtube.com/playlist?list=PLabc')
+        self.assertEqual(self.app.store.playlists[-1]['name'],
+                         'YouTube import 2')
+
+    def test_url_import_needs_ytdlp(self):
+        with patch.object(s, 'HAVE_YTDL', False):
+            self._submit('https://www.youtube.com/playlist?list=PLabc')
+        self.assertEqual(self.app.store.playlists, [])
+        self.assertIn('needs yt-dlp', self.app.toast[0])
+
+    def test_plain_name_still_creates(self):
+        self._submit('My Mix')
+        self.assertEqual(self.app.store.playlists[-1]['name'], 'My Mix')
+
+    def test_watch_link_without_list_is_a_name(self):
+        # a plain watch/share link has no list= and stays a normal name
+        self._submit('https://youtu.be/dQw4w9WgXcQ')
+        self.assertEqual(self.app.store.playlists[-1]['name'],
+                         'https://youtu.be/dQw4w9WgXcQ')
