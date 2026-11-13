@@ -349,17 +349,17 @@ class YouTubeClient {
         val muxed: Boolean
     )
 
-    suspend fun resolveVideoStream(videoId: String): Result<VideoStream> = withContext(Dispatchers.IO) {
+    suspend fun resolveVideoStream(videoId: String, maxHeight: Int = 1080): Result<VideoStream> = withContext(Dispatchers.IO) {
         runCatching {
             for (spec in CLIENT_SPECS) {
-                val vs = tryPlayerVideoClient(videoId, spec)
+                val vs = tryPlayerVideoClient(videoId, spec, maxHeight)
                 if (vs != null) return@runCatching vs
             }
             throw RuntimeException("No playable video stream found")
         }
     }
 
-    private fun tryPlayerVideoClient(videoId: String, spec: ClientSpec): VideoStream? {
+    private fun tryPlayerVideoClient(videoId: String, spec: ClientSpec, maxHeight: Int = 1080): VideoStream? {
         return runCatching {
             val clientObj = JSONObject().apply {
                 put("clientName", spec.name)
@@ -379,21 +379,22 @@ class YouTubeClient {
             val status = root.optJSONObject("playabilityStatus")?.optString("status")
             if (status != null && status != "OK") return null
             val streaming = root.optJSONObject("streamingData") ?: return null
-            selectVideoStream(streaming)
+            selectVideoStream(streaming, maxHeight)
         }.getOrNull()
     }
 
-    private fun selectVideoStream(streaming: JSONObject): VideoStream? {
+    private fun selectVideoStream(streaming: JSONObject, maxHeight: Int = 1080): VideoStream? {
         val adaptive = streaming.optJSONArray("adaptiveFormats")
         // Prefer a high-quality video-only stream paired with the best audio.
-        val videoOnly = pickBestVideo(adaptive, maxHeight = 1080, requireAudio = false)
+        val videoOnly = pickBestVideo(adaptive, maxHeight = maxHeight, requireAudio = false)
         val audio = pickBestAudioUrl(adaptive)
         if (videoOnly != null && audio != null) {
             return VideoStream(videoOnly.first, audio, videoOnly.second, muxed = false)
         }
         // Otherwise the best muxed (audio+video) stream, usually 360p/720p.
-        val mux = pickBestVideo(streaming.optJSONArray("formats"), maxHeight = 720, requireAudio = true)
-            ?: pickBestVideo(adaptive, maxHeight = 720, requireAudio = true)
+        val muxCap = minOf(maxHeight, 720)
+        val mux = pickBestVideo(streaming.optJSONArray("formats"), maxHeight = muxCap, requireAudio = true)
+            ?: pickBestVideo(adaptive, maxHeight = muxCap, requireAudio = true)
         if (mux != null) return VideoStream(mux.first, null, mux.second, muxed = true)
         return null
     }
