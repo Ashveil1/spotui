@@ -1,12 +1,18 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -45,14 +51,17 @@ fun ChannelScreen(
     val spot = LocalSpotColors.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var info by remember { mutableStateOf<YouTubeClient.YtChannelInfo?>(null) }
+    var playlists by remember { mutableStateOf<List<YouTubeClient.YtPlaylistRef>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(channelId) {
         info = null
         error = null
+        playlists = emptyList()
         viewModel.fetchChannel(channelId)
             .onSuccess { info = it }
             .onFailure { error = it.message ?: "Could not load channel" }
+        playlists = viewModel.fetchChannelPlaylists(channelId).getOrDefault(emptyList())
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -113,6 +122,55 @@ fun ChannelScreen(
                 CircularProgressIndicator(color = spot.accent)
             }
             else -> LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                if (playlists.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Playlists",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp)
+                        ) {
+                            itemsIndexed(playlists, key = { _, pl -> "pl_${'$'}{pl.id}" }) { _, pl ->
+                                Column(
+                                    modifier = Modifier
+                                        .width(180.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(spot.raised)
+                                        .clickable {
+                                            viewModel.createOrImportPlaylist(
+                                                "https://www.youtube.com/playlist?list=${'$'}{pl.id}"
+                                            )
+                                        }
+                                        .padding(12.dp)
+                                ) {
+                                    Text(
+                                        text = pl.title,
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = pl.videoCount.ifBlank { "Playlist" },
+                                        color = spot.textDim,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                    Text(
+                                        text = "Tap to import",
+                                        color = spot.accent,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(top = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 item {
                     Text(
                         text = "Videos",
