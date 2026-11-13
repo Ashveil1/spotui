@@ -28,14 +28,20 @@ jobs:
           arch: x86_64
           profile: pixel_6
           script: |
-            adb install app/build/outputs/apk/debug/app-debug.apk
-            adb shell monkey -p com.aistudio.spotui.kxmzpq -c android.intent.category.LAUNCHER 1
-            sleep 20
-            adb shell input tap 540 1200
-            sleep 8
-            adb exec-out screencap -p > home.png
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -n com.aistudio.spotui.kxmzpq/com.example.MainActivity
+            sleep 25
+            adb shell dumpsys activity activities | grep -iE 'ResumedActivity' > foreground.txt || true
+            adb exec-out screencap -p > shot1.png
+            adb shell input tap 360 800
+            sleep 10
+            adb exec-out screencap -p > shot2.png
+            adb shell dumpsys activity activities | grep -iE 'ResumedActivity' >> foreground.txt || true
       - uses: actions/upload-artifact@v4
         with:
           name: emulator-screenshot
-          path: home.png
+          path: |
+            shot1.png
+            shot2.png
+            foreground.txt
           if-no-files-found: error
