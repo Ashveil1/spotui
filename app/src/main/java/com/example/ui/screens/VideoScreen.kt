@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -100,6 +101,21 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
         comments = null
         comments = viewModel.fetchComments(track.id).getOrNull()
         related = viewModel.fetchRelated(track.id).getOrNull()
+    }
+
+    DisposableEffect(related) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) {
+                    val next = related?.firstOrNull() ?: return
+                    viewModel.navigateTo(NavDest.Video(next))
+                }
+            }
+        }
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+        }
     }
 
     DisposableEffect(Unit) {
