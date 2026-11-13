@@ -144,6 +144,7 @@ class SpotUiRepository(
     suspend fun fetchYouTubePlaylist(url: String): Result<Pair<String?, List<Track>>> = yt.fetchPlaylist(url)
     suspend fun resolveStreamUrl(videoId: String): Result<String> = yt.resolveAudioStreamUrl(videoId)
     suspend fun resolveVideoStream(videoId: String): Result<YouTubeClient.VideoStream> = yt.resolveVideoStream(videoId)
+    suspend fun fetchHomeFeed(): Result<List<Track>> = yt.fetchHomeFeed()
 
     suspend fun toggleLike(track: Track, currentlyLiked: Boolean) {
         if (currentlyLiked) {

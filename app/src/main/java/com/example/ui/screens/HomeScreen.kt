@@ -431,6 +431,35 @@ fun HomeScreen(
             }
         }
 
+        // Trending on YouTube shelf (real YouTube home feed - tap to watch the video)
+        if (state.homeFeed.isNotEmpty()) {
+            item {
+                SectionHeader(
+                    title = "Trending on YouTube",
+                    subtitle = "From YouTube's home feed - tap a card to watch",
+                    trailing = {
+                        IconButton(
+                            onClick = { viewModel.maybeLoadHomeFeed(force = true) },
+                            modifier = Modifier.minimumInteractiveComponentSize().testTag("home_refresh_yt_btn")
+                        ) {
+                            Icon(Icons.Rounded.Refresh, "Refresh YouTube feed", tint = spot.textDim)
+                        }
+                    }
+                )
+                Spacer(Modifier.height(8.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    itemsIndexed(state.homeFeed, key = { _, t -> "yt_${'$'}{t.id}" }) { _, track ->
+                        TrackShelfCard(
+                            track = track,
+                            badge = "Video",
+                            onClick = { viewModel.watchVideo(track) },
+                            onLongClick = { viewModel.openModal(ActiveModal.SongMenu(track, "YouTube")) }
+                        )
+                    }
+                }
+            }
+        }
+
         // Made for you Shelf
         if (similar.items.isNotEmpty()) {
             item {
