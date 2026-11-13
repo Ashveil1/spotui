@@ -131,7 +131,9 @@ Mouse works too: click anything (rows, tiles, sidebar items, playlists,
 playlists rows, controls, toast — everything), drag the progress / volume
 bars, click a column header to sort by it (click the active column again to
 restore the original order), and the wheel scrolls the list — or the
-sidebar when the cursor is over it. `Ctrl+Z` suspends cleanly; the screen
+sidebar when the cursor is over it. Right-click a song row for a menu
+(play, queue, like, info, copy link, hide) that also works from the
+keyboard with `j`/`k` and `Enter`. `Ctrl+Z` suspends cleanly; the screen
 repaints on resume.
 
 ## Where is my data?

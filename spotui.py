@@ -1469,6 +1469,7 @@ class App:
         self.theme_orig = None         # theme to revert to (picker)
         self.theme_idx = 0             # highlighted theme in the picker
         self._trash = None             # last deleted playlist/song (undo)
+        self.ctx = None                # right-click menu: track/vk/idx/x/y/sel
         self._fade_level = None        # last level sent (1/sec throttle)
         self._muted_from = None      # volume before muting, None = not muted
         self.speed = 1.0
@@ -3238,6 +3239,43 @@ class App:
                 self.pending_seek = (self.load_token, t)
             return
         self.play_row("history:", 0)
+
+    def open_context(self, track, vk, idx, x, y):
+        """Right-click menu for a track row."""
+        self.ctx = {"track": track, "vk": vk, "idx": idx,
+                    "x": x, "y": y, "sel": 0}
+        self.sel[vk] = idx
+        self.mode = "context"
+
+    def close_context(self):
+        self.ctx = None
+        self.mode = "normal"
+
+    def context_items(self):
+        """(label, action) pairs for the right-click menu."""
+        c = self.ctx
+        if not c:
+            return []
+        t, vk, idx = c["track"], c["vk"], c["idx"]
+        liked = t.get("id") in self.liked_ids
+        blocked = t.get("id") in self.blocked_ids
+        return [
+            ("Play now", lambda: self.play_row(vk, idx)),
+            ("Play next", lambda: self.play_next(t)),
+            ("Add to queue", lambda: self.add_queue(t)),
+            ("Unlike" if liked else "Like", lambda: self.like(t)),
+            ("Song info", lambda: self.open_info(t)),
+            ("Copy link", lambda: self.copy_link(t)),
+            ("Unhide from suggestions" if blocked else "Hide from suggestions",
+             lambda: self.toggle_block(t)),
+        ]
+
+    def context_exec(self, i):
+        items = self.context_items()
+        if not 0 <= i < len(items):
+            return
+        self.mode = "normal"
+        items[i][1]()
 
     def track_under(self):
         tracks = self.view_tracks()
@@ -5238,6 +5276,29 @@ class UI:
         put(self.scr, y + h - 2, x + 2, "Enter: start \u00b7 Esc: cancel",
             pal["sfaint"])
 
+    def context_modal(self, W):
+        app, pal = self.app, self.pal
+        items = app.context_items()
+        if not items or not app.ctx:
+            return
+        w = 28
+        h = len(items) + 4
+        H = self.scr.getmaxyx()[0]
+        x = min(max(1, app.ctx["x"]), max(1, W - w - 1))
+        y = min(max(1, app.ctx["y"]), max(1, H - h - 2))
+        box(self.scr, y, x, w, h, pal["dim"], pal["side"])
+        put(self.scr, y + 1, x + 2,
+            wcut(app.ctx["track"].get("title") or "", w - 4), pal["side"],
+            curses.A_BOLD)
+        for i, (label, _) in enumerate(items):
+            yy = y + 3 + i
+            if i == app.ctx["sel"]:
+                fill(self.scr, yy, x + 1, w - 2, pal["pill"])
+                put(self.scr, yy, x + 2, label, pal["pill"], curses.A_BOLD)
+            else:
+                put(self.scr, yy, x + 2, label, pal["side"])
+            self.hit(x + 1, yy, w - 2, 1, "ctxrow", i)
+
     def pick_modal(self, y0, W):
         app, pal = self.app, self.pal
         view = app.pick_view()
@@ -5340,6 +5401,8 @@ class UI:
             self.sleep_modal(y1, W)
         if app.mode == "pick":
             self.pick_modal(y1, W)
+        if app.mode == "context":
+            self.context_modal(W)
         if app.mode == "info":
             self.info_modal(W)
         if app.mode == "theme":
@@ -5349,7 +5412,7 @@ class UI:
         if app.mode == "confirm_clearhist":
             self.clearhist_modal(W)
         if not app.show_help and app.mode not in ("name", "pick", "confirm_delete", "confirm_clearhist", "sleep", "info",
-                          "theme"):
+                          "theme", "context"):
             self.toast(y1 - 1, W)
         # cursor for text input
         if app.mode == "search" and hasattr(app, "search_xy"):
@@ -5425,6 +5488,21 @@ def handle_key(app, k):
             app.mode = "normal"
         elif k in ("n", "N", "q", "\x1b", 27):
             app.mode = "normal"
+        return
+
+    if app.mode == "context":
+        if not app.ctx:
+            app.mode = "normal"
+            return
+        items = app.context_items()
+        if k in ("\x1b", 27, "q"):
+            app.close_context()
+        elif k == "j":
+            app.ctx["sel"] = min(len(items) - 1, app.ctx["sel"] + 1)
+        elif k == "k":
+            app.ctx["sel"] = max(0, app.ctx["sel"] - 1)
+        elif k in ("\n", "\r", curses.KEY_ENTER, 10, 13):
+            app.context_exec(app.ctx["sel"])
         return
 
     if app.mode == "find":
@@ -5792,7 +5870,7 @@ def handle_mouse(app):
     if os.environ.get("SPOTUI_DEBUG"):
         open("/tmp/spotui-debug.log", "a").write(
             f"mouse x={mx} y={my} bstate={bstate:#x}\n")
-    modal = app.show_help or app.mode in ("name", "pick", "confirm_delete", "confirm_clearhist")
+    modal = app.show_help or app.mode in ("name", "pick", "confirm_delete", "confirm_clearhist", "context")
     if modal:
         app.drag_rect = None
         app.drag_row = None
@@ -5847,14 +5925,30 @@ def handle_mouse(app):
         else:
             app.move_sel(3, len(app.view_tracks()))
         return
+    if bstate & (getattr(curses, "BUTTON3_PRESSED", 0)
+                 | getattr(curses, "BUTTON3_CLICKED", 0)):
+        if app.mode == "context":
+            app.close_context()
+            return
+        for r in reversed(app.rects):
+            if (r["act"] == "row" and r["x0"] <= mx < r["x1"]
+                    and r["y0"] <= my < r["y1"]):
+                vk, idx = r["arg"][0], r["arg"][1]
+                tracks = app.view_tracks(vk)
+                if 0 <= idx < len(tracks):
+                    app.open_context(tracks[idx], vk, idx, mx, my)
+                return
+        return
     if not (bstate & (curses.BUTTON1_PRESSED | curses.BUTTON1_CLICKED
                       | curses.BUTTON1_DOUBLE_CLICKED | curses.BUTTON1_TRIPLE_CLICKED)):
         return
     dbl = bool(bstate & (curses.BUTTON1_DOUBLE_CLICKED
                          | curses.BUTTON1_TRIPLE_CLICKED))
     # while a modal is open, only the modal's own controls respond
-    blocked = app.show_help or app.mode in ("name", "pick", "confirm_delete", "confirm_clearhist")
-    allowed = {"helpclose"} if app.show_help else ({"pickrow"} if app.mode == "pick" else set())
+    blocked = app.show_help or app.mode in ("name", "pick", "confirm_delete", "confirm_clearhist", "context")
+    allowed = {"helpclose"} if app.show_help else (
+        {"pickrow"} if app.mode == "pick" else
+        {"ctxrow"} if app.mode == "context" else set())
     for r in reversed(app.rects):
         if not (r["x0"] <= mx < r["x1"] and r["y0"] <= my < r["y1"]):
             continue
@@ -5984,6 +6078,8 @@ def handle_mouse(app):
         elif act == "pickrow":
             app.pick_idx = arg
             handle_key(app, "\n")
+        elif act == "ctxrow":
+            app.context_exec(arg)
         return
 
 def mouse_tracking(on):
@@ -6016,6 +6112,8 @@ def run(scr):
         curses.mousemask(
             curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED
             | curses.BUTTON1_CLICKED | curses.BUTTON1_DOUBLE_CLICKED
+            | getattr(curses, "BUTTON3_PRESSED", 0)
+            | getattr(curses, "BUTTON3_CLICKED", 0)
             | curses.BUTTON4_PRESSED | getattr(curses, "BUTTON5_PRESSED", 0)
             | curses.REPORT_MOUSE_POSITION)
     except curses.error:

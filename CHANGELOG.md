@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Right-click any song row for a context menu: play now, play next, add to queue, like/unlike, song info, copy link, hide from suggestions. `j`/`k` and `Enter` work in it too.
 - `m` sort gains a Most played first order, using your local play counts.
 - Import a playlist without leaving the app: type the exported `.json` path into the new-playlist box instead of a name. Also fixes a test that flaked when it ran across local midnight.
 - `0`-`9` in the Now Playing view seeks to 0-90% of the song, like YouTube's number keys.
