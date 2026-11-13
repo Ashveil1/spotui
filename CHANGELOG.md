@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- `V` now works in Liked Songs and Recently Played too, copying the visible list (with the current sort) as numbered shareable text.
 - The right-click menu on queue rows offers queue actions: play now, move up next (works on already-played rows too, to hear a song again) and remove from queue.
 - Right-click any song row for a context menu: play now, play next, add to queue, like/unlike, song info, copy link, hide from suggestions. `j`/`k` and `Enter` work in it too.
 - `m` sort gains a Most played first order, using your local play counts.
