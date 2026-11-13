@@ -1936,6 +1936,25 @@ class App:
         self.refresh_similar()
 
     # ------------------------------------------------------- radio queue --
+    def start_radio(self, t):
+        """'Start radio' menu action: play the song, queue similar ones."""
+        if not t:
+            return
+        if not HAVE_YTDL:
+            self.toast_now("Radio needs yt-dlp")
+            return
+        if not (self.current and self.current.get("id") == t.get("id")):
+            # a one-song play would make autoplay fetch the same radio and
+            # win the race; hold the radio flag across the play instead
+            self._radio_busy = True
+            try:
+                self.play([dict(t)], 0, "Radio")
+            finally:
+                self._radio_busy = False
+        self.toast_now("Starting radio from "
+                       f"{(t.get('title') or 'this song')[:30]}\u2026")
+        self._start_radio(t)
+
     def _start_radio(self, track):
         """Queue up same-artist / same-channel tracks after this one."""
         vid = track.get("id")
@@ -1976,6 +1995,7 @@ class App:
                     and self.current.get("id") == track.get("id")):
                 self.queue = [track] + picks
                 self.qpos = 0
+                self.queue_revision += 1
                 self.orig_queue = None
                 if self.shuffle:
                     self._apply_shuffle(True)
@@ -3718,6 +3738,7 @@ class App:
                     ("Unlike" if liked else "Like", lambda: self.like(t)),
                     ("Song info", lambda: self.open_info(t)),
                     ("Lyrics", lambda: self.open_lyrics(t)),
+                    ("Start radio", lambda: self.start_radio(t)),
                 ]
             eq = self.store.eq_preset
             items += [
@@ -3791,6 +3812,7 @@ class App:
                 ("Unlike" if liked else "Like", lambda: self.like(t)),
                 ("Song info", lambda: self.open_info(t)),
                 ("Lyrics", lambda: self.open_lyrics(t)),
+                ("Start radio", lambda: self.start_radio(t)),
                 ("Copy link", lambda: self.copy_link(t)),
                 ("Unhide from suggestions" if blocked
                  else "Hide from suggestions",
@@ -3849,6 +3871,7 @@ class App:
             ("Unlike" if liked else "Like", lambda: self.like(t)),
             ("Song info", lambda: self.open_info(t)),
             ("Lyrics", lambda: self.open_lyrics(t)),
+            ("Start radio", lambda: self.start_radio(t)),
             ("Copy link", lambda: self.copy_link(t)),
             ("Unhide from suggestions" if blocked else "Hide from suggestions",
              lambda: self.toggle_block(t)),

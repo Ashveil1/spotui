@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-13
 
+- Start radio: right-click any song (or the player bar) and choose Start radio to play it and line up similar songs from YouTube's auto-Mix - the manual radio now also wins the race against autoplay instead of silently losing it.
 - `python3 spotui.py --import-url <youtube-playlist-url>` imports a YouTube playlist headless from the shell (needs yt-dlp), keeping its real YouTube title and deduping the name - handy for scripts and Termux, no TUI needed.
 - Play next chip on playlist, Liked, Recently Played and artist headers: one click lines the whole list up right after the current song, in order (with nothing playing it just plays the list).
 - The song info card (`I`) now shows a Lyrics row - synced, saved, none-on-LRCLIB or not-fetched - and Tab jumps straight from the card into that song's lyrics (fetching them if needed).
