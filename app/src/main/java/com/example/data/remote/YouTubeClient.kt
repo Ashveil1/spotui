@@ -134,12 +134,6 @@ class YouTubeClient {
                 if (!url.isNullOrBlank()) return@runCatching url
             }
 
-            // Fallback: Piped public instances (best-effort audio stream lookup)
-            for (host in PIPED_HOSTS) {
-                val url = tryPipedStream(host, videoId)
-                if (!url.isNullOrBlank()) return@runCatching url
-            }
-
             throw RuntimeException("No playable audio stream found")
         }
     }
@@ -194,34 +188,6 @@ class YouTubeClient {
         return bestUrl
     }
 
-    private fun tryPipedStream(host: String, videoId: String): String? {
-        return runCatching {
-            val req = Request.Builder()
-                .url("$host/streams/$videoId")
-                .header("User-Agent", "spotui-android")
-                .build()
-            client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return null
-                val raw = resp.body?.string() ?: return null
-                val json = JSONObject(raw)
-                val streams = json.optJSONArray("audioStreams") ?: return null
-                var bestUrl: String? = null
-                var bestBitrate = -1
-                for (i in 0 until streams.length()) {
-                    val s = streams.optJSONObject(i) ?: continue
-                    val u = s.optString("url", "")
-                    if (u.isBlank()) continue
-                    val mime = s.optString("mimeType", "")
-                    val br = s.optInt("bitrate", 0) + if (mime.contains("mp4")) 100_000 else 0
-                    if (br > bestBitrate) {
-                        bestBitrate = br
-                        bestUrl = u
-                    }
-                }
-                bestUrl
-            }
-        }.getOrNull()
-    }
 
     suspend fun fetchLyrics(title: String, artist: String): LyricsData? = withContext(Dispatchers.IO) {
         if (title.isBlank() || artist.isBlank()) return@withContext null
@@ -408,9 +374,5 @@ class YouTubeClient {
     companion object {
         private const val WEB_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        private val PIPED_HOSTS = listOf(
-            "https://pipedapi.kavin.rocks",
-            "https://pipedapi.adminforge.de"
-        )
     }
 }
