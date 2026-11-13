@@ -5,7 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-13
 
-- Import a YouTube playlist straight into your library: paste its link (anything with list=) into the new-playlist box; songs are fetched in the background and the new playlist opens when it is ready.
+- Import a YouTube playlist straight into your library: paste its link (anything with list=) into the new-playlist box; songs are fetched in the background, the playlist keeps its real YouTube title, and it opens when it is ready.
 - Lyrics prefetch: playing a song fetches its lyrics in the background, and Now Playing shows a clickable ♪ Lyrics chip (marked "synced" when timestamps exist) once they are cached, so the lyrics card opens instantly.
 - Click a line in a synced lyrics card to seek the song straight to it.
 - Synced lyrics: when LRCLIB has timestamps, the lyrics card highlights the current line as the song plays and follows it (`j`/`k` scroll by hand, `G` jumps back to the playing line). Works with cached lyrics too.
