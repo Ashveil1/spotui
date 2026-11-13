@@ -5609,3 +5609,45 @@ class OneoffContextTests(unittest.TestCase):
             s.handle_mouse(self.app)
         self.assertEqual(self.app.ctx["oneoff"]["id"], "2")
         self.assertEqual(self.app.ctx["src"], "Listening stats")
+
+
+class QjumpContextTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+        self.app.play([track(i) for i in range(4)], 0)
+
+    def test_right_click_up_next_row(self):
+        self.app.rects = [{"x0": 30, "y0": 20, "x1": 100, "y1": 21,
+                           "act": "qjump", "arg": 2}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 50, 20, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mode, "context")
+        self.assertEqual(self.app.ctx["vk"], "queue:")
+        self.assertEqual(self.app.ctx["idx"], 2)
+        self.assertEqual(self.app.ctx["track"]["id"], "2")
+        labels = [l for l, _ in self.app.context_items()]
+        self.assertIn("Play now", labels)
+        self.assertIn("Move up next", labels)
+        self.assertIn("Remove from queue", labels)
+
+    def test_right_click_qjump_bad_index(self):
+        self.app.rects = [{"x0": 30, "y0": 20, "x1": 100, "y1": 21,
+                           "act": "qjump", "arg": 99}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 50, 20, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertNotEqual(self.app.mode, "context")

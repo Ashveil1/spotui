@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Right-click an Up Next row in Now Playing for the queue menu (play now, move up next, remove, info, copy link, hide).
 - Right-click a standalone song card (On repeat, stats top songs) for the full song menu: play, play next, queue, like, info, copy link, hide.
 - The ? help overlay now lists the mouse gestures (click, right-click menus, wheel, drag), and a modal-height bug that let a full help page overflow its box is fixed.
 - Recent notices: every toast is kept in a 30-entry log with its age; open it from the player-bar Playback menu (j/k scrolls).
