@@ -818,15 +818,19 @@ def smart_shuffle(tracks, previous_artist="", recent_ids=(), rng=None,
     return out
 
 
-SORT_MODES = ("default", "title", "artist", "added", "dur")
+SORT_MODES = ("default", "title", "artist", "added", "dur", "plays")
 SORT_LABEL = {"default": "Default", "title": "Title A-Z",
               "artist": "Artist A-Z", "added": "Recently added",
-              "dur": "Longest first"}
+              "dur": "Longest first", "plays": "Most played first"}
 SORTABLE_KINDS = ("liked", "playlist", "history")
 
 
-def sort_tracks(tracks, mode):
+def sort_tracks(tracks, mode, plays=None):
     """A sorted copy for list views - the stored order never changes."""
+    if mode == "plays":
+        plays = plays or {}
+        return sorted(tracks,
+                      key=lambda t: -(plays.get(t.get("id")) or {}).get("n", 0))
     fold = lambda v: unicodedata.normalize("NFKC", v or "").casefold()
     if mode == "title":
         return sorted(tracks, key=lambda t: (fold(t.get("title")),
@@ -1542,13 +1546,13 @@ class App:
         if kind == "search":
             return self.results
         if kind == "liked":
-            return sort_tracks(self.store.liked, self.store.sort_mode)
+            return sort_tracks(self.store.liked, self.store.sort_mode, self.store.plays)
         if kind == "playlist":
             try:
                 pl = self.store.playlists[int(arg)]
             except Exception:
                 return []
-            return sort_tracks(pl["tracks"], self.store.sort_mode)
+            return sort_tracks(pl["tracks"], self.store.sort_mode, self.store.plays)
         if kind == "queue":
             return self.queue
         if kind == "history":
@@ -1563,7 +1567,7 @@ class App:
                         seen.add(tid)
                     ded.append(t)
                 hist = ded
-            return sort_tracks(hist, self.store.sort_mode)
+            return sort_tracks(hist, self.store.sort_mode, self.store.plays)
         if kind == "artist":
             lib = self.artist_tracks(arg or "")
             return lib or self._artist_remote.get(arg or "", [])

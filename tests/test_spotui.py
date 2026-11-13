@@ -4583,3 +4583,42 @@ class TuiImportTests(unittest.TestCase):
         s.handle_key(self.app, '\n')
         self.assertEqual(self.app.store.playlists[-1]["name"], "Fresh list")
         self.assertEqual(self.app.store.playlists[-1]["tracks"], [])
+
+
+class SortPlaysTests(unittest.TestCase):
+    def test_sort_by_play_count_desc(self):
+        plays = {"1": {"n": 5}, "2": {"n": 40}, "3": {"n": 12}}
+        out = s.sort_tracks([track(1), track(2), track(3)], "plays", plays)
+        self.assertEqual([t["id"] for t in out], ["2", "3", "1"])
+
+    def test_unplayed_songs_sort_last(self):
+        plays = {"2": {"n": 3}}
+        out = s.sort_tracks([track(1), track(2), track(3)], "plays", plays)
+        self.assertEqual(out[0]["id"], "2")
+        self.assertEqual([t["id"] for t in out[1:]], ["1", "3"])
+
+    def test_plays_none_is_safe(self):
+        out = s.sort_tracks([track(1), track(2)], "plays")
+        self.assertEqual(len(out), 2)
+
+    def test_plays_mode_in_cycle_and_label(self):
+        self.assertIn("plays", s.SORT_MODES)
+        self.assertEqual(s.SORT_LABEL["plays"], "Most played first")
+
+    def test_view_uses_store_plays(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        app = s.App()
+        app.store.liked = [dict(track(1)), dict(track(2))]
+        app.store.plays = {"2": {"n": 9}}
+        app.store.sort_mode = "plays"
+        app.stack = [("liked", None)]
+        self.assertEqual([t["id"] for t in app.view_tracks()], ["2", "1"])
