@@ -95,7 +95,10 @@ data class SpotUiState(
     val showSplash: Boolean = true,
     val isMuted: Boolean = false,
     val hasUndo: Boolean = false,
-    val activeLyricsLoading: Boolean = false
+    val activeLyricsLoading: Boolean = false,
+    val homeFeed: List<Track> = emptyList(),
+    val homeFeedLoading: Boolean = false,
+    val homeFeedError: String? = null
 ) {
     val currentDest: NavDest get() = backStack.lastOrNull() ?: NavDest.Home
     val effectiveTheme: SpotTheme get() = previewTheme ?: library.prefs.theme
@@ -183,6 +186,7 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
                         }
                     }
                     refreshSimilar(force = false)
+                    maybeLoadHomeFeed()
                 }
             }
         }
@@ -225,6 +229,24 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
         }
         if (dest is NavDest.Artist) {
             maybeFetchArtistRemote(dest.name)
+        }
+    }
+
+    fun maybeLoadHomeFeed(force: Boolean = false) {
+        val s = _uiState.value
+        if (s.homeFeedLoading) return
+        if (!force && (s.homeFeed.isNotEmpty() || s.homeFeedError != null)) return
+        _uiState.update { it.copy(homeFeedLoading = true, homeFeedError = null) }
+        viewModelScope.launch {
+            repo.fetchHomeFeed()
+                .onSuccess { list ->
+                    _uiState.update { it.copy(homeFeed = list, homeFeedLoading = false) }
+                }
+                .onFailure { e ->
+                    _uiState.update {
+                        it.copy(homeFeedLoading = false, homeFeedError = e.message ?: "feed failed")
+                    }
+                }
         }
     }
 

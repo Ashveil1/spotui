@@ -89,6 +89,52 @@ class YouTubeClient {
         }
     }
 
+
+    suspend fun fetchHomeFeed(limit: Int = 60): Result<List<Track>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val body = JSONObject().apply {
+                put("context", webContextJson())
+                put("browseId", "FEwhat_to_watch")
+            }
+            val root = innertubePost("browse", body)
+                ?: throw RuntimeException("Could not load YouTube home feed")
+            val tracks = mutableListOf<Track>()
+            val seen = mutableSetOf<String>()
+            collectVideoRenderersDeep(root, tracks, seen, limit)
+            if (tracks.isEmpty()) throw RuntimeException("YouTube home feed was empty")
+            tracks.toList()
+        }
+    }
+
+    private fun collectVideoRenderersDeep(
+        node: Any?,
+        out: MutableList<Track>,
+        seen: MutableSet<String>,
+        limit: Int
+    ) {
+        if (node == null || out.size >= limit) return
+        when (node) {
+            is JSONObject -> {
+                val vr = node.optJSONObject("videoRenderer")
+                if (vr != null) {
+                    val t = parseVideoObject(vr)
+                    if (t != null && seen.add(t.id)) out.add(t)
+                }
+                val keys = node.keys()
+                while (keys.hasNext() && out.size < limit) {
+                    collectVideoRenderersDeep(node.opt(keys.next()), out, seen, limit)
+                }
+            }
+            is JSONArray -> {
+                var i = 0
+                while (i < node.length() && out.size < limit) {
+                    collectVideoRenderersDeep(node.opt(i), out, seen, limit)
+                    i++
+                }
+            }
+        }
+    }
+
     suspend fun fetchPlaylist(urlOrId: String, limit: Int = 200): Result<Pair<String?, List<Track>>> = withContext(Dispatchers.IO) {
         runCatching {
             val listId = extractPlaylistId(urlOrId)
