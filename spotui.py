@@ -2735,6 +2735,23 @@ class App:
         self.push("playlist", len(self.store.playlists) - 1)
         self.toast_now(f"Created playlist: {name}")
 
+    def import_playlist_file(self, path):
+        """Import a playlist JSON written by X into the live store."""
+        p = Path(path).expanduser()
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            self.toast_now(f"Could not read {p.name}: {e}")
+            return
+        if not isinstance(d, dict) or not isinstance(d.get("name"), str):
+            self.toast_now("Not a SpotUI playlist file")
+            return
+        tracks = Store._tracks(d.get("tracks"))
+        self.store.playlists.append({"name": d["name"], "tracks": tracks})
+        self.store.save()
+        self.push("playlist", len(self.store.playlists) - 1)
+        self.toast_now(f"Imported {d['name']} ({len(tracks)} songs)")
+
     def duplicate_playlist(self, pi):
         """Copy a playlist, tracks included, as '<name> (copy)'."""
         if not 0 <= pi < len(self.store.playlists):
@@ -5191,8 +5208,14 @@ class UI:
         put(self.scr, y + 3, x + 3, wcut(app.name_buf, w - 8), pal["pill"],
             curses.A_BOLD)
         app.name_xy = (x + 3 + min(dlen(app.name_buf), w - 9), y + 3)
-        put(self.scr, y + h - 2, x + 2, "Enter: save · Esc: cancel",
-            pal["sfaint"])
+        if app.rename_index is None:
+            if app.name_buf.strip().lower().endswith(".json"):
+                foot = "Enter: import playlist · Esc: cancel"
+            else:
+                foot = "Enter: save · .json path imports · Esc"
+        else:
+            foot = "Enter: save · Esc: cancel"
+        put(self.scr, y + h - 2, x + 2, foot, pal["sfaint"])
 
     def sleep_modal(self, y0, W):
         app, pal = self.app, self.pal
@@ -5429,6 +5452,13 @@ def handle_key(app, k):
             if app.rename_index is not None:
                 app.rename_playlist(app.rename_index, app.name_buf)
             else:
+                buf = app.name_buf.strip()
+                if (buf.lower().endswith(".json")
+                        and Path(buf).expanduser().is_file()):
+                    app.import_playlist_file(buf)
+                    app.name_buf = ""
+                    app.mode = "normal"
+                    return
                 app.create_playlist(app.name_buf)
                 if app.pick_merge is not None:
                     app.merge_playlist(app.pick_merge,

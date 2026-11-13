@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Import a playlist without leaving the app: type the exported `.json` path into the new-playlist box instead of a name. Also fixes a test that flaked when it ran across local midnight.
 - `0`-`9` in the Now Playing view seeks to 0-90% of the song, like YouTube's number keys.
 - `H` in a playlist removes duplicate songs, keeping the first copy of each; `U` restores them.
 - `Z` shuffles your entire library (liked songs, history and every playlist, deduped, skipping hidden songs) into the queue with the current shuffle mode.

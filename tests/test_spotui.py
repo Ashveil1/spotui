@@ -1,3 +1,4 @@
+import json
 import importlib.util
 from pathlib import Path
 import tempfile
@@ -2362,13 +2363,17 @@ class StatsDayMinutesTests(unittest.TestCase):
     def test_minutes_per_day(self):
         import time as _t
         store = s.Store()
-        now = _t.time()
+        # anchor on local midnight: relative "now - Nh" anchors flake when
+        # the run crosses midnight, since the buckets are calendar days
+        lt = _t.localtime()
+        today0 = _t.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday,
+                            0, 0, 0, 0, 0, -1))
         store.history = [
-            {"id": "1", "added": now - 3600, "dur": 180},        # today 3m
-            {"id": "2", "added": now - 3600, "dur": 120},        # today +2m
-            {"id": "3", "added": now - 26 * 3600, "dur": 600},   # yesterday 10m
-            {"id": "4", "added": now - 8 * 86400, "dur": 300},   # outside
-            {"id": "5", "added": now - 3600},                    # no dur
+            {"id": "1", "added": today0 + 3600, "dur": 180},      # today 3m
+            {"id": "2", "added": today0 + 3600, "dur": 120},      # today +2m
+            {"id": "3", "added": today0 - 3600, "dur": 600},      # yesterday 10m
+            {"id": "4", "added": today0 - 8 * 86400, "dur": 300}, # outside
+            {"id": "5", "added": today0 + 3600},                  # no dur
         ]
         mins = s.stats_day_minutes(store)
         self.assertEqual(len(mins), 7)
@@ -4522,3 +4527,59 @@ class SeekPercentTests(unittest.TestCase):
         self.app.stack = [("liked", None)]
         s.handle_key(self.app, '5')
         self.app.mpv.seek_abs.assert_not_called()
+
+
+class TuiImportTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.export = root / "mix.json"
+        self.export.write_text(json.dumps(
+            {"name": "Roadtrip",
+             "tracks": [dict(track(1)), dict(track(2))]}),
+            encoding="utf-8")
+
+    def test_import_adds_playlist_and_opens_it(self):
+        self.app.import_playlist_file(str(self.export))
+        self.assertEqual(self.app.store.playlists[-1]["name"], "Roadtrip")
+        self.assertEqual(len(self.app.store.playlists[-1]["tracks"]), 2)
+        self.assertEqual(self.app.stack[-1],
+                         ("playlist", len(self.app.store.playlists) - 1))
+
+    def test_import_rejects_non_playlist_json(self):
+        bad = Path(self.tmp.name) / "bad.json"
+        bad.write_text('{"foo": 1}', encoding="utf-8")
+        self.app.toast_now = Mock()
+        n = len(self.app.store.playlists)
+        self.app.import_playlist_file(str(bad))
+        self.assertEqual(len(self.app.store.playlists), n)
+        self.assertIn("Not a SpotUI playlist file",
+                      self.app.toast_now.call_args[0][0])
+
+    def test_import_missing_file_toasts(self):
+        self.app.toast_now = Mock()
+        self.app.import_playlist_file(str(Path(self.tmp.name) / "gone.json"))
+        self.assertIn("Could not read", self.app.toast_now.call_args[0][0])
+
+    def test_json_path_in_create_modal_imports(self):
+        self.app.mode = "name"
+        self.app.name_buf = str(self.export)
+        s.handle_key(self.app, '\n')
+        self.assertEqual(self.app.mode, "normal")
+        self.assertEqual(self.app.store.playlists[-1]["name"], "Roadtrip")
+
+    def test_plain_name_still_creates_empty_playlist(self):
+        self.app.mode = "name"
+        self.app.name_buf = "Fresh list"
+        s.handle_key(self.app, '\n')
+        self.assertEqual(self.app.store.playlists[-1]["name"], "Fresh list")
+        self.assertEqual(self.app.store.playlists[-1]["tracks"], [])
