@@ -253,6 +253,97 @@ class YouTubeClient {
         }
     }
 
+    data class YtChannelInfo(
+        val id: String,
+        val name: String,
+        val subscribers: String,
+        val videos: List<Track>
+    )
+
+    suspend fun resolveChannelId(channelName: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val trimmed = channelName.trim()
+            if (trimmed.isEmpty()) return@runCatching null
+            val body = JSONObject().apply {
+                put("context", webContextJson())
+                put("query", trimmed)
+                put("params", "EgIQAg%3D%3D") // channels filter
+            }
+            val root = innertubePost("search", body) ?: return@runCatching null
+            findChannelId(root)
+        }.getOrNull()
+    }
+
+    suspend fun fetchChannel(channelId: String, limit: Int = 40): Result<YtChannelInfo> = withContext(Dispatchers.IO) {
+        runCatching {
+            val body = JSONObject().apply {
+                put("context", webContextJson())
+                put("browseId", channelId)
+                put("params", "EgZ2aWRlb3M%3D") // videos tab
+            }
+            val root = innertubePost("browse", body)
+                ?: throw RuntimeException("Channel unavailable")
+            var name = ""
+            var subs = ""
+            root.optJSONObject("header")?.optJSONObject("c4TabbedHeaderRenderer")?.let { c4 ->
+                name = c4.optString("title", "")
+                subs = readRunsText(c4.optJSONObject("subscriberCountText"))
+            }
+            root.optJSONObject("metadata")?.optJSONObject("channelMetadataRenderer")?.let { m ->
+                if (name.isBlank()) name = m.optString("title", "")
+            }
+            if (subs.isBlank()) {
+                subs = findTextNodeDeep(root, "subscriberCountText")
+            }
+            val tracks = mutableListOf<Track>()
+            val seen = mutableSetOf<String>()
+            collectVideoRenderers(root, tracks, seen, limit)
+            if (name.isBlank()) name = tracks.firstOrNull()?.channel ?: channelId
+            YtChannelInfo(channelId, name, subs, tracks)
+        }
+    }
+
+    private fun findChannelId(node: Any?): String? {
+        when (node) {
+            is JSONObject -> {
+                node.optJSONObject("channelRenderer")?.let { cr ->
+                    val id = cr.optString("channelId", "")
+                    if (id.isNotBlank()) return id
+                }
+                val keys = node.keys()
+                while (keys.hasNext()) {
+                    findChannelId(node.opt(keys.next()))?.let { return it }
+                }
+            }
+            is JSONArray -> {
+                for (i in 0 until node.length()) {
+                    findChannelId(node.opt(i))?.let { return it }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun findTextNodeDeep(node: Any?, key: String): String {
+        when (node) {
+            is JSONObject -> {
+                node.optJSONObject(key)?.let { return readRunsText(it) }
+                val keys = node.keys()
+                while (keys.hasNext()) {
+                    val hit = findTextNodeDeep(node.opt(keys.next()), key)
+                    if (hit.isNotBlank()) return hit
+                }
+            }
+            is JSONArray -> {
+                for (i in 0 until node.length()) {
+                    val hit = findTextNodeDeep(node.opt(i), key)
+                    if (hit.isNotBlank()) return hit
+                }
+            }
+        }
+        return ""
+    }
+
     suspend fun fetchHomeFeed(limit: Int = 60): Result<List<Track>> = withContext(Dispatchers.IO) {
         runCatching {
             val body = JSONObject().apply {

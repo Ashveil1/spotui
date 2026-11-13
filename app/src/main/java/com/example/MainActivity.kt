@@ -83,6 +83,7 @@ import com.example.ui.components.SplashOverlay
 import com.example.ui.components.SpotUiModals
 import com.example.ui.components.SpotUiSidebar
 import com.example.ui.screens.ArtistScreen
+import com.example.ui.screens.ChannelScreen
 import com.example.ui.screens.CollectionScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.LibraryScreen
@@ -272,6 +273,7 @@ private fun SpotUiRoot(
                                 NavDest.Stats -> StatsScreen(state, viewModel)
                                 NavDest.Similar -> SimilarScreen(state, viewModel)
                                 is NavDest.Video -> VideoScreen(dest.track, viewModel, onClose = { viewModel.goBack() })
+                                is NavDest.Channel -> ChannelScreen(dest.channelId, dest.name, viewModel, onClose = { viewModel.goBack() })
                             }
                         }
                     }
@@ -399,6 +401,7 @@ private fun SpotTopBar(
         NavDest.Stats -> stringResource(R.string.stats_title)
         NavDest.Similar -> stringResource(R.string.made_for_you)
         is NavDest.Video -> dest.track.title
+        is NavDest.Channel -> dest.name
     }
 
     Row(

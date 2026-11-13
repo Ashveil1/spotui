@@ -204,6 +204,7 @@ sealed interface NavDest {
     data object Stats : NavDest
     data object Similar : NavDest
     data class Video(val track: Track) : NavDest
+    data class Channel(val channelId: String, val name: String) : NavDest
 }
 
 data class StatsDay(val label: String, val plays: Int, val minutes: Int)

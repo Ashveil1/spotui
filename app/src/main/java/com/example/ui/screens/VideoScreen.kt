@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +52,7 @@ import com.example.ui.components.TrackRow
 import com.example.ui.theme.LocalSpotColors
 import com.example.ui.viewmodel.ActiveModal
 import com.example.ui.viewmodel.SpotUiViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -57,6 +60,7 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
     val spot = LocalSpotColors.current
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
     var stream by remember { mutableStateOf<YouTubeClient.VideoStream?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var related by remember { mutableStateOf<List<Track>?>(null) }
@@ -130,10 +134,17 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
                 )
                 Text(
                     text = track.artist,
-                    color = spot.textDim,
+                    color = spot.accent,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable {
+                        scope.launch {
+                            viewModel.resolveChannelId(track.artist)?.let { id ->
+                                viewModel.navigateTo(NavDest.Channel(id, track.artist))
+                            }
+                        }
+                    }
                 )
             }
             Box {
