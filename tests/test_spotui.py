@@ -6740,3 +6740,49 @@ class CoverClickTests(unittest.TestCase):
         self.assertEqual(self.app.ctx['oneoff']['id'], '1')
         labels = [l for l, _ in self.app.context_items()]
         self.assertIn('Start radio', labels)
+
+
+class ShuffleModeMouseTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_right_click_shuffle_icon_cycles_mode(self):
+        self.app.play([track(1), track(2), track(3)], 0)
+        self.assertEqual(self.app.store.shuffle_mode, 'spread')
+        # real playerbar registers pbzone first, the shuffle icon later;
+        # hit testing is last-rect-first, so the icon wins its own cells
+        self.app.rects = [{"x0": 0, "y0": 37, "x1": 120, "y1": 40,
+                           "act": "pbzone", "arg": None},
+                          {"x0": 10, "y0": 37, "x1": 12, "y1": 38,
+                           "act": "shuffle", "arg": None}]
+        b3 = getattr(s.curses, 'BUTTON3_PRESSED', 2097152)
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, 11, 37, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.store.shuffle_mode, 'discovery')
+        self.assertTrue(self.app.shuffle)
+        self.assertIn('Shuffle:', self.app.toast[0])
+        self.assertNotEqual(self.app.mode, 'context')
+
+    def test_right_click_bar_elsewhere_still_opens_menu(self):
+        self.app.play([track(1)], 0)
+        # real playerbar registers pbzone first, the shuffle icon later;
+        # hit testing is last-rect-first, so the icon wins its own cells
+        self.app.rects = [{"x0": 0, "y0": 37, "x1": 120, "y1": 40,
+                           "act": "pbzone", "arg": None},
+                          {"x0": 10, "y0": 37, "x1": 12, "y1": 38,
+                           "act": "shuffle", "arg": None}]
+        b3 = getattr(s.curses, 'BUTTON3_PRESSED', 2097152)
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, 60, 38, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mode, 'context')
+        self.assertIn('pb', self.app.ctx)

@@ -138,7 +138,7 @@ keyboard with `j`/`k` and `Enter`. Queue rows get their own actions:
 play now, move up next and remove from queue. Right-click a playlist
 in the sidebar for its own menu: play, rename, duplicate, pin, like all,
 copy tracklist, export JSON and delete.
-Right-click the player bar for playback options: like, song info, lyrics, the
+Right-click the shuffle icon to cycle the shuffle mode (spread, discovery, mood); right-click the player bar for playback options: like, song info, lyrics, the
 equalizer, volume leveling, the sleep timer and Recent notices - a log of
 the last 30 toasts with their age, so a message you missed is never gone. Right-click a home tile: playlists get
 their full menu, and Liked Songs offers play, shuffle play and open.
