@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -455,6 +456,34 @@ fun HomeScreen(
                             onClick = { viewModel.watchVideo(track) },
                             onLongClick = { viewModel.openModal(ActiveModal.SongMenu(track, "YouTube")) }
                         )
+                    }
+                    if (state.homeFeedContinuation != null) {
+                        item(key = "yt_load_more") {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .width(120.dp)
+                                    .height(150.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(spot.raised)
+                                    .clickable(enabled = !state.homeFeedMoreLoading) {
+                                        viewModel.loadMoreHomeFeed()
+                                    }
+                            ) {
+                                if (state.homeFeedMoreLoading) {
+                                    CircularProgressIndicator(
+                                        color = spot.accent,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                } else {
+                                    Text(
+                                        text = "More",
+                                        color = spot.accent,
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

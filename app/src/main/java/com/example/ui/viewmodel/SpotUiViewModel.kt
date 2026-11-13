@@ -98,7 +98,9 @@ data class SpotUiState(
     val activeLyricsLoading: Boolean = false,
     val homeFeed: List<Track> = emptyList(),
     val homeFeedLoading: Boolean = false,
-    val homeFeedError: String? = null
+    val homeFeedError: String? = null,
+    val homeFeedContinuation: String? = null,
+    val homeFeedMoreLoading: Boolean = false
 ) {
     val currentDest: NavDest get() = backStack.lastOrNull() ?: NavDest.Home
     val effectiveTheme: SpotTheme get() = previewTheme ?: library.prefs.theme
@@ -239,13 +241,43 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update { it.copy(homeFeedLoading = true, homeFeedError = null) }
         viewModelScope.launch {
             repo.fetchHomeFeed()
-                .onSuccess { list ->
-                    _uiState.update { it.copy(homeFeed = list, homeFeedLoading = false) }
+                .onSuccess { page ->
+                    _uiState.update {
+                        it.copy(
+                            homeFeed = page.tracks,
+                            homeFeedLoading = false,
+                            homeFeedContinuation = page.continuation
+                        )
+                    }
                 }
                 .onFailure { e ->
                     _uiState.update {
                         it.copy(homeFeedLoading = false, homeFeedError = e.message ?: "feed failed")
                     }
+                }
+        }
+    }
+
+    fun loadMoreHomeFeed() {
+        val s = _uiState.value
+        val cont = s.homeFeedContinuation ?: return
+        if (s.homeFeedLoading || s.homeFeedMoreLoading) return
+        _uiState.update { it.copy(homeFeedMoreLoading = true) }
+        viewModelScope.launch {
+            repo.fetchHomeFeedPage(cont)
+                .onSuccess { page ->
+                    _uiState.update { cur ->
+                        val seen = cur.homeFeed.map { it.id }.toMutableSet()
+                        val fresh = page.tracks.filter { seen.add(it.id) }
+                        cur.copy(
+                            homeFeed = cur.homeFeed + fresh,
+                            homeFeedMoreLoading = false,
+                            homeFeedContinuation = page.continuation
+                        )
+                    }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(homeFeedMoreLoading = false) }
                 }
         }
     }
