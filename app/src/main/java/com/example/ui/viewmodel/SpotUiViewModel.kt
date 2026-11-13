@@ -258,8 +258,8 @@ class SpotUiViewModel(application: Application) : AndroidViewModel(application) 
         navigateTo(NavDest.Video(track))
     }
 
-    suspend fun resolveVideoStream(videoId: String): Result<YouTubeClient.VideoStream> =
-        repo.resolveVideoStream(videoId)
+    suspend fun resolveVideoStream(videoId: String, maxHeight: Int = 1080): Result<YouTubeClient.VideoStream> =
+        repo.resolveVideoStream(videoId, maxHeight)
 
     suspend fun fetchRelated(videoId: String): Result<List<Track>> =
         repo.fetchRelated(videoId)

@@ -14,10 +14,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -58,16 +61,15 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var related by remember { mutableStateOf<List<Track>?>(null) }
     var comments by remember { mutableStateOf<List<YouTubeClient.YtComment>?>(null) }
+    var maxQuality by remember { mutableStateOf(1080) }
 
     val player = remember { ExoPlayer.Builder(context).build() }
 
-    LaunchedEffect(track.id) {
+    LaunchedEffect(track.id, maxQuality) {
         error = null
         stream = null
-        related = null
-        comments = null
         player.stop()
-        viewModel.resolveVideoStream(track.id)
+        viewModel.resolveVideoStream(track.id, maxQuality)
             .onSuccess { vs ->
                 stream = vs
                 val ds = DefaultHttpDataSource.Factory().setUserAgent("SpotUI/1.0 (Android)")
@@ -87,6 +89,11 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
                 player.playWhenReady = true
             }
             .onFailure { error = it.message ?: "No playable video stream found" }
+    }
+
+    LaunchedEffect(track.id) {
+        related = null
+        comments = null
         comments = viewModel.fetchComments(track.id).getOrNull()
         related = viewModel.fetchRelated(track.id).getOrNull()
     }
@@ -129,13 +136,29 @@ fun VideoScreen(track: Track, viewModel: SpotUiViewModel, onClose: () -> Unit) {
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            stream?.let {
-                Text(
-                    text = it.qualityLabel,
-                    color = spot.accent,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
+            Box {
+                var qualityMenu by remember { mutableStateOf(false) }
+                TextButton(onClick = { qualityMenu = true }) {
+                    Text(
+                        text = stream?.qualityLabel ?: "Quality",
+                        color = spot.accent,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+                DropdownMenu(
+                    expanded = qualityMenu,
+                    onDismissRequest = { qualityMenu = false }
+                ) {
+                    listOf(1080, 720, 480, 360).forEach { q ->
+                        DropdownMenuItem(
+                            text = { Text("${q}p" + if (q == maxQuality) " ✓" else "") },
+                            onClick = {
+                                maxQuality = q
+                                qualityMenu = false
+                            }
+                        )
+                    }
+                }
             }
         }
 
