@@ -5219,3 +5219,69 @@ class MixContextTests(unittest.TestCase):
             s.handle_mouse(self.app)
         self.assertEqual(self.app.mode, "context")
         self.assertEqual(self.app.ctx["mixctx"], 0)
+
+
+class ArtistContextTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+        self.app.store.liked = [dict(track(1), artist='Alpha'),
+                                dict(track(2), artist='Alpha'),
+                                dict(track(3), artist='Beta')]
+
+    def labels(self):
+        return [l for l, _ in self.app.context_items()]
+
+    def test_items_with_saved_songs(self):
+        self.app.open_artist_context('Alpha', 30, 10)
+        self.assertEqual(self.app.mode, "context")
+        self.assertEqual(self.labels(), ["Open artist page",
+                                         "Play artist's songs",
+                                         "Add artist's songs to queue"])
+
+    def test_items_without_saved_songs(self):
+        self.app.open_artist_context('Stranger', 30, 10)
+        self.assertEqual(self.labels(), ["Open artist page"])
+
+    def test_open_artist_context_empty_name(self):
+        self.app.open_artist_context('', 30, 10)
+        self.assertIsNone(self.app.ctx)
+        self.assertNotEqual(self.app.mode, "context")
+
+    def test_exec_open_page(self):
+        self.app.open_artist_context('Alpha', 30, 10)
+        self.app.context_exec(self.labels().index("Open artist page"))
+        self.assertEqual(self.app.stack[-1], ("artist", "Alpha"))
+
+    def test_exec_play(self):
+        self.app.play = Mock()
+        self.app.open_artist_context('Alpha', 30, 10)
+        self.app.context_exec(self.labels().index("Play artist's songs"))
+        self.app.play.assert_called_once()
+        self.assertEqual(len(self.app.play.call_args[0][0]), 2)
+        self.assertEqual(self.app.play.call_args[0][2], 'Alpha')
+
+    def test_exec_queue(self):
+        self.app.open_artist_context('Alpha', 30, 10)
+        self.app.context_exec(self.labels().index("Add artist's songs to queue"))
+        self.assertEqual(len(self.app.queue), 2)
+
+    def test_right_click_artist_chip(self):
+        self.app.rects = [{"x0": 30, "y0": 8, "x1": 45, "y1": 9,
+                           "act": "artist", "arg": "Alpha"}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 35, 8, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mode, "context")
+        self.assertEqual(self.app.ctx["artistctx"], "Alpha")

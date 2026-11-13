@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- Right-click an artist chip or row in search: open the artist page, play their saved songs, or add them all to the queue.
 - Right-click a Your mixes card on home: play the mix, add it to the queue, or open the artist behind it.
 - Right-click Recently Played or Liked Songs in the sidebar: open, play again, shuffle, or clear listening history (with confirmation).
 - Right-click the Liked Songs home tile for play, shuffle play and open; playlist tiles open the full playlist menu.

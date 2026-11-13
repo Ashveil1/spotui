@@ -142,7 +142,9 @@ equalizer, volume leveling and the sleep timer. Right-click a home tile: playlis
 their full menu, and Liked Songs offers play, shuffle play and open.
 Right-click Liked Songs or Recently Played in the sidebar for quick menus
 (open, play, shuffle, clear history). Right-click a mix card on home to play
-it, queue it or open its artist. `Ctrl+Z` suspends cleanly; the screen
+it, queue it or open its artist.
+Right-click an artist in search results to open their page, play their saved
+songs or queue them all. `Ctrl+Z` suspends cleanly; the screen
 repaints on resume.
 
 ## Where is my data?

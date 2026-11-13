@@ -2173,6 +2173,16 @@ class App:
         self.queue.extend(list(m["tracks"]))
         self.toast_now(f"Queued {m['name']} - {len(m['tracks'])} songs")
 
+    def queue_artist(self, name):
+        """Append every saved song by an artist to the queue."""
+        tracks = self.artist_tracks(name)
+        if not tracks:
+            self.toast_now("No saved songs by this artist yet")
+            return
+        self.queue_revision += 1
+        self.queue.extend(list(tracks))
+        self.toast_now(f"Queued {len(tracks)} songs by {name}")
+
     def cycle_shuffle_mode(self):
         i = SHUFFLE_MODES.index(self.store.shuffle_mode)
         self.store.shuffle_mode = SHUFFLE_MODES[(i + 1) % len(SHUFFLE_MODES)]
@@ -3369,6 +3379,13 @@ class App:
                     "x": x, "y": y, "sel": 0}
         self.mode = "context"
 
+    def open_artist_context(self, name, x, y):
+        """Right-click menu for an artist chip or row in search."""
+        if not name:
+            return
+        self.ctx = {"artistctx": name, "x": x, "y": y, "sel": 0}
+        self.mode = "context"
+
     def close_context(self):
         self.ctx = None
         self.mode = "normal"
@@ -3427,6 +3444,18 @@ class App:
             if m.get("artist"):
                 items.append((f"More from {m['artist']}",
                               lambda: self.push("artist", m["artist"])))
+            return items
+        if "artistctx" in c:
+            name = c["artistctx"]
+            items = [("Open artist page", lambda: self.push("artist", name))]
+            tracks = self.artist_tracks(name)
+            if tracks:
+                items += [
+                    ("Play artist's songs",
+                     lambda: self.play(list(tracks), 0, name)),
+                    ("Add artist's songs to queue",
+                     lambda: self.queue_artist(name)),
+                ]
             return items
         if "pl" in c:
             pi = c["pl"]
@@ -5511,6 +5540,8 @@ class UI:
             title = "Recently Played"
         elif "mixctx" in app.ctx:
             title = app.ctx.get("name") or "Mix"
+        elif "artistctx" in app.ctx:
+            title = app.ctx["artistctx"]
         elif "track" in app.ctx:
             title = app.ctx["track"].get("title") or ""
         elif 0 <= app.ctx["pl"] < len(app.store.playlists):
@@ -6171,6 +6202,9 @@ def handle_mouse(app):
                     return
             if r["act"] == "mix":
                 app.open_mix_context(r["arg"], mx, my)
+                return
+            if r["act"] == "artist":
+                app.open_artist_context(r["arg"], mx, my)
                 return
             if r["act"] == "libitem":
                 if r["arg"][0] == "playlist":
