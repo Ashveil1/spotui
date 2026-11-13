@@ -24,6 +24,9 @@ import tempfile
 import time
 import unicodedata
 import queue
+import textwrap
+import urllib.parse
+import urllib.request
 from collections import OrderedDict
 from pathlib import Path
 
@@ -212,7 +215,7 @@ VIEW_HINTS = {
     "history": "Enter plays \u00b7 a queues \u00b7 m sorts \u00b7 F finds \u00b7 D hides repeats \u00b7 V copies list \u00b7 X clears",
     "artist": "Enter plays \u00b7 a queues \u00b7 F finds",
     "queue": "J/K or drag reorders \u00b7 C clears upcoming \u00b7 D drops autoplayed \u00b7 W saves as playlist",
-    "playing": "Space pause \u00b7 l like \u00b7 0-9 seeks \u00b7 v queue \u00b7 chips and Up Next are clickable",
+    "playing": "Space pause \u00b7 l like \u00b7 0-9 seeks \u00b7 Tab lyrics \u00b7 v queue \u00b7 chips and Up Next are clickable",
     "stats": "Click a top artist to open it \u00b7 a top song plays \u00b7 Y copies summary \u00b7 Backspace back",
     "similar": "Enter plays \u00b7 a queues \u00b7 R finds new picks \u00b7 Backspace back",
 }
@@ -311,6 +314,35 @@ def clean_title(s):
 _SPLIT_RE = re.compile(r"\s+[-–—]\s+")
 
 
+LYRICS_URL = "https://lrclib.net/api/get"
+
+
+def fetch_lyrics(title, artist, timeout=8):
+    """Plain lyrics for one song from LRCLIB (free, no API key).
+
+    Returns the lyrics text, or None when LRCLIB has no match or the
+    request fails. Never raises: lyrics are a nicety, not a dependency.
+    """
+    if not title or not artist:
+        return None
+    try:
+        q = urllib.parse.urlencode({"track_name": title,
+                                    "artist_name": artist})
+        req = urllib.request.Request(
+            LYRICS_URL + "?" + q,
+            headers={"User-Agent": "spotui (terminal music player)"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = json.loads(r.read().decode("utf-8", "replace"))
+        if not isinstance(data, dict):
+            return None
+        text = data.get("plainLyrics")
+        if isinstance(text, str) and text.strip():
+            return text.strip()
+        return None
+    except Exception:
+        return None
+
+
 def _norm(s):
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
@@ -396,6 +428,7 @@ class Store:
         self.zen = False
         self.theme = THEME_NAMES[0]
         self.blocked = []              # song ids hidden from suggestions
+        self.lyrics = {}                 # vid -> {"text": str|None, "ts": int}
         self._load()
 
     @staticmethod
@@ -502,6 +535,19 @@ class Store:
             self.zen = d["zen"]
         if isinstance(d.get("blocked"), list):
             self.blocked = [x for x in d["blocked"] if isinstance(x, str)]
+        ly = d.get("lyrics")
+        if isinstance(ly, dict):
+            for k, v in list(ly.items())[:400]:
+                if not isinstance(k, str) or not isinstance(v, dict):
+                    continue
+                text = v.get("text")
+                if text is not None and not isinstance(text, str):
+                    continue
+                try:
+                    ts = int(v.get("ts") or 0)
+                except (ValueError, TypeError):
+                    ts = 0
+                self.lyrics[k] = {"text": text, "ts": ts}
         if d.get("theme") in THEMES:
             self.theme = d["theme"]
         try:
@@ -533,6 +579,7 @@ class Store:
                         "hist_dedupe": self.hist_dedupe,
                         "zen": self.zen,
                         "blocked": self.blocked,
+                        "lyrics": self.lyrics,
                     }, f, ensure_ascii=False, indent=1)
                     f.flush()
                     os.fsync(f.fileno())
@@ -1472,6 +1519,10 @@ class App:
         self._fading = False           # sleep fade is ramping mpv's volume
         self.private = False           # private session: nothing is recorded
         self.info_track = None         # song shown in the info modal
+        self.lyrics_track = None       # song shown in the lyrics modal
+        self.lyrics_off = 0            # lyrics modal scroll offset
+        self.lyrics_max_off = 0        # set by the lyrics modal each render
+        self._lyrics_pending = set()   # lyrics fetches in flight
         self.theme_orig = None         # theme to revert to (picker)
         self.theme_idx = 0             # highlighted theme in the picker
         self._trash = None             # last deleted playlist/song (undo)
@@ -3197,6 +3248,71 @@ class App:
         self.info_track = dict(t)
         self.mode = "info"
 
+    def open_lyrics(self, t):
+        """Lyrics modal for a song: plain lyrics from LRCLIB, cached."""
+        if not t:
+            self.toast_now("Nothing to show")
+            return
+        self.lyrics_track = dict(t)
+        self.lyrics_off = 0
+        self.mode = "lyrics"
+        self.ensure_lyrics(t)
+
+    def ensure_lyrics(self, t):
+        """Fetch lyrics in the background unless cached or in flight."""
+        vid = str((t or {}).get("id") or "")
+        if not vid or vid in self.store.lyrics \
+                or vid in self._lyrics_pending:
+            return
+        title = clean_title(t.get("title") or "")
+        artist = (t.get("artist") or "").strip()
+        if title == "Unknown title" or not artist:
+            with self.lock:
+                self.store.lyrics[vid] = {"text": None,
+                                          "ts": int(time.time())}
+            return
+        self._lyrics_pending.add(vid)
+        threading.Thread(target=self._lyrics_worker,
+                         args=(vid, title, artist), daemon=True).start()
+
+    def _lyrics_worker(self, vid, title, artist):
+        text = fetch_lyrics(title, artist)
+        with self.lock:
+            self._lyrics_pending.discard(vid)
+            self.store.lyrics[vid] = {"text": text, "ts": int(time.time())}
+            # cap the cache so the library file does not grow forever
+            if len(self.store.lyrics) > 400:
+                oldest = sorted(self.store.lyrics,
+                                key=lambda k: self.store.lyrics[k]["ts"])[:100]
+                for k in oldest:
+                    self.store.lyrics.pop(k, None)
+            self.store.save()
+
+    def lyrics_lines(self, width):
+        """None while loading, [] when not found, else wrapped lines."""
+        t = self.lyrics_track or {}
+        entry = self.store.lyrics.get(str(t.get("id") or ""))
+        if entry is None:
+            return None
+        text = entry.get("text")
+        if not text:
+            return []
+        out = []
+        for raw in text.splitlines():
+            out.extend(textwrap.wrap(raw, width=max(10, width)) or [""])
+        return out
+
+    def copy_lyrics(self):
+        """Copy the shown lyrics to the clipboard (Y in the modal)."""
+        t = self.lyrics_track or {}
+        entry = self.store.lyrics.get(str(t.get("id") or ""))
+        text = (entry or {}).get("text")
+        if not text:
+            self.toast_now("No lyrics to copy")
+            return
+        if not self.copy_text(text, "Lyrics"):
+            self.toast_now("No clipboard tool found")
+
     def info_rows(self):
         """(label, value) facts about the info-track, all local data."""
         t = self.info_track or {}
@@ -3443,6 +3559,7 @@ class App:
                 items += [
                     ("Unlike" if liked else "Like", lambda: self.like(t)),
                     ("Song info", lambda: self.open_info(t)),
+                    ("Lyrics", lambda: self.open_lyrics(t)),
                 ]
             eq = self.store.eq_preset
             items += [
@@ -3515,6 +3632,7 @@ class App:
                 ("Add to queue", lambda: self.add_queue(t)),
                 ("Unlike" if liked else "Like", lambda: self.like(t)),
                 ("Song info", lambda: self.open_info(t)),
+                ("Lyrics", lambda: self.open_lyrics(t)),
                 ("Copy link", lambda: self.copy_link(t)),
                 ("Unhide from suggestions" if blocked
                  else "Hide from suggestions",
@@ -3572,6 +3690,7 @@ class App:
             ("Add to queue", lambda: self.add_queue(t)),
             ("Unlike" if liked else "Like", lambda: self.like(t)),
             ("Song info", lambda: self.open_info(t)),
+            ("Lyrics", lambda: self.open_lyrics(t)),
             ("Copy link", lambda: self.copy_link(t)),
             ("Unhide from suggestions" if blocked else "Hide from suggestions",
              lambda: self.toggle_block(t)),
@@ -5475,7 +5594,7 @@ class UI:
             ("z", "hide / show the sidebar"),
             ("Enter", "play selection"), ("Space", "play / pause"),
             ("n / p", "next / prev"), ("← / →", "seek ±10s"),
-            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link / stats summary"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("V", "copy list as text"), ("H", "playlist: remove duplicates"), ("[ / ]", "speed down / up"), ("0-9", "now playing: seek to 0-90%"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("Z", "shuffle whole library"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
+            ("+ / -", "volume"), ("M", "mute / unmute"), ("a", "add to queue"), ("A", "play next"), ("J / K", "reorder queue / playlist"), ("W", "save queue as playlist"), ("C", "clear upcoming queue"), ("D", "queue: drop autoplayed / history: hide repeats"), ("X", "playlist: export JSON"), ("Y", "copy song link / stats summary"), ("I", "song info"), ("O", "open song in browser"), ("x", "hide song from suggestions"), ("Q", "search: queue all results"), (".", "jump to the playing song"), ("Tab", "lyrics (LRCLIB)"), ("N", "playlist: duplicate"), ("B", "playlist: merge into another"), ("w", "playlist: pin to the top"), ("h", "playlist: enhance with suggestions"), ("L", "playlist: like every song"), ("V", "copy list as text"), ("H", "playlist: remove duplicates"), ("[ / ]", "speed down / up"), ("0-9", "now playing: seek to 0-90%"), ("T", "theme picker (live preview)"), ("i", "listening stats"), ("S", "shuffle mode"), ("u", "autoplay"), ("b", "private session"), ("U", "undo delete"), ("Z", "shuffle whole library"), ("E", "equalizer"), ("y", "recently played"), ("o", "open artist"),
             ("F", "find in a list"), ("m", "sort list"), ("l", "like / unlike"), ("s", "shuffle"),
             ("r", "repeat"), ("R", "new picks"),
             ("v", "queue view"), ("f", "now playing"), ("t", "sleep timer: presets, end of track, custom"),
@@ -5582,6 +5701,45 @@ class UI:
                     pal["sfaint"])
         put(self.scr, y + h - 2, x + 2, "j/k scroll \u00b7 Esc: close",
             pal["sfaint"])
+
+    def lyrics_modal(self, W):
+        app, pal = self.app, self.pal
+        H = self.scr.getmaxyx()[0]
+        w = min(64, max(30, W - 6))
+        h = min(max(10, H - 6), 24)
+        y = max(1, (H - h) // 2)
+        x = max(0, (W - w) // 2)
+        box(self.scr, y, x, w, h, pal["dim"], pal["side"])
+        t = app.lyrics_track or {}
+        put(self.scr, y + 1, x + 2,
+            wcut("Lyrics \u00b7 " + (t.get("title") or "?"), w - 4),
+            pal["side"], curses.A_BOLD)
+        put(self.scr, y + 2, x + 2,
+            wcut(t.get("artist") or "", w - 4), pal["sfaint"])
+        view_h = h - 6
+        lines = app.lyrics_lines(w - 4)
+        if lines is None:
+            put(self.scr, y + 4, x + 2, "Finding lyrics\u2026", pal["sfaint"])
+            app.lyrics_max_off = 0
+        elif not lines:
+            put(self.scr, y + 4, x + 2,
+                "No lyrics found for this song", pal["sfaint"])
+            put(self.scr, y + 5, x + 2,
+                "LRCLIB does not have it (yet)", pal["sfaint"])
+            app.lyrics_max_off = 0
+        else:
+            app.lyrics_max_off = max(0, len(lines) - view_h)
+            off = max(0, min(app.lyrics_off, app.lyrics_max_off))
+            app.lyrics_off = off
+            for i, ln in enumerate(lines[off:off + view_h]):
+                put(self.scr, y + 4 + i, x + 2, wcut(ln, w - 4),
+                    pal["side"])
+            if app.lyrics_max_off:
+                put(self.scr, y + h - 2, x + w - 12,
+                    f"{off + 1}-{min(off + view_h, len(lines))}/{len(lines)}",
+                    pal["sfaint"])
+        put(self.scr, y + h - 2, x + 2,
+            "j/k scroll \u00b7 Y copy \u00b7 Esc close", pal["sfaint"])
 
     def name_modal(self, y0, W):
         app, pal = self.app, self.pal
@@ -5770,6 +5928,8 @@ class UI:
             self.context_modal(W)
         if app.mode == "info":
             self.info_modal(W)
+        if app.mode == "lyrics":
+            self.lyrics_modal(W)
         if app.mode == "notices":
             self.notices_modal(W)
         if app.mode == "theme":
@@ -5779,7 +5939,7 @@ class UI:
         if app.mode == "confirm_clearhist":
             self.clearhist_modal(W)
         if not app.show_help and app.mode not in ("name", "pick", "confirm_delete", "confirm_clearhist", "sleep", "info",
-                          "notices", "theme", "context"):
+                          "notices", "theme", "context", "lyrics"):
             self.toast(y1 - 1, W)
         # cursor for text input
         if app.mode == "search" and hasattr(app, "search_xy"):
@@ -5950,6 +6110,23 @@ def handle_key(app, k):
                                   app.notices_off + 1)
         elif k in ("k", curses.KEY_UP):
             app.notices_off = max(0, app.notices_off - 1)
+        return
+
+    if app.mode == "lyrics":
+        if k in ("\x1b", 27, "q", "\t", "\n", "\r", curses.KEY_ENTER,
+                 10, 13):
+            app.mode = "normal"
+            app.lyrics_track = None
+        elif k in ("j", curses.KEY_DOWN):
+            app.lyrics_off = min(app.lyrics_max_off, app.lyrics_off + 1)
+        elif k in ("k", curses.KEY_UP):
+            app.lyrics_off = max(0, app.lyrics_off - 1)
+        elif k == "g":
+            app.lyrics_off = 0
+        elif k == "G":
+            app.lyrics_off = app.lyrics_max_off
+        elif k == "Y":
+            app.copy_lyrics()
         return
 
     if app.mode == "info":
@@ -6123,6 +6300,8 @@ def handle_key(app, k):
             app.play_mix(int(k) - 1)
         elif k in tuple("0123456789") and kind == "playing":
             app.seek_percent(int(k) * 10)
+        elif k == "\t":
+            app.open_lyrics(app.track_under() or app.current)
         elif k == "i":
             app.push("stats")
         elif k == "o":
@@ -6247,7 +6426,7 @@ def handle_mouse(app):
     if os.environ.get("SPOTUI_DEBUG"):
         open("/tmp/spotui-debug.log", "a").write(
             f"mouse x={mx} y={my} bstate={bstate:#x}\n")
-    modal = app.show_help or app.mode in ("name", "pick", "confirm_delete", "confirm_clearhist", "context")
+    modal = app.show_help or app.mode in ("name", "pick", "confirm_delete", "confirm_clearhist", "context", "lyrics")
     if modal:
         app.drag_rect = None
         app.drag_row = None
@@ -6255,6 +6434,10 @@ def handle_mouse(app):
             if app.mode == "pick":
                 step = -1 if bstate & curses.BUTTON4_PRESSED else 1
                 app.pick_idx = max(0, min(len(app.pick_rows) - 1, app.pick_idx + step))
+            elif app.mode == "lyrics":
+                step = -3 if bstate & curses.BUTTON4_PRESSED else 3
+                app.lyrics_off = max(0, min(app.lyrics_max_off,
+                                            app.lyrics_off + step))
             return
     if app.drag_row is not None and bstate & (curses.REPORT_MOUSE_POSITION | curses.BUTTON1_RELEASED):
         if bstate & curses.REPORT_MOUSE_POSITION:

@@ -4717,7 +4717,7 @@ class ContextMenuTests(unittest.TestCase):
         self.open_menu()
         self.app.copy_link = Mock()
         self.app.rects = [{"x0": 1, "y0": 3, "x1": 27, "y1": 4,
-                           "act": "ctxrow", "arg": 5}]
+                           "act": "ctxrow", "arg": 6}]
         with patch.object(s.curses, "getmouse",
                           return_value=(0, 5, 3, 0, s.curses.BUTTON1_CLICKED)):
             s.handle_mouse(self.app)
@@ -5651,3 +5651,159 @@ class QjumpContextTests(unittest.TestCase):
                           return_value=(0, 50, 20, 0, b3)):
             s.handle_mouse(self.app)
         self.assertNotEqual(self.app.mode, "context")
+
+
+class _InlineThread:
+    """threading.Thread stand-in that runs the target synchronously."""
+    def __init__(self, target=None, args=(), daemon=None):
+        self._target, self._args = target, args
+
+    def start(self):
+        self._target(*self._args)
+
+
+class _FakeResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self):
+        return json.dumps(self._payload).encode()
+
+
+class LyricsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def test_fetch_lyrics_parses_plain(self):
+        with patch('urllib.request.urlopen',
+                   return_value=_FakeResponse({'plainLyrics': 'la la\nla'})):
+            self.assertEqual(s.fetch_lyrics('Song', 'Artist'), 'la la\nla')
+
+    def test_fetch_lyrics_missing_or_error(self):
+        with patch('urllib.request.urlopen',
+                   return_value=_FakeResponse({'plainLyrics': '   '})):
+            self.assertIsNone(s.fetch_lyrics('Song', 'Artist'))
+        with patch('urllib.request.urlopen', side_effect=OSError('nope')):
+            self.assertIsNone(s.fetch_lyrics('Song', 'Artist'))
+        self.assertIsNone(s.fetch_lyrics('', 'Artist'))
+
+    def test_open_lyrics_fetches_and_caches(self):
+        t = track(1)
+        with patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, 'fetch_lyrics', return_value='words here') as f:
+            self.app.open_lyrics(t)
+        self.assertEqual(self.app.mode, 'lyrics')
+        self.assertEqual(self.app.lyrics_track['id'], '1')
+        self.assertEqual(self.app.store.lyrics['1']['text'], 'words here')
+        self.assertIn('words here', self.app.lyrics_lines(60))
+        f.assert_called_once()
+        # second open uses the cache: no new fetch
+        self.app.mode = 'normal'
+        with patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, 'fetch_lyrics', return_value='x') as f2:
+            self.app.open_lyrics(t)
+        f2.assert_not_called()
+
+    def test_open_lyrics_empty(self):
+        self.app.open_lyrics(None)
+        self.assertNotEqual(self.app.mode, 'lyrics')
+        self.assertIn('Nothing to show', self.app.toast[0])
+
+    def test_not_found_is_cached(self):
+        t = track(2)
+        with patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, 'fetch_lyrics', return_value=None):
+            self.app.open_lyrics(t)
+        self.assertIsNone(self.app.store.lyrics['2']['text'])
+        self.assertEqual(self.app.lyrics_lines(60), [])
+        self.app.mode = 'normal'
+        with patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, 'fetch_lyrics', return_value='late') as f:
+            self.app.open_lyrics(t)
+        f.assert_not_called()
+
+    def test_loading_state_lines_none(self):
+        self.app.lyrics_track = track(3)
+        self.assertIsNone(self.app.lyrics_lines(60))
+
+    def test_lyrics_modal_keys(self):
+        t = track(1)
+        with patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, 'fetch_lyrics',
+                             return_value='\n'.join(f'line {i}' for i in range(50))):
+            self.app.open_lyrics(t)
+        self.app.lyrics_max_off = 30
+        s.handle_key(self.app, 'j')
+        self.assertEqual(self.app.lyrics_off, 1)
+        s.handle_key(self.app, 'G')
+        self.assertEqual(self.app.lyrics_off, 30)
+        s.handle_key(self.app, 'k')
+        self.assertEqual(self.app.lyrics_off, 29)
+        s.handle_key(self.app, 'g')
+        self.assertEqual(self.app.lyrics_off, 0)
+        s.handle_key(self.app, '\x1b')
+        self.assertEqual(self.app.mode, 'normal')
+        self.assertIsNone(self.app.lyrics_track)
+
+    def test_lyrics_modal_y_copies(self):
+        t = track(1)
+        with patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, 'fetch_lyrics', return_value='some words'):
+            self.app.open_lyrics(t)
+        seen = []
+        self.app.copy_text = lambda text, what='Text': seen.append((text, what)) or True
+        s.handle_key(self.app, 'Y')
+        self.assertEqual(seen, [('some words', 'Lyrics')])
+        self.assertEqual(self.app.mode, 'lyrics')   # stays open
+
+    def test_tab_opens_lyrics(self):
+        t = track(1)
+        self.app.current = t
+        with patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, 'fetch_lyrics', return_value='hi'):
+            s.handle_key(self.app, '\t')
+        self.assertEqual(self.app.mode, 'lyrics')
+        self.assertEqual(self.app.lyrics_track['id'], '1')
+
+    def test_playback_menu_has_lyrics_item(self):
+        self.app.play([dict(track(1))], 0)
+        self.app.current = self.app.queue[0]
+        self.app.open_playback_context(5, 37)
+        labels = [l for l, _ in self.app.context_items()]
+        self.assertIn('Lyrics', labels)
+        with patch.object(s.threading, 'Thread', _InlineThread), \
+                patch.object(s, 'fetch_lyrics', return_value='hi'):
+            self.app.context_exec(labels.index('Lyrics'))
+        self.assertEqual(self.app.mode, 'lyrics')
+
+    def test_track_menu_has_lyrics_item(self):
+        t = track(1)
+        self.app.ctx = {'track': t, 'vk': 'liked:0', 'idx': 0}
+        labels = [l for l, _ in self.app.context_items()]
+        self.assertIn('Lyrics', labels)
+
+    def test_lyrics_survive_save_load(self):
+        self.app.store.lyrics['9'] = {'text': 'kept', 'ts': 123}
+        self.app.store.save()
+        fresh = s.Store()
+        self.assertEqual(fresh.lyrics['9'], {'text': 'kept', 'ts': 123})
+
+    def test_lyrics_load_ignores_junk(self):
+        self.app.store.lyrics['9'] = {'text': 5, 'ts': 'x'}
+        self.app.store.save()
+        fresh = s.Store()
+        self.assertNotIn('9', fresh.lyrics)
