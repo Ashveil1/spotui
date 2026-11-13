@@ -4910,3 +4910,103 @@ class PlaylistContextTests(unittest.TestCase):
     def test_gone_playlist_gives_no_items(self):
         self.app.store.playlists = []
         self.assertEqual(self.app.context_items(), [])
+
+
+class VolumeLevelingTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app.mpv.cmd = Mock()
+        self.app.store.save = Mock()
+
+    def last_af(self):
+        return self.app.mpv.cmd.call_args[0][0][2]
+
+    def test_toggle_adds_dynaudnorm(self):
+        self.app.toggle_leveling()
+        self.assertTrue(self.app.store.leveling)
+        self.assertIn("dynaudnorm", self.last_af())
+
+    def test_toggle_off_clears_filter(self):
+        self.app.toggle_leveling()
+        self.app.toggle_leveling()
+        self.assertEqual(self.last_af(), "")
+
+    def test_leveling_composes_with_eq(self):
+        self.app.store.eq_preset = "bass"
+        self.app.store.leveling = True
+        self.app._apply_af()
+        self.assertEqual(self.last_af(), "bass=g=8,dynaudnorm=f=250:g=3")
+
+    def test_cycle_eq_keeps_leveling(self):
+        self.app.store.leveling = True
+        self.app.cycle_eq()   # off -> bass
+        self.assertIn("dynaudnorm", self.last_af())
+        self.assertIn("bass=g=8", self.last_af())
+
+    def test_persistence_roundtrip(self):
+        st = s.Store()
+        st.leveling = True
+        st.save()
+        self.assertTrue(s.Store().leveling)
+
+
+class PlaybackContextTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+        self.app.play([dict(track(1))], 0)
+        self.app.current = self.app.queue[0]
+
+    def labels(self):
+        return [l for l, _ in self.app.context_items()]
+
+    def test_items_with_current_track(self):
+        self.app.open_playback_context(5, 37)
+        labels = self.labels()
+        self.assertIn("Like", labels)
+        self.assertIn("Song info", labels)
+        self.assertIn("Equalizer: Off", labels)
+        self.assertIn("Volume leveling: off", labels)
+        self.assertIn("Sleep timer", labels)
+
+    def test_leveling_label_follows_state(self):
+        self.app.store.leveling = True
+        self.app.open_playback_context(5, 37)
+        self.assertIn("Volume leveling: on", self.labels())
+
+    def test_exec_leveling_item(self):
+        self.app.mpv.cmd = Mock()
+        self.app.open_playback_context(5, 37)
+        i = self.labels().index("Volume leveling: off")
+        self.app.context_exec(i)
+        self.assertTrue(self.app.store.leveling)
+
+    def test_right_click_playerbar_opens_menu(self):
+        self.app.rects = [{"x0": 0, "y0": 37, "x1": 120, "y1": 40,
+                           "act": "pbzone"}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 60, 38, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mode, "context")
+        self.assertTrue(self.app.ctx["pb"])
