@@ -3397,6 +3397,19 @@ class App:
         self.ctx = {"artistctx": name, "x": x, "y": y, "sel": 0}
         self.mode = "context"
 
+    def open_recent_context(self, q, x, y):
+        """Right-click menu for a recent-search chip."""
+        if not q:
+            return
+        self.ctx = {"recentctx": q, "x": x, "y": y, "sel": 0}
+        self.mode = "context"
+
+    def rerun_search(self, q):
+        """Re-run a recent search (chip click or its menu)."""
+        self.query = q
+        self.mode = "search"
+        self.do_search(q)
+
     def close_context(self):
         self.ctx = None
         self.mode = "normal"
@@ -3468,6 +3481,13 @@ class App:
                      lambda: self.queue_artist(name)),
                 ]
             return items
+        if "recentctx" in c:
+            q = c["recentctx"]
+            return [
+                ("Search again", lambda: self.rerun_search(q)),
+                ("Remove from recent searches",
+                 lambda: self.remove_recent(q)),
+            ]
         if "pl" in c:
             pi = c["pl"]
             if not 0 <= pi < len(self.store.playlists):
@@ -5557,6 +5577,8 @@ class UI:
             title = app.ctx.get("name") or "Mix"
         elif "artistctx" in app.ctx:
             title = app.ctx["artistctx"]
+        elif "recentctx" in app.ctx:
+            title = app.ctx["recentctx"]
         elif "track" in app.ctx:
             title = app.ctx["track"].get("title") or ""
         elif 0 <= app.ctx["pl"] < len(app.store.playlists):
@@ -6220,6 +6242,9 @@ def handle_mouse(app):
                 return
             if r["act"] == "artist":
                 app.open_artist_context(r["arg"], mx, my)
+                return
+            if r["act"] == "recent":
+                app.open_recent_context(r["arg"], mx, my)
                 return
             if r["act"] == "libitem":
                 if r["arg"][0] == "playlist":

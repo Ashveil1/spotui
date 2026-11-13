@@ -5373,3 +5373,52 @@ class FindHighlightTests(unittest.TestCase):
                    "liked:", 1, show_date=False)
         title_calls = [p for txt, p in calls if txt == "Rainy Day"]
         self.assertNotIn(77, title_calls)
+
+
+class RecentChipContextTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+        self.app.store.recent = ["luna waves", "neon coast"]
+
+    def labels(self):
+        return [l for l, _ in self.app.context_items()]
+
+    def test_items(self):
+        self.app.open_recent_context("luna waves", 10, 10)
+        self.assertEqual(self.app.mode, "context")
+        self.assertEqual(self.labels(),
+                         ["Search again", "Remove from recent searches"])
+
+    def test_exec_search_again(self):
+        self.app.do_search = Mock()
+        self.app.open_recent_context("luna waves", 10, 10)
+        self.app.context_exec(self.labels().index("Search again"))
+        self.assertEqual(self.app.query, "luna waves")
+        self.assertEqual(self.app.mode, "search")
+        self.app.do_search.assert_called_once_with("luna waves")
+
+    def test_exec_remove(self):
+        self.app.open_recent_context("luna waves", 10, 10)
+        self.app.context_exec(self.labels().index("Remove from recent searches"))
+        self.assertEqual(self.app.store.recent, ["neon coast"])
+
+    def test_right_click_chip(self):
+        self.app.rects = [{"x0": 30, "y0": 12, "x1": 44, "y1": 13,
+                           "act": "recent", "arg": "luna waves"}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 35, 12, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mode, "context")
+        self.assertEqual(self.app.ctx["recentctx"], "luna waves")
