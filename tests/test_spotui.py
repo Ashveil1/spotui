@@ -4622,3 +4622,103 @@ class SortPlaysTests(unittest.TestCase):
         app.store.sort_mode = "plays"
         app.stack = [("liked", None)]
         self.assertEqual([t["id"] for t in app.view_tracks()], ["2", "1"])
+
+
+class ContextMenuTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+        self.app.store.liked = [dict(track(1)), dict(track(2))]
+        self.app.liked_ids = {"1", "2"}
+        self.app.stack = [("liked", None)]
+
+    def open_menu(self, idx=0):
+        t = self.app.store.liked[idx]
+        self.app.open_context(t, "liked:", idx, 10, 5)
+
+    def test_items_reflect_like_state(self):
+        self.open_menu()
+        labels = [l for l, _ in self.app.context_items()]
+        self.assertIn("Unlike", labels)
+        self.assertIn("Hide from suggestions", labels)
+        self.assertEqual(self.app.mode, "context")
+
+    def test_items_reflect_block_state(self):
+        self.app.blocked_ids = {"1"}
+        self.open_menu()
+        labels = [l for l, _ in self.app.context_items()]
+        self.assertIn("Unhide from suggestions", labels)
+
+    def test_exec_runs_action_and_closes(self):
+        self.open_menu()
+        self.app.play_next = Mock()
+        self.app.context_exec(1)
+        self.app.play_next.assert_called_once()
+        self.assertEqual(self.app.mode, "normal")
+
+    def test_esc_closes(self):
+        self.open_menu()
+        s.handle_key(self.app, '\x1b')
+        self.assertEqual(self.app.mode, "normal")
+        self.assertIsNone(self.app.ctx)
+
+    def test_j_k_move_selection_with_clamp(self):
+        self.open_menu()
+        s.handle_key(self.app, 'k')
+        self.assertEqual(self.app.ctx["sel"], 0)
+        s.handle_key(self.app, 'j')
+        s.handle_key(self.app, 'j')
+        self.assertEqual(self.app.ctx["sel"], 2)
+        for _ in range(10):
+            s.handle_key(self.app, 'j')
+        self.assertEqual(self.app.ctx["sel"],
+                         len(self.app.context_items()) - 1)
+
+    def test_enter_executes_selected(self):
+        self.open_menu()
+        self.app.like = Mock()
+        s.handle_key(self.app, 'j')   # Play next
+        s.handle_key(self.app, 'j')   # Add to queue
+        s.handle_key(self.app, 'j')   # Unlike
+        s.handle_key(self.app, '\n')
+        self.app.like.assert_called_once()
+
+    def test_right_click_on_row_opens_menu(self):
+        self.app.rects = [{"x0": 0, "y0": 0, "x1": 20, "y1": 1,
+                           "act": "row", "arg": ("liked:", 1, False)}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 5, 0, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mode, "context")
+        self.assertEqual(self.app.ctx["track"]["id"], "2")
+
+    def test_right_click_outside_rows_does_nothing(self):
+        self.app.rects = [{"x0": 0, "y0": 0, "x1": 20, "y1": 1,
+                           "act": "nav", "arg": "home"}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 5, 0, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mode, "normal")
+        self.assertIsNone(self.app.ctx)
+
+    def test_ctxrow_click_executes(self):
+        self.open_menu()
+        self.app.copy_link = Mock()
+        self.app.rects = [{"x0": 1, "y0": 3, "x1": 27, "y1": 4,
+                           "act": "ctxrow", "arg": 5}]
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 5, 3, 0, s.curses.BUTTON1_CLICKED)):
+            s.handle_mouse(self.app)
+        self.app.copy_link.assert_called_once()
