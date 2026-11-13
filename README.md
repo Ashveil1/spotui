@@ -146,7 +146,7 @@ Right-click Liked Songs or Recently Played in the sidebar for quick menus
 it, queue it or open its artist.
 Right-click an artist in search results to open their page, play their saved
 songs or queue them all. Right-click a recent-search
-pill to run it again or forget it. `Ctrl+Z` suspends cleanly; the screen
+pill to run it again or forget it. The `?` overlay lists them too. `Ctrl+Z` suspends cleanly; the screen
 repaints on resume.
 
 ## Where is my data?

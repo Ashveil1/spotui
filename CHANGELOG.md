@@ -5,6 +5,7 @@ day they landed on `main`.
 
 ## 2026-11-12
 
+- The ? help overlay now lists the mouse gestures (click, right-click menus, wheel, drag), and a modal-height bug that let a full help page overflow its box is fixed.
 - Recent notices: every toast is kept in a 30-entry log with its age; open it from the player-bar Playback menu (j/k scrolls).
 - Right-click a recent-search pill: search again or remove it from the list.
 - Find-in-list (F) now highlights every matching row green as you type and counts the matches in the toast, not just jumping to the first one.
