@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -83,6 +84,16 @@ fun ChannelScreen(
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
+                )
+            }
+            val followed = state.followedChannels.any { it.id == channelId }
+            TextButton(onClick = {
+                viewModel.toggleFollowChannel(channelId, info?.name ?: channelName)
+            }) {
+                Text(
+                    text = if (followed) "Following" else "Follow",
+                    color = if (followed) spot.textDim else spot.accent,
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
         }

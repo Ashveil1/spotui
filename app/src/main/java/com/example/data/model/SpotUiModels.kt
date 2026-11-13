@@ -208,6 +208,11 @@ sealed interface NavDest {
     data class Channel(val channelId: String, val name: String) : NavDest
 }
 
+data class FollowedChannel(
+    val id: String,
+    val name: String
+)
+
 data class StatsDay(val label: String, val plays: Int, val minutes: Int)
 data class HourBucket(val label: String, val count: Int)
 data class StatsSummaryData(

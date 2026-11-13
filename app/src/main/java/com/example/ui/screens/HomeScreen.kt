@@ -489,6 +489,51 @@ fun HomeScreen(
             }
         }
 
+        // Following shelf (account-free: channels followed on this device only)
+        if (state.followedChannels.isNotEmpty()) {
+            item {
+                SectionHeader(
+                    title = "Following",
+                    subtitle = "Latest from your followed channels - stored on this device only",
+                    trailing = {
+                        IconButton(
+                            onClick = { viewModel.loadFollowingFeed() },
+                            modifier = Modifier.minimumInteractiveComponentSize().testTag("home_refresh_following_btn")
+                        ) {
+                            Icon(Icons.Rounded.Refresh, "Refresh following feed", tint = spot.textDim)
+                        }
+                    }
+                )
+                Spacer(Modifier.height(8.dp))
+                if (state.followingFeed.isEmpty() && state.followingFeedLoading) {
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth().padding(24.dp)
+                    ) {
+                        CircularProgressIndicator(color = spot.accent)
+                    }
+                } else if (state.followingFeed.isEmpty()) {
+                    Text(
+                        text = "No recent videos from your channels",
+                        color = spot.textFaint,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                } else {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        itemsIndexed(state.followingFeed, key = { _, t -> "fw_${'$'}{t.id}" }) { _, track ->
+                            TrackShelfCard(
+                                track = track,
+                                badge = track.channel.ifBlank { "Video" },
+                                onClick = { viewModel.watchVideo(track) },
+                                onLongClick = { viewModel.openModal(ActiveModal.SongMenu(track, "Following")) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Made for you Shelf
         if (similar.items.isNotEmpty()) {
             item {
