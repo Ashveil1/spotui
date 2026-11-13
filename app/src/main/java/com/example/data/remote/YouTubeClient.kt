@@ -344,20 +344,54 @@ class YouTubeClient {
         return ""
     }
 
-    suspend fun fetchHomeFeed(limit: Int = 60): Result<List<Track>> = withContext(Dispatchers.IO) {
+    data class HomeFeedPage(
+        val tracks: List<Track>,
+        val continuation: String?
+    )
+
+    suspend fun fetchHomeFeed(limit: Int = 60): Result<HomeFeedPage> = fetchHomeFeedPage(null, limit)
+
+    suspend fun fetchHomeFeedPage(continuation: String?, limit: Int = 60): Result<HomeFeedPage> = withContext(Dispatchers.IO) {
         runCatching {
             val body = JSONObject().apply {
                 put("context", webContextJson())
-                put("browseId", "FEwhat_to_watch")
+                if (continuation.isNullOrBlank()) {
+                    put("browseId", "FEwhat_to_watch")
+                } else {
+                    put("continuation", continuation)
+                }
             }
             val root = innertubePost("browse", body)
                 ?: throw RuntimeException("Could not load YouTube home feed")
             val tracks = mutableListOf<Track>()
             val seen = mutableSetOf<String>()
             collectVideoRenderersDeep(root, tracks, seen, limit)
-            if (tracks.isEmpty()) throw RuntimeException("YouTube home feed was empty")
-            tracks.toList()
+            if (tracks.isEmpty() && continuation.isNullOrBlank()) {
+                throw RuntimeException("YouTube home feed was empty")
+            }
+            HomeFeedPage(tracks.toList(), findContinuationToken(root))
         }
+    }
+
+    private fun findContinuationToken(node: Any?): String? {
+        when (node) {
+            is JSONObject -> {
+                node.optJSONObject("continuationCommand")?.let { cc ->
+                    val token = cc.optString("token", "")
+                    if (token.isNotBlank()) return token
+                }
+                val keys = node.keys()
+                while (keys.hasNext()) {
+                    findContinuationToken(node.opt(keys.next()))?.let { return it }
+                }
+            }
+            is JSONArray -> {
+                for (i in 0 until node.length()) {
+                    findContinuationToken(node.opt(i))?.let { return it }
+                }
+            }
+        }
+        return null
     }
 
     private fun collectVideoRenderersDeep(
