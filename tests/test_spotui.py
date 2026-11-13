@@ -6405,3 +6405,76 @@ class InfoLyricsRowTests(unittest.TestCase):
         # closing lyrics returns to a clean normal mode
         s.handle_key(self.app, '\x1b')
         self.assertEqual(self.app.mode, 'normal')
+
+
+class PlayNextAllTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        with patch.object(s.threading.Thread, 'start'):
+            self.app = s.App()
+
+    def _playing(self):
+        self.app.play([track(1), track(2)], 0)
+        self.assertEqual(self.app.qpos, 0)
+
+    def test_inserts_after_current_in_order(self):
+        self._playing()
+        extra = [track(3), track(4)]
+        n = self.app.play_next_all(extra)
+        self.assertEqual(n, 2)
+        ids = [t['id'] for t in self.app.queue]
+        self.assertEqual(ids, ['1', '3', '4', '2'])
+        self.assertIn('2 songs', self.app.toast[0])
+
+    def test_empty_list(self):
+        self._playing()
+        self.assertEqual(self.app.play_next_all([]), 0)
+        self.assertEqual(len(self.app.queue), 2)
+        self.assertIn('Nothing to play next', self.app.toast[0])
+
+    def test_nothing_playing_plays_the_list(self):
+        self.app.play_next_all([track(3), track(4)])
+        self.assertIsNotNone(self.app.current)
+        self.assertEqual(self.app.current['id'], '3')
+
+    def test_shuffle_orig_queue_extended(self):
+        self._playing()
+        self.app.shuffle = True
+        self.app.orig_queue = [dict(t) for t in self.app.queue]
+        self.app.play_next_all([track(9)])
+        self.assertEqual([t['id'] for t in self.app.queue], ['1', '9', '2'])
+        self.assertEqual(len(self.app.orig_queue), 3)
+
+    def _render_artist(self):
+        from collections import defaultdict
+        self.app.store.playlists = []
+        self.app.store.liked = [track(1), track(2)]
+        self.app.liked_ids = {t['id'] for t in self.app.store.liked}
+        self.app.push('artist', self.app.store.liked[0]['artist'])
+        self.app.cover_for = lambda *a, **k: None
+        self.app.pal = defaultdict(int)
+        self.app.rects = []
+        scr = Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        ui = s.UI(self.app, scr)
+        with patch.object(s, 'put'), patch.object(s, 'fill'):
+            ui.v_artist(1, 38, 20, 120)
+
+    def test_artist_header_chip_click(self):
+        self._playing()
+        self._render_artist()
+        hits = [r for r in self.app.rects if r['act'] == 'playnextall']
+        self.assertEqual(len(hits), 1)
+        r = hits[0]
+        b1 = getattr(s.curses, 'BUTTON1_PRESSED', 2)
+        with patch.object(s.curses, 'getmouse',
+                          return_value=(0, r['x0'] + 2, r['y0'] + 1, 0, b1)):
+            s.handle_mouse(self.app)
+        ids = [t['id'] for t in self.app.queue]
+        self.assertEqual(ids[:3], ['1', '1', '2'])

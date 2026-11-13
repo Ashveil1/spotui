@@ -2685,6 +2685,23 @@ class App:
             self.orig_queue.append(dict(t, src="Added"))
         self.toast_now(f"Plays next: {t['title'][:30]}")
 
+    def play_next_all(self, tracks):
+        """Line a whole list up right after the current song, in order."""
+        fresh = [dict(t, src="Added") for t in tracks or [] if t]
+        if not fresh:
+            self.toast_now("Nothing to play next")
+            return 0
+        if not self.current:
+            self.play(tracks, 0)
+            return len(fresh)
+        self.queue_revision += 1
+        self.queue[self.qpos + 1:self.qpos + 1] = fresh
+        if self.shuffle and self.orig_queue is not None:
+            self.orig_queue.extend(fresh)
+        self.toast_now(f"Play next: {len(fresh)} song"
+                       f"{'s' if len(fresh) != 1 else ''}")
+        return len(fresh)
+
     def move_queue(self, idx, d):
         j = idx + d
         if not (self.qpos < idx < len(self.queue) and self.qpos < j < len(self.queue)):
@@ -5217,6 +5234,8 @@ class UI:
         put(scr, by, x0 + 13, rp,
             pal["green"] if app.repeat else pal["dim"], curses.A_BOLD)
         self.hit(x0 + 12, by - 1, 3, 2, "repeat")
+        put(scr, by, x0 + 17, " Play next ", pal["btn"], curses.A_BOLD)
+        self.hit(x0 + 16, by - 1, 13, 2, "playnextall", (vk, tracks))
 
         ly = by + 2
         self.list_header(ly, x0 + 2, W - x0 - 4, show_date=True, kind=kind)
@@ -5268,6 +5287,8 @@ class UI:
         put(scr, by, x0 + 9, IC_SHUF,
             pal["green"] if app.shuffle else pal["dim"], curses.A_BOLD)
         self.hit(x0 + 8, by - 1, 3, 2, "shuffle")
+        put(scr, by, x0 + 13, " Play next ", pal["btn"], curses.A_BOLD)
+        self.hit(x0 + 12, by - 1, 13, 2, "playnextall", (vk, tracks))
         ly = by + 2
         # Spotify-style Popular: the artist's most played songs, from local
         # play counts, above the full list (only when tall enough to keep
@@ -6835,6 +6856,9 @@ def handle_mouse(app):
             vk2, tracks = arg
             if tracks:
                 app.play(tracks, 0, source=app._source_for_vk(vk2))
+        elif act == "playnextall":
+            vk2, tracks = arg
+            app.play_next_all(tracks)
         elif act == "playat":
             vk2, tracks, pos = arg
             if tracks:
