@@ -390,6 +390,7 @@ class Store:
         self.autoplay = True
         self.time_left = False
         self.eq_preset = "off"
+        self.leveling = False        # dynaudnorm volume leveling
         self.sort_mode = "default"
         self.hist_dedupe = False
         self.zen = False
@@ -491,6 +492,8 @@ class Store:
             self.time_left = d["time_left"]
         if d.get("eq_preset") in EQ_PRESETS:
             self.eq_preset = d["eq_preset"]
+        if isinstance(d.get("leveling"), bool):
+            self.leveling = d["leveling"]
         if d.get("sort_mode") in SORT_MODES:
             self.sort_mode = d["sort_mode"]
         if isinstance(d.get("hist_dedupe"), bool):
@@ -526,6 +529,7 @@ class Store:
                         "session": self.session, "theme": self.theme,
                         "plays": self.plays, "first_play": self.first_play, "shuffle_mode": self.shuffle_mode, "autoplay": self.autoplay, "time_left": self.time_left, "eq_preset": self.eq_preset,
                         "sort_mode": self.sort_mode,
+                        "leveling": self.leveling,
                         "hist_dedupe": self.hist_dedupe,
                         "zen": self.zen,
                         "blocked": self.blocked,
@@ -1405,7 +1409,7 @@ class App:
         self.store = Store()
         self.mpv = Mpv()
         self.mpv.state["vol"] = self.store.volume
-        self.mpv.set_eq(self.store.eq_preset)
+        self._apply_af()
         self.pal = None
         self.lock = threading.RLock()
         self.stack = [("home", None)]
@@ -2771,10 +2775,27 @@ class App:
         self.mpv.set_speed(self.speed)
         self.toast_now(f"Speed {self.speed:g}x")
 
+    def _apply_af(self):
+        """Rebuild mpv's audio filter chain: EQ plus volume leveling."""
+        parts = [EQ_FILTER.get(self.store.eq_preset, "")]
+        if self.store.leveling:
+            parts.append("dynaudnorm=f=250:g=3")
+        self.mpv.cmd(["set_property", "af",
+                      ",".join(p for p in parts if p)])
+
+    def toggle_leveling(self):
+        """Volume leveling: dynaudnorm keeps quiet and loud songs closer."""
+        self.store.leveling = not self.store.leveling
+        self._apply_af()
+        self.store.save()
+        self.toast_now("Volume leveling " +
+                       ("on - loud and quiet songs sit closer"
+                        if self.store.leveling else "off"))
+
     def cycle_eq(self):
         i = EQ_PRESETS.index(self.store.eq_preset)
         self.store.eq_preset = EQ_PRESETS[(i + 1) % len(EQ_PRESETS)]
-        self.mpv.set_eq(self.store.eq_preset)
+        self._apply_af()
         self.store.save()
         p = self.store.eq_preset
         self.toast_now("Equalizer: " + ("off" if p == "off" else EQ_LABEL[p]))
@@ -3293,6 +3314,11 @@ class App:
         self.sel[vk] = idx
         self.mode = "context"
 
+    def open_playback_context(self, x, y):
+        """Right-click menu for the player bar."""
+        self.ctx = {"pb": True, "x": x, "y": y, "sel": 0}
+        self.mode = "context"
+
     def open_playlist_context(self, pi, x, y):
         """Right-click menu for a playlist row in the sidebar."""
         if not 0 <= pi < len(self.store.playlists):
@@ -3309,6 +3335,24 @@ class App:
         c = self.ctx
         if not c:
             return []
+        if "pb" in c:
+            items = []
+            t = self.current
+            if t:
+                liked = t.get("id") in self.liked_ids
+                items += [
+                    ("Unlike" if liked else "Like", lambda: self.like(t)),
+                    ("Song info", lambda: self.open_info(t)),
+                ]
+            eq = self.store.eq_preset
+            items += [
+                ("Equalizer: " + EQ_LABEL.get(eq, "Off"), self.cycle_eq),
+                ("Volume leveling: " +
+                 ("on" if self.store.leveling else "off"),
+                 self.toggle_leveling),
+                ("Sleep timer", self.cycle_sleep),
+            ]
+            return items
         if "pl" in c:
             pi = c["pl"]
             if not 0 <= pi < len(self.store.playlists):
@@ -5124,6 +5168,7 @@ class UI:
     def playerbar(self, y0, W):
         app, pal = self.app, self.pal
         scr = self.scr
+        self.hit(0, y0, W, 3, "pbzone")
         fill(scr, y0 - 1, 0, W, pal["fade"])  # 1px separator, Spotify-style
         for j in range(3):
             fill(scr, y0 + j, 0, W, pal["bside"])
@@ -5383,7 +5428,9 @@ class UI:
         x = min(max(1, app.ctx["x"]), max(1, W - w - 1))
         y = min(max(1, app.ctx["y"]), max(1, H - h - 2))
         box(self.scr, y, x, w, h, pal["dim"], pal["side"])
-        if "track" in app.ctx:
+        if "pb" in app.ctx:
+            title = "Playback"
+        elif "track" in app.ctx:
             title = app.ctx["track"].get("title") or ""
         elif 0 <= app.ctx["pl"] < len(app.store.playlists):
             title = app.store.playlists[app.ctx["pl"]]["name"]
@@ -6036,6 +6083,9 @@ def handle_mouse(app):
                 continue
             if r["act"] == "libitem" and r["arg"][0] == "playlist":
                 app.open_playlist_context(r["arg"][1], mx, my)
+                return
+            if r["act"] == "pbzone":
+                app.open_playback_context(mx, my)
                 return
             if r["act"] == "row":
                 vk, idx = r["arg"][0], r["arg"][1]
