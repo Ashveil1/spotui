@@ -5156,3 +5156,66 @@ class SidebarContextTests(unittest.TestCase):
         self.right_click("libitem", ("liked", None))
         self.assertEqual(self.app.mode, "context")
         self.assertTrue(self.app.ctx["likedctx"])
+
+
+class MixContextTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for name, value in [('CFG', root), ('STORE', root / 'library.json')]:
+            p = patch.object(s, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        tp = patch.object(s.threading.Thread, 'start')
+        tp.start()
+        self.addCleanup(tp.stop)
+        self.app = s.App()
+        self.app._play_current = Mock()
+        self.app.store.liked = \
+            [dict(track(i), artist='Alpha') for i in range(3)] + \
+            [dict(track(10 + i), artist='Beta') for i in range(3)]
+
+    def labels(self):
+        return [l for l, _ in self.app.context_items()]
+
+    def test_mix_items(self):
+        self.app.open_mix_context(0, 30, 20)
+        self.assertEqual(self.app.mode, "context")
+        self.assertEqual(self.app.ctx["name"], "Daily Mix 1")
+        labels = self.labels()
+        self.assertIn("Play mix", labels)
+        self.assertIn("Add mix to queue", labels)
+        self.assertIn("More from Alpha", labels)
+
+    def test_open_mix_context_bad_index(self):
+        self.app.open_mix_context(9, 30, 20)
+        self.assertIsNone(self.app.ctx)
+        self.assertNotEqual(self.app.mode, "context")
+
+    def test_exec_play_mix(self):
+        self.app.play = Mock()
+        self.app.open_mix_context(0, 30, 20)
+        self.app.context_exec(self.labels().index("Play mix"))
+        self.app.play.assert_called_once()
+        self.assertGreater(len(self.app.play.call_args[0][0]), 0)
+
+    def test_exec_queue_mix(self):
+        self.app.open_mix_context(0, 30, 20)
+        self.app.context_exec(self.labels().index("Add mix to queue"))
+        self.assertGreater(len(self.app.queue), 0)
+
+    def test_exec_more_from_artist(self):
+        self.app.open_mix_context(0, 30, 20)
+        self.app.context_exec(self.labels().index("More from Alpha"))
+        self.assertEqual(self.app.stack[-1], ("artist", "Alpha"))
+
+    def test_right_click_mix_card(self):
+        self.app.rects = [{"x0": 30, "y0": 20, "x1": 55, "y1": 23,
+                           "act": "mix", "arg": 0}]
+        b3 = getattr(s.curses, "BUTTON3_PRESSED", 2097152)
+        with patch.object(s.curses, "getmouse",
+                          return_value=(0, 40, 21, 0, b3)):
+            s.handle_mouse(self.app)
+        self.assertEqual(self.app.mode, "context")
+        self.assertEqual(self.app.ctx["mixctx"], 0)
